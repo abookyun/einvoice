@@ -1,8 +1,17 @@
 # Einvoice
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/einvoice`. To experiment with that code, run `bin/console` for an interactive prompt.
+To support the thriving e-commerce industry and lower the business costs and barriers associated with printing paper receipts, the Taiwan Executive Yuan announced plans in August 2000 to implement electronic receipts in Taiwan and launched a comprehensive project in May 2010 to promote e-invoice applications. This initiative employs innovative approaches such as allowing consumers to claim virtual receipts via multiple devices, offering automatic checking of receipt lottery numbers, and providing a variety of channels for retailers to issue receipts.
 
-TODO: Delete this and the text above, and describe your gem
+Hence, there are several e-invoice services for B2B, B2C in Taiwan as the intermediate and value-adding platform like CHT, allPay, Neweb, ..etc. They mostly provide services like below:
+
+* Manage e-invoices
+* New an e-invoice
+* Return an e-invoice
+* Invalidate an e-invoice
+* List e-invoices
+* ...
+
+So that, we need a API wrapper to manage and access the APIs.
 
 ## Installation
 
@@ -38,4 +47,3 @@ Bug reports and pull requests are welcome on GitHub at https://github.com/[USERN
 ## License
 
 The gem is available as open source under the terms of the [MIT License](http://opensource.org/licenses/MIT).
-
