@@ -1,5 +1,6 @@
 require "einvoice/version"
+require "einvoice/configuration"
 
 module Einvoice
-  # Your code goes here...
+  extend Configuration
 end
