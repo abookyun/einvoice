@@ -11,8 +11,6 @@ module Einvoice
       }
 
       ::Faraday::Connection.new(options) do |connection|
-        connection.use Faraday::Request::UrlEncoded
-
         case format.to_s.downcase
         when "xml" then connection.use Faraday::Response::ParseXml
         when "json" then connection.use Faraday::Response::ParseJson
