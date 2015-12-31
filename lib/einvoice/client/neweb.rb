@@ -11,7 +11,7 @@ module Einvoice
           request.url "IN_PreInvoiceS.action"
           request.body = {
             StoreCode: client_id,
-            xmldata: invoice.to_xml
+            xmldata: invoice.to_json
           }
         end.body
       end
