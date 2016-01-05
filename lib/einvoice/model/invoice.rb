@@ -4,7 +4,7 @@ module Einvoice
       attr_accessor :data_number, :data_date, :seller_id, :buyer_name,
                     :buyer_id, :customs_clearance_mark, :invoice_type,
                     :donate_mark, :carrier_type, :carrier_id1, :carrier_id2,
-                    :print_mark, :n_p_o_b_a_n, :random_number, :invoice_items,
+                    :print_mark, :n_p_o_b_a_n, :random_number, :invoice_item,
                     :sales_amount, :free_tax_sales_amount,
                     :zero_tax_sales_amount, :tax_type, :tax_rate, :tax_amount,
                     :total_amount, :contact, :customer_defined
@@ -23,7 +23,7 @@ module Einvoice
       validates :print_mark, presence: true, length: { maximum: 1 }, format: { with: /[YN]/ }, print_mark: true
       validates :n_p_o_b_a_n, length: { maximum: 10 }
       validates :random_number, length: { maximum: 4 }
-      validates :invoice_items, presence: true
+      validates :invoice_item, presence: true
       validates :sales_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }
       validates :free_tax_sales_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }
       validates :zero_tax_sales_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }

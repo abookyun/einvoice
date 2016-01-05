@@ -14,11 +14,11 @@ module Einvoice
       include ActiveModel::Serializers::JSON
 
       def attributes=(hash)
-        @invoice_items ||= []
+        @invoice_item ||= []
         hash.each do |key, value|
           case key.to_sym
-          when :invoice_items
-            value.each { |v| @invoice_items << InvoiceItem.new(v) }
+          when :invoice_item
+            value.each { |v| @invoice_item << InvoiceItem.new(v) }
           when :contact
             @contact = Contact.new(value)
           when :customer_defined
@@ -31,6 +31,14 @@ module Einvoice
 
       def attributes
         instance_values
+      end
+
+      def serializable_hash(options = nil)
+        super.tap do |hash|
+          hash.keys.each do |k|
+            hash[k.to_s.camelize] = hash.delete(k)
+          end
+        end
       end
     end
   end

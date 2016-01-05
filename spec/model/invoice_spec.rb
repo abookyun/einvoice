@@ -10,7 +10,7 @@ RSpec.describe Einvoice::Model::Invoice, type: :model do
     it { is_expected.to validate_presence_of :invoice_type }
     it { is_expected.to validate_presence_of :donate_mark }
     it { is_expected.to validate_presence_of :print_mark }
-    it { is_expected.to validate_presence_of :invoice_items }
+    it { is_expected.to validate_presence_of :invoice_item }
     it { is_expected.to validate_presence_of :sales_amount }
     it { is_expected.to validate_presence_of :free_tax_sales_amount }
     it { is_expected.to validate_presence_of :zero_tax_sales_amount }
