@@ -7,17 +7,21 @@ module Einvoice
       end
 
       def create_invoice(invoice)
-        connection.post do |request|
-          request.url "IN_PreInvoiceS.action"
-          request.body = {
-            StoreCode: client_id,
-            xmldata: { "InvoiceRoot" =>
-              { "Invoice" =>
-                invoice.serializable_hash(include: { invoice_item: {}, contact: {}, customer_defined: {}})
+        if invoice.valid?
+          connection.post do |request|
+            request.url "IN_PreInvoiceS.action"
+            request.body = {
+              StoreCode: client_id,
+              xmldata: { "InvoiceRoot" =>
+                { "Invoice" =>
+                  invoice.serializable_hash(include: { invoice_item: {}, contact: {}, customer_defined: {}})
+                }
               }
             }
-          }
-        end.body
+          end.body
+        else
+          # TODO raise errors
+        end
       end
     end
   end
