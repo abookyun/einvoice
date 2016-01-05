@@ -11,7 +11,11 @@ module Einvoice
           request.url "IN_PreInvoiceS.action"
           request.body = {
             StoreCode: client_id,
-            xmldata: invoice.to_json
+            xmldata: { "InvoiceRoot" =>
+              { "Invoice" =>
+                invoice.serializable_hash(include: { invoice_item: {}, contact: {}, customer_defined: {}})
+              }
+            }
           }
         end.body
       end
