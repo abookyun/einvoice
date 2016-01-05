@@ -48,6 +48,35 @@ module Einvoice
           end
         end
       end
+
+      def attributes
+        {
+          'data_number' => data_number,
+          'data_date' => data_date,
+          'seller_id' => seller_id,
+          'buyer_name' => buyer_name,
+          'buyer_id' => buyer_id,
+          'customs_clearance_mark' => customs_clearance_mark,
+          'invoice_type' => invoice_type,
+          'donate_mark' => donate_mark,
+          'carrier_type' => carrier_type,
+          'carrier_id1' => carrier_id1,
+          'carrier_id2' => carrier_id2,
+          'print_mark' => print_mark,
+          'n_p_o_b_a_n' => n_p_o_b_a_n,
+          'random_number' => random_number,
+          'invoice_items' => invoice_items.to_json,
+          'sales_amount' => sales_amount,
+          'free_tax_sales_amount' => free_tax_sales_amount,
+          'zero_tax_sales_amount' => zero_tax_sales_amount,
+          'tax_type' => tax_type,
+          'tax_rate' => tax_rate,
+          'tax_amount' => tax_amount,
+          'total_amount' => total_amount,
+          'contact' => contact.to_json,
+          'customer_defined' => customer_defined.to_json
+        }
+      end
     end
   end
 end

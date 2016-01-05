@@ -13,6 +13,15 @@ module Einvoice
           instance_variable_set("@#{attribute}", value) if respond_to?(attribute.to_sym)
         end
       end
+
+      def attributes
+        {
+          'name' => name,
+          'address' => address,
+          't_e_l' => t_e_l,
+          'email' => email
+        }
+      end
     end
   end
 end

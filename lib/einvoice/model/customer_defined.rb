@@ -12,6 +12,14 @@ module Einvoice
           instance_variable_set("@#{attribute}", value) if respond_to?(attribute.to_sym)
         end
       end
+
+      def attributes
+        {
+          'project_no' => project_no,
+          'purchase_no' => purchase_no,
+          'stamp_duty_flag' => stamp_duty_flag
+        }
+      end
     end
   end
 end

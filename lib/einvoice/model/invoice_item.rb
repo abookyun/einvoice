@@ -17,6 +17,18 @@ module Einvoice
           instance_variable_set("@#{attribute}", value) if respond_to?(attribute.to_sym)
         end
       end
+
+      def attributes
+        {
+          'description' => description,
+          'quantity' => quantity,
+          'unit' => unit,
+          'unit_price' => unit_price,
+          'amount' => amount,
+          'sequence_number' => sequence_number,
+          'remark' => remark
+        }
+      end
     end
   end
 end

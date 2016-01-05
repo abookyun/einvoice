@@ -11,6 +11,7 @@ module Einvoice
       include ActiveModel::Model
       include ActiveModel::Validations
       include ActiveModel::Serialization
+      include ActiveModel::Serializers::JSON
     end
   end
 end
