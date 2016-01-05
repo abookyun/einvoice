@@ -6,20 +6,6 @@ module Einvoice
       validates :project_no, length: { maximum: 64 }
       validates :purchase_no, length: { maximum: 64 }
       validates :stamp_duty_flag, length: { maximum: 1 }
-
-      def initialize(attributes={})
-        attributes.each do |attribute, value|
-          instance_variable_set("@#{attribute}", value) if respond_to?(attribute.to_sym)
-        end
-      end
-
-      def attributes
-        {
-          'project_no' => project_no,
-          'purchase_no' => purchase_no,
-          'stamp_duty_flag' => stamp_duty_flag
-        }
-      end
     end
   end
 end
