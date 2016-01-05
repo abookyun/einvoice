@@ -6,10 +6,11 @@ module Einvoice
         connection.use Faraday::Request::DigestNeweb :neweb, client_secret
       end
 
-      def create_invoice(invoice)
+      def upload_invoice(invoice)
         if invoice.valid?
+          action = invoice.data_number.present? ? "IN_PreInvoiceS.action" : "IN_SellerInvoiceS.action"
           connection.post do |request|
-            request.url "IN_PreInvoiceS.action"
+            request.url action
             request.body = {
               StoreCode: client_id,
               xmldata: { "InvoiceRoot" =>
