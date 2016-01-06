@@ -32,14 +32,6 @@ module Einvoice
       def attributes
         instance_values
       end
-
-      def serializable_hash(options = nil)
-        super.tap do |hash|
-          hash.keys.each do |k|
-            hash[k.to_s.camelize] = hash.delete(k)
-          end
-        end
-      end
     end
   end
 end

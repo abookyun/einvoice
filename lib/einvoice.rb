@@ -1,3 +1,5 @@
+require "active_support"
+
 require "einvoice/version"
 require "einvoice/configuration"
 require "einvoice/connection"
