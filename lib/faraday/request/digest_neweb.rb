@@ -13,7 +13,7 @@ module Faraday
 
     def call(env)
       xmldata = env[:body][:xmldata]
-      env[:body][:hash] = Digest::MD5.digest([xmldata, @secret])
+      env[:body][:hash] = Digest::MD5.hexdigest(xmldata + @secret)
       @app.call env
     end
   end

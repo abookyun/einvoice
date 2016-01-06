@@ -12,7 +12,7 @@ module Einvoice
     DEFAULT_CLIENT_ID = nil
     DEFAULT_CLIENT_SECRET = nil
     DEFAULT_ENDPOINT = "".freeze
-    DEFAULT_FORMAT = :xml
+    DEFAULT_FORMAT = ""
 
     attr_accessor *VALID_OPTIONS_KEYS
 

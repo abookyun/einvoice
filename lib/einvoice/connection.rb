@@ -1,5 +1,4 @@
 require "faraday_middleware"
-require "faraday/request/encode_xml"
 require "faraday/request/digest_neweb"
 
 module Einvoice
@@ -13,6 +12,10 @@ module Einvoice
       }
 
       ::Faraday::Connection.new(options) do |connection|
+        connection.request :digest, client_secret
+        connection.request :url_encoded
+
+        # Parser
         case format.to_s.downcase
         when "xml" then connection.response :xml
         when "json" then connection.response :json
