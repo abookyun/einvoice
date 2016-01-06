@@ -2,15 +2,16 @@ module Einvoice
   module Client
     class Neweb < API
       def initialize
-        connection.use Faraday::Request::UrlEncoded
-        connection.use Faraday::Request::DigestNeweb :neweb, client_secret
+        super
+        connection.request :url_encoded
+        connection.request :digest, client_secret
       end
 
       def upload_invoice(invoice)
         if invoice.valid?
           action = invoice.data_number.present? ? "IN_PreInvoiceS.action" : "IN_SellerInvoiceS.action"
           connection.post do |request|
-            request.url action
+            request.url endpoint + action
             request.body = {
               StoreCode: client_id,
               xmldata: wrap(invoice).deep_transform_keys { |k| k.to_s.camelize }

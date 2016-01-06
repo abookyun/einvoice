@@ -1,7 +1,7 @@
 require 'faraday'
 
-module FaradayMiddleware
-  class DigestNeweb < Faraday::Middleware
+module Faraday
+  class Request::DigestNeweb < Faraday::Middleware
     dependency do
       require 'digest' unless defined?(::Digest)
     end
@@ -18,3 +18,5 @@ module FaradayMiddleware
     end
   end
 end
+
+Faraday::Request.register_middleware digest: Faraday::Request::DigestNeweb
