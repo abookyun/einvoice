@@ -3,19 +3,15 @@ require "gyoku"
 module Einvoice
   module Client
     class Neweb < API
-      def upload_invoice(invoice)
-        if invoice.valid?
-          action = invoice.data_number.present? ? "IN_PreInvoiceS.action" : "IN_SellerInvoiceS.action"
-          connection.post do |request|
-            request.url endpoint + action
-            request.body = {
-              StoreCode: client_id,
-              xmldata: encode_xml(wrap(invoice))
-            }
-          end.body
-        else
-          # TODO raise errors
-        end
+      def upload(invoice)
+        action = "IN_PreInvoiceS.action"
+        connection.post do |request|
+          request.url endpoint + action
+          request.body = {
+            StoreCode: client_id,
+            xmldata: encode_xml(wrap(invoice))
+          }
+        end.body
       end
 
       private
