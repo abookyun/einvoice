@@ -8,7 +8,7 @@ module Einvoice
         connection.post do |request|
           request.url endpoint + action
           request.body = {
-            StoreCode: client_id,
+            storecode: client_id,
             xmldata: encode_xml(wrap(serialize(invoice)))
           }
         end.body
