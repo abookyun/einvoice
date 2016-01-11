@@ -1,7 +1,13 @@
 module Einvoice
   module Model
     class CustomerDefined < Einvoice::Model::Base
-      attr_accessor :project_no, :purchase_no, :stamp_duty_flag
+      VALID_OPTIONS_KEYS = [
+        :project_no,
+        :purchase_no,
+        :stamp_duty_flag
+      ].freeze
+
+      attr_accessor *VALID_OPTIONS_KEYS
 
       validates :project_no, length: { maximum: 64 }
       validates :purchase_no, length: { maximum: 64 }

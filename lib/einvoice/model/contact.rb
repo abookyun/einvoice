@@ -1,7 +1,14 @@
 module Einvoice
   module Model
     class Contact < Einvoice::Model::Base
-      attr_accessor :name, :address, :t_e_l, :email
+      VALID_OPTIONS_KEYS = [
+        :name,
+        :address,
+        :t_e_l,
+        :email
+      ].freeze
+
+      attr_accessor *VALID_OPTIONS_KEYS
 
       validates :name, presence: true, length: { maximum: 64 }
       validates :address, presence: true, length: { maximum: 128 }

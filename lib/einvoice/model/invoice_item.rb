@@ -1,8 +1,17 @@
 module Einvoice
   module Model
     class InvoiceItem < Einvoice::Model::Base
-      attr_accessor :description, :quantity, :unit, :unit_price, :amount,
-                    :sequence_number, :remark
+      VALID_OPTIONS_KEYS = [
+        :description,
+        :quantity,
+        :unit,
+        :unit_price,
+        :amount,
+        :sequence_number,
+        :remark
+      ].freeze
+
+      attr_accessor *VALID_OPTIONS_KEYS
 
       validates :description, presence: true, length: { maximum: 256 }
       validates :quantity, presence: true, length: { maximum: 17 }

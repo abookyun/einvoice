@@ -1,13 +1,34 @@
 module Einvoice
   module Model
     class Invoice < Einvoice::Model::Base
-      attr_accessor :data_number, :data_date, :seller_id, :buyer_name,
-                    :buyer_id, :customs_clearance_mark, :invoice_type,
-                    :donate_mark, :carrier_type, :carrier_id1, :carrier_id2,
-                    :print_mark, :n_p_o_b_a_n, :random_number, :invoice_item,
-                    :sales_amount, :free_tax_sales_amount,
-                    :zero_tax_sales_amount, :tax_type, :tax_rate, :tax_amount,
-                    :total_amount, :contact, :customer_defined
+      VALID_OPTIONS_KEYS = [
+        :data_number,
+        :data_date,
+        :seller_id,
+        :buyer_name,
+        :buyer_id,
+        :customs_clearance_mark,
+        :invoice_type,
+        :donate_mark,
+        :carrier_type,
+        :carrier_id1,
+        :carrier_id2,
+        :print_mark,
+        :n_p_o_b_a_n,
+        :random_number,
+        :invoice_item,
+        :sales_amount,
+        :free_tax_sales_amount,
+        :zero_tax_sales_amount,
+        :tax_type,
+        :tax_rate,
+        :tax_amount,
+        :total_amount,
+        :contact,
+        :customer_defined
+      ].freeze
+
+      attr_accessor *VALID_OPTIONS_KEYS
 
       validates :data_number, presence: true, length: { maximum: 20 }
       validates :data_date, presence: true, length: { maximum: 10 }, format: { with: /\A\d{4}\/\d{2}\/\d{2}\z/ }
