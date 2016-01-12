@@ -11,6 +11,7 @@ require "einvoice/model/invoice"
 require "einvoice/model/invoice_item"
 require "einvoice/model/contact"
 require "einvoice/model/customer_defined"
+require "einvoice/model/result"
 
 module Einvoice
   extend Configuration

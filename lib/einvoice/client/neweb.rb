@@ -4,14 +4,20 @@ module Einvoice
   module Client
     class Neweb < API
       def upload(invoice)
-        action = "IN_PreInvoiceS.action"
-        connection.post do |request|
-          request.url endpoint + action
-          request.body = {
-            storecode: client_id,
-            xmldata: encode_xml(wrap(serialize(invoice)))
-          }
-        end.body
+        if invoice.valid?
+          action = "IN_PreInvoiceS.action"
+          response = connection.post do |request|
+            request.url endpoint + action
+            request.body = {
+              storecode: client_id,
+              xmldata: encode_xml(wrap(serialize(invoice)))
+            }
+          end.body
+
+          Einvoice::Model::Result.new(response)
+        else
+          Einvoice::Model::Result.new(invoice.errors)
+        end
       end
 
       private
