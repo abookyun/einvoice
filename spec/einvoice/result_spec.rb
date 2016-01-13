@@ -1,6 +1,6 @@
 require "spec_helper"
 
-RSpec.describe Einvoice::Model::Result do
+RSpec.describe Einvoice::Result do
   describe "#initialize" do
     it "initialize instance" do
       response = double(:response)

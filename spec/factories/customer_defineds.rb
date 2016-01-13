@@ -1,4 +1,4 @@
 FactoryGirl.define do
-  factory :customer_defined, class: Einvoice::Model::CustomerDefined do
+  factory :customer_defined, class: Einvoice::Model::Neweb::CustomerDefined do
   end
 end

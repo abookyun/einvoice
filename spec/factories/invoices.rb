@@ -1,5 +1,5 @@
 FactoryGirl.define do
-  factory :invoice, class: Einvoice::Model::Invoice do
+  factory :invoice, class: Einvoice::Model::Neweb::Invoice do
     sequence :data_number do |n|
       "data_number#{n}"
     end

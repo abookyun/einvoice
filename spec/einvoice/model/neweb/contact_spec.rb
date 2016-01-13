@@ -1,6 +1,6 @@
 require "spec_helper"
 
-RSpec.describe Einvoice::Model::Contact, type: :model do
+RSpec.describe Einvoice::Model::Neweb::Contact, type: :model do
   context "validations" do
     it { is_expected.to validate_presence_of(:name) }
     it { is_expected.to validate_presence_of(:address) }
