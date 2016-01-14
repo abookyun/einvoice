@@ -1,7 +1,7 @@
 module Einvoice
-  module Model
-    module Neweb
-      class InvoiceItem < Einvoice::Model::Neweb::Base
+  module Neweb
+    module Model
+      class InvoiceItem < Base
         VALID_OPTIONS_KEYS = [
           :description,
           :quantity,

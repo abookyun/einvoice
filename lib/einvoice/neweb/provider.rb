@@ -1,18 +1,18 @@
 require "einvoice/utils"
 
-require "einvoice/model/neweb/base"
-require "einvoice/model/neweb/contact"
-require "einvoice/model/neweb/customer_defined"
-require "einvoice/model/neweb/invoice_item"
-require "einvoice/model/neweb/invoice"
+require "einvoice/neweb/model/base"
+require "einvoice/neweb/model/contact"
+require "einvoice/neweb/model/customer_defined"
+require "einvoice/neweb/model/invoice_item"
+require "einvoice/neweb/model/invoice"
 
 module Einvoice
-  module Provider
-    class Neweb < Base
+  module Neweb
+    class Provider < Einvoice::Provider
       include Einvoice::Utils
 
       def issue(payload)
-        invoice = Einvoice::Model::Neweb::Invoice.new
+        invoice = Einvoice::Neweb::Model::Invoice.new
         invoice.from_json(payload.to_json)
 
         if invoice.valid?

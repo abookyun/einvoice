@@ -14,7 +14,7 @@ RSpec.describe Einvoice::NewebResponse do
     end
 
     it "returns active model validation errors" do
-      invoice = build(:invoice, data_number: nil)
+      invoice = build(:invoice_neweb, data_number: nil)
       invoice.valid?
 
       expect(described_class.new(invoice.errors).errors).to include "Data number can't be blank"
@@ -27,7 +27,7 @@ RSpec.describe Einvoice::NewebResponse do
     end
 
     it "returns false when there's active model errors" do
-      invoice = build(:invoice, data_number: nil)
+      invoice = build(:invoice_neweb, data_number: nil)
       invoice.valid?
 
       expect(described_class.new(invoice.errors).success?).to be_falsey

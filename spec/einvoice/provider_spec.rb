@@ -1,6 +1,6 @@
 require "spec_helper"
 
-RSpec.describe Einvoice::Provider::Base do
+RSpec.describe Einvoice::Provider do
   before do
     @keys = Einvoice::Configuration::VALID_OPTIONS_KEYS
   end
@@ -19,7 +19,7 @@ RSpec.describe Einvoice::Provider::Base do
     end
 
     it "inherits module configuration" do
-      provider = Einvoice::Provider::Base.new
+      provider = Einvoice::Provider.new
       @keys.each do |key|
         expect(provider.send(key)).to eq key
       end
@@ -37,7 +37,7 @@ RSpec.describe Einvoice::Provider::Base do
 
       context "during initialization" do
         it "overrides module configuration" do
-          provider = Einvoice::Provider::Base.new(@configuration)
+          provider = Einvoice::Provider.new(@configuration)
           @keys.each do |key|
             expect(provider.send(key)).to eq @configuration[key]
           end
@@ -45,7 +45,7 @@ RSpec.describe Einvoice::Provider::Base do
       end
 
       context "after initilization" do
-        let(:provider) { Einvoice::Provider::Base.new }
+        let(:provider) { Einvoice::Provider.new }
 
         before do
           @configuration.each do |key, value|
@@ -63,7 +63,7 @@ RSpec.describe Einvoice::Provider::Base do
   end
 
   describe "#config" do
-    subject { Einvoice::Provider::Base.new }
+    subject { Einvoice::Provider.new }
 
     let(:config) do
       c = {}; @keys.each {|key| c[key] = key }; c

@@ -1,7 +1,7 @@
 module Einvoice
-  module Model
-    module Neweb
-      class Invoice < Einvoice::Model::Neweb::Base
+  module Neweb
+    module Model
+      class Invoice < Base
         include Einvoice::Validator::Neweb
 
         VALID_OPTIONS_KEYS = [

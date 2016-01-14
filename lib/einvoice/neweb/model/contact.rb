@@ -1,7 +1,7 @@
 module Einvoice
-  module Model
-    module Neweb
-      class Contact < Einvoice::Model::Neweb::Base
+  module Neweb
+    module Model
+      class Contact < Base
         VALID_OPTIONS_KEYS = [
           :name,
           :address,

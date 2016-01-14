@@ -1,14 +1,15 @@
 require "active_support"
 
-require "einvoice/version"
+require "einvoice/client"
 require "einvoice/configuration"
 require "einvoice/connection"
-require "einvoice/result"
+require "einvoice/provider"
 require "einvoice/response"
-require "einvoice/client"
+require "einvoice/result"
+require "einvoice/utils"
+require "einvoice/version"
 
-require "einvoice/provider/base"
-require "einvoice/provider/neweb"
+require "einvoice/neweb/provider"
 
 module Einvoice
   extend Configuration

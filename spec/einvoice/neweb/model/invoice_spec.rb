@@ -1,6 +1,6 @@
 require "spec_helper"
 
-RSpec.describe Einvoice::Model::Neweb::Invoice, type: :model do
+RSpec.describe Einvoice::Neweb::Model::Invoice, type: :model do
   context "validations" do
     it { is_expected.to validate_presence_of :data_number }
     it { is_expected.to validate_presence_of :data_date }

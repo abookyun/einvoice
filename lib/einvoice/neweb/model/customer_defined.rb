@@ -1,7 +1,7 @@
 module Einvoice
-  module Model
-    module Neweb
-      class CustomerDefined < Einvoice::Model::Neweb::Base
+  module Neweb
+    module Model
+      class CustomerDefined < Base
         VALID_OPTIONS_KEYS = [
           :project_no,
           :purchase_no,

@@ -1,13 +1,13 @@
 require "active_model"
 
-require "einvoice/validator/neweb/carrier_id1_validator"
-require "einvoice/validator/neweb/carrier_id2_validator"
-require "einvoice/validator/neweb/customs_clearance_mark_validator"
-require "einvoice/validator/neweb/print_mark_validator"
+require "einvoice/neweb/validator/carrier_id1_validator"
+require "einvoice/neweb/validator/carrier_id2_validator"
+require "einvoice/neweb/validator/customs_clearance_mark_validator"
+require "einvoice/neweb/validator/print_mark_validator"
 
 module Einvoice
-  module Model
-    module Neweb
+  module Neweb
+    module Model
       class Base
         include ActiveModel::Model
         include ActiveModel::Validations
