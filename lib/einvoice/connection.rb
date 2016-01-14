@@ -12,7 +12,7 @@ module Einvoice
       }
 
       ::Faraday::Connection.new(options) do |connection|
-        connection.request :digest, client_secret
+        connection.request :digest_neweb, client_secret
         connection.request :url_encoded
 
         # Parser

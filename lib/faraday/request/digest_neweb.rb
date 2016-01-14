@@ -19,4 +19,4 @@ module Faraday
   end
 end
 
-Faraday::Request.register_middleware digest: Faraday::Request::DigestNeweb
+Faraday::Request.register_middleware digest_neweb: Faraday::Request::DigestNeweb
