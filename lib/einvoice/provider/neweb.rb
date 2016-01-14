@@ -10,8 +10,6 @@ module Einvoice
   module Provider
     class Neweb < Base
       include Einvoice::Utils
-      # include Einvoice::Model::Neweb
-      # include Einvoice::Validator::Neweb
 
       def issue(payload)
         invoice = Einvoice::Model::Neweb::Invoice.new
@@ -27,9 +25,9 @@ module Einvoice
             }
           end.body
 
-          # Einvoice::Result.new(response)
+          Einvoice::Result.new(Einvoice::NewebResponse.new(response))
         else
-          # Einvoice::Result.new(invoice.errors)
+          Einvoice::Result.new(Einvoice::NewebResponse.new(response))
         end
       end
     end

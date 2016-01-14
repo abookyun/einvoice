@@ -7,23 +7,11 @@ module Einvoice
     end
 
     def errors
-      if response.is_a? ActiveModel::Errors
-        response.full_messages.join('; ')
-      else
-        response && response.fetch("Result", {}) do |data|
-          "#{data["statcode"]}: #{data["statdesc"]}"
-        end
-      end
+      response.errors unless success?
     end
 
     def success?
-      if response.is_a? ActiveModel::Errors
-        false
-      elsif response && response.fetch("Result", {})["statdesc"] == "0000"
-        true
-      else
-        false
-      end
+      response.success?
     end
   end
 end

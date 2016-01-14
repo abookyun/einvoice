@@ -1,6 +1,6 @@
 require "spec_helper"
 
-RSpec.describe Einvoice::Result do
+RSpec.describe Einvoice::NewebResponse do
   describe "#initialize" do
     it "initialize instance" do
       response = double(:response)
