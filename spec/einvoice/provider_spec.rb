@@ -1,6 +1,6 @@
 require "spec_helper"
 
-RSpec.describe Einvoice::API do
+RSpec.describe Einvoice::Provider do
   before do
     @keys = Einvoice::Configuration::VALID_OPTIONS_KEYS
   end
@@ -19,9 +19,9 @@ RSpec.describe Einvoice::API do
     end
 
     it "inherits module configuration" do
-      api = Einvoice::API.new
+      provider = Einvoice::Provider.new
       @keys.each do |key|
-        expect(api.send(key)).to eq key
+        expect(provider.send(key)).to eq key
       end
     end
 
@@ -37,25 +37,25 @@ RSpec.describe Einvoice::API do
 
       context "during initialization" do
         it "overrides module configuration" do
-          api = Einvoice::API.new(@configuration)
+          provider = Einvoice::Provider.new(@configuration)
           @keys.each do |key|
-            expect(api.send(key)).to eq @configuration[key]
+            expect(provider.send(key)).to eq @configuration[key]
           end
         end
       end
 
       context "after initilization" do
-        let(:api) { Einvoice::API.new }
+        let(:provider) { Einvoice::Provider.new }
 
         before do
           @configuration.each do |key, value|
-            api.send("#{key}=", value)
+            provider.send("#{key}=", value)
           end
         end
 
         it "overrides module configuration after initialization" do
           @keys.each do |key|
-            expect(api.send(key)).to eq @configuration[key]
+            expect(provider.send(key)).to eq @configuration[key]
           end
         end
       end
@@ -63,7 +63,7 @@ RSpec.describe Einvoice::API do
   end
 
   describe "#config" do
-    subject { Einvoice::API.new }
+    subject { Einvoice::Provider.new }
 
     let(:config) do
       c = {}; @keys.each {|key| c[key] = key }; c

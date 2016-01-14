@@ -1,5 +1,5 @@
 FactoryGirl.define do
-  factory :invoice_item, class: Einvoice::Model::InvoiceItem do
+  factory :invoice_item_neweb, class: Einvoice::Neweb::Model::InvoiceItem do
     sequence :description do |n|
       "item#{n}"
     end

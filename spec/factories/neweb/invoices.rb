@@ -1,5 +1,5 @@
 FactoryGirl.define do
-  factory :invoice, class: Einvoice::Model::Invoice do
+  factory :invoice_neweb, class: Einvoice::Neweb::Model::Invoice do
     sequence :data_number do |n|
       "data_number#{n}"
     end
@@ -20,7 +20,7 @@ FactoryGirl.define do
 
     random_number "AAAA"
 
-    FactoryGirl.build(:invoice_item)
-    FactoryGirl.build(:contact)
+    FactoryGirl.build(:invoice_item_neweb)
+    FactoryGirl.build(:contact_neweb)
   end
 end
