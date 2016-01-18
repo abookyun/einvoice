@@ -8,6 +8,8 @@ require "einvoice/neweb/model/invoice"
 require "einvoice/neweb/model/pre_invoice"
 require "einvoice/neweb/model/seller_invoice"
 
+require "einvoice/neweb/result"
+
 module Einvoice
   module Neweb
     class Provider < Einvoice::Provider
@@ -36,9 +38,9 @@ module Einvoice
             }
           end.body
 
-          Einvoice::Result.new(Einvoice::NewebResponse.new(response))
+          Einvoice::Neweb::Result.new(response)
         else
-          Einvoice::Result.new(Einvoice::NewebResponse.new(response))
+          Einvoice::Neweb::Result.new(invoice.errors)
         end
       end
     end

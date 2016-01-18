@@ -5,19 +5,7 @@ RSpec.describe Einvoice::Utils do
   subject { dummy_class.new }
 
   describe "#serialize" do
-    let(:invoice) { build(:neweb_pre_invoice) }
-
-    it "includes required keys only" do
-      actual_keys = subject.serialize(invoice).keys.map(&:to_sym)
-      expect(actual_keys - Einvoice::Neweb::Model::PreInvoice::VALID_OPTIONS_KEYS).to be_empty
-    end
-
-    it "includes required keys only even executed #valid?" do
-      invoice.valid?
-
-      actual_keys = subject.serialize(invoice).keys.map(&:to_sym)
-      expect(actual_keys - Einvoice::Neweb::Model::PreInvoice::VALID_OPTIONS_KEYS).to be_empty
-    end
+    pending
   end
 
   describe "#wrap" do
