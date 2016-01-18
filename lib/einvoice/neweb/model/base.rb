@@ -1,9 +1,6 @@
 require "active_model"
 
-require "einvoice/neweb/validator/carrier_id1_validator"
-require "einvoice/neweb/validator/carrier_id2_validator"
-require "einvoice/neweb/validator/customs_clearance_mark_validator"
-require "einvoice/neweb/validator/print_mark_validator"
+require "einvoice/neweb/validator/invoice_validator"
 
 module Einvoice
   module Neweb
@@ -13,6 +10,8 @@ module Einvoice
         include ActiveModel::Validations
         include ActiveModel::Serialization
         include ActiveModel::Serializers::JSON
+
+        include Einvoice::Neweb::Validator
 
         def attributes=(hash)
           @invoice_item ||= []

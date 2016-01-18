@@ -2,8 +2,6 @@ module Einvoice
   module Neweb
     module Model
       class SellerInvoice < Invoice
-        include Einvoice::Validator::Neweb
-
         TYPE_SPECIFIC_KEYS = [:invoice_number, :invoice_date]
 
         attr_accessor *TYPE_SPECIFIC_KEYS

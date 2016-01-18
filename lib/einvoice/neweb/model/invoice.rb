@@ -2,8 +2,6 @@ module Einvoice
   module Neweb
     module Model
       class Invoice < Base
-        include Einvoice::Validator::Neweb
-
         VALID_OPTIONS_KEYS = [
           :seller_id,
           :buyer_name,
@@ -32,7 +30,7 @@ module Einvoice
         attr_accessor *VALID_OPTIONS_KEYS
 
         validates :seller_id, presence: true, length: { maximum: 10 }
-        validates :buyer_name, presence: true, length: { maximum: 60 }
+        validates :buyer_name, presence: true, length: { maximum: 60 }, buyer_name: true
         validates :buyer_id, presence: true, length: { maximum: 10 }
         validates :customs_clearance_mark, length: { maximum: 1 }, format: { with: /[01]/ }, customs_clearance_mark: true, allow_blank: true
         validates :invoice_type, presence: true, length: { maximum: 2 }, format: { with: /07|08/ }
