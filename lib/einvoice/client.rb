@@ -6,8 +6,8 @@ module Einvoice
       @provider = provider
     end
 
-    def issue(payload)
-      provider.issue(payload)
+    def issue(payload, options = {})
+      provider.issue(payload, options)
     end
   end
 end

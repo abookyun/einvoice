@@ -15,8 +15,8 @@ module Einvoice
     class Provider < Einvoice::Provider
       include Einvoice::Utils
 
-      def issue(type = :pre_invoice, payload)
-        case type
+      def issue(payload, type: :pre_invoice)
+        case options[:type]
         when :pre_invoice
           action = "IN_PreInvoiceS.action"
           invoice = Einvoice::Neweb::Model::PreInvoice.new
@@ -31,7 +31,7 @@ module Einvoice
 
         if invoice.valid?
           response = connection.post do |request|
-            request.url endpoint + action
+            request.url options[:url] || endpoint + action
             request.body = {
               storecode: client_id,
               xmldata: encode_xml(wrap(serialize(invoice)))
