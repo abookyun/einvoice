@@ -85,8 +85,10 @@ def invoice_payload(order)
     tax_amount: "#{order.tax_amount}",
     total_amount: "#{order.total_amount}",
     contact: {
-      name: "product.owner.name",
-      address: "product.owner.address"
+      name: "#{order.user.name}",
+      address: "#{order.user.address}"
+      t_e_l: "#{order.user.mobile}"
+      email: "#{order.user.email}"
     }
   }
 end
@@ -114,7 +116,7 @@ else
 end
 ```
 
-See [Einvoice::Result]()
+See [Einvoice::Result](https://github.com/abookyun/einvoice/blob/master/lib/einvoice/result.rb)
 
 ## Development
 
