@@ -12,7 +12,7 @@ module Einvoice
 
         validates :project_no, length: { maximum: 64 }
         validates :purchase_no, length: { maximum: 64 }
-        validates :stamp_duty_flag, length: { maximum: 1 }
+        validates :stamp_duty_flag, length: { is: 1 }
       end
     end
   end

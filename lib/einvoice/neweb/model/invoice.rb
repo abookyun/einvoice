@@ -32,20 +32,20 @@ module Einvoice
         validates :seller_id, presence: true, length: { maximum: 10 }
         validates :buyer_name, presence: true, length: { maximum: 60 }, buyer_name: true
         validates :buyer_id, presence: true, length: { maximum: 10 }
-        validates :customs_clearance_mark, length: { maximum: 1 }, format: { with: /[01]/ }, customs_clearance_mark: true, allow_blank: true
-        validates :invoice_type, presence: true, length: { maximum: 2 }, format: { with: /07|08/ }
-        validates :donate_mark, presence: true, length: { maximum: 1 }, format: { with: /[01]/ }
+        validates :customs_clearance_mark, length: { maximum: 1 }, inclusion: { in: %w(1 2) }, allow_blank: true
+        validates :invoice_type, presence: true, length: { is: 2 }, inclusion: { in: %w(07 08) }
+        validates :donate_mark, presence: true, length: { is: 1 }, inclusion: { in: %w(0 1) }, donate_mark: true
         validates :carrier_type, length: { maximum: 6 }, format: { with: /[a-zA-Z]{2}\d{4}/ }, allow_blank: true
         validates :carrier_id1, length: { maximum: 64 }, carrier_id1: true, allow_blank: true
         validates :carrier_id2, length: { maximum: 64 }, carrier_id2: true, allow_blank: true
-        validates :print_mark, presence: true, length: { maximum: 1 }, format: { with: /[YN]/ }, print_mark: true
+        validates :print_mark, presence: true, length: { is: 1 }, inclusion: { in: %w(Y N) }, print_mark: true
         validates :n_p_o_b_a_n, length: { maximum: 10 }
-        validates :random_number, length: { maximum: 4 }
+        validates :random_number, length: { is: 4 }, allow_blank: true
         validates :invoice_item, presence: true
         validates :sales_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }
         validates :free_tax_sales_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }
         validates :zero_tax_sales_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }
-        validates :tax_type, presence: true, length: { maximum: 1 }
+        validates :tax_type, presence: true, length: { is: 1 }, inclusion: { in: %w(1 2 3 4 9) }
         validates :tax_rate, presence: true, length: { maximum: 6 }
         validates :tax_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }
         validates :total_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }
