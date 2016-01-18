@@ -5,8 +5,6 @@ module Einvoice
         include Einvoice::Validator::Neweb
 
         VALID_OPTIONS_KEYS = [
-          :data_number,
-          :data_date,
           :seller_id,
           :buyer_name,
           :buyer_id,
@@ -33,8 +31,6 @@ module Einvoice
 
         attr_accessor *VALID_OPTIONS_KEYS
 
-        validates :data_number, presence: true, length: { maximum: 20 }
-        validates :data_date, presence: true, length: { maximum: 10 }, format: { with: /\A\d{4}\/\d{2}\/\d{2}\z/ }
         validates :seller_id, presence: true, length: { maximum: 10 }
         validates :buyer_name, presence: true, length: { maximum: 60 }
         validates :buyer_id, presence: true, length: { maximum: 10 }
@@ -56,6 +52,10 @@ module Einvoice
         validates :tax_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }
         validates :total_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }
         validates :contact, presence: true
+
+        def initialize
+          raise NotImplementedError, "You should initialize with subclasses"
+        end
       end
     end
   end

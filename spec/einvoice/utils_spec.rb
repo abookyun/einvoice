@@ -5,23 +5,23 @@ RSpec.describe Einvoice::Utils do
   subject { dummy_class.new }
 
   describe "#serialize" do
-    let(:invoice) { build(:invoice_neweb) }
+    let(:invoice) { build(:neweb_pre_invoice) }
 
     it "includes required keys only" do
       actual_keys = subject.serialize(invoice).keys.map(&:to_sym)
-      expect(actual_keys - Einvoice::Neweb::Model::Invoice::VALID_OPTIONS_KEYS).to be_empty
+      expect(actual_keys - Einvoice::Neweb::Model::PreInvoice::VALID_OPTIONS_KEYS).to be_empty
     end
 
     it "includes required keys only even executed #valid?" do
       invoice.valid?
 
       actual_keys = subject.serialize(invoice).keys.map(&:to_sym)
-      expect(actual_keys - Einvoice::Neweb::Model::Invoice::VALID_OPTIONS_KEYS).to be_empty
+      expect(actual_keys - Einvoice::Neweb::Model::PreInvoice::VALID_OPTIONS_KEYS).to be_empty
     end
   end
 
   describe "#wrap" do
-    let(:invoice) { build(:invoice_neweb) }
+    let(:invoice) { build(:neweb_pre_invoice) }
 
     it "wraps needed outter nodes for neweb API" do
       hash = subject.wrap(subject.serialize(invoice))
@@ -30,7 +30,7 @@ RSpec.describe Einvoice::Utils do
   end
 
   describe "#camelize" do
-    let(:invoice) { build(:invoice_neweb) }
+    let(:invoice) { build(:neweb_pre_invoice) }
 
     it "camelize keys as needed" do
       hash = subject.camelize(subject.wrap(subject.serialize(invoice)))
