@@ -2,7 +2,7 @@ require "spec_helper"
 
 RSpec.describe Einvoice::Neweb::Model::Invoice, type: :model do
   context "validations" do
-    subject { Einvoice::Neweb::Model::PreInvoice.new }
+    subject { build(:neweb_pre_invoice) }
 
     it { is_expected.to validate_presence_of :seller_id }
     it { is_expected.to validate_presence_of :buyer_name }

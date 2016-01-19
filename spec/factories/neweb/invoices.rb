@@ -5,6 +5,7 @@ FactoryGirl.define do
     buyer_id "0000000000"
     invoice_type "07"
     donate_mark "0"
+    n_p_o_b_a_n "53086054"
     print_mark "N"
     sales_amount "1000"
     free_tax_sales_amount "0"

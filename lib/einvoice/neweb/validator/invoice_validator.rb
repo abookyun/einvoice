@@ -12,7 +12,7 @@ module Einvoice
 
       class DonateMarkValidator < ActiveModel::EachValidator
         def validate_each(record, attribute, value)
-          if record.n_p_o_b_a_n.present? && value.to_i != 1
+          if value == "1" && record.n_p_o_b_a_n.blank?
             record.errors.add attribute, options[:message] || :invalid
           end
         end
