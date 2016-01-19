@@ -15,23 +15,21 @@ module Einvoice
     class Provider < Einvoice::Provider
       include Einvoice::Utils
 
-      def issue(payload, type: :pre_invoice)
+      def issue(payload, options)
         case options[:type]
-        when :pre_invoice
-          action = "IN_PreInvoiceS.action"
-          invoice = Einvoice::Neweb::Model::PreInvoice.new
         when :seller_invoice
           action = "IN_SellerInvoiceS.action"
           invoice = Einvoice::Neweb::Model::SellerInvoice.new
         else
-          # nothing
+          action = "IN_PreInvoiceS.action"
+          invoice = Einvoice::Neweb::Model::PreInvoice.new
         end
 
         invoice.from_json(payload.to_json)
 
         if invoice.valid?
           response = connection.post do |request|
-            request.url options[:url] || endpoint + action
+            request.url endpoint_url || endpoint + action
             request.body = {
               storecode: client_id,
               xmldata: encode_xml(wrap(serialize(invoice)))

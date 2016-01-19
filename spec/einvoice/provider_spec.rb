@@ -31,6 +31,7 @@ RSpec.describe Einvoice::Provider do
           client_id: '9999',
           client_secret: '9999',
           endpoint: 'http://test.com/',
+          endpoint_url: 'http://test.com/action',
           format: :xml,
         }
       end

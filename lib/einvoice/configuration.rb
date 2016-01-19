@@ -7,11 +7,13 @@ module Einvoice
       :client_id,
       :client_secret,
       :format,
+      :endpoint_url
     ].freeze
 
     DEFAULT_CLIENT_ID = nil
     DEFAULT_CLIENT_SECRET = nil
     DEFAULT_ENDPOINT = "".freeze
+    DEFAULT_ENDPOINT_URL = nil
     DEFAULT_FORMAT = ""
 
     attr_accessor *VALID_OPTIONS_KEYS
@@ -31,9 +33,10 @@ module Einvoice
     end
 
     def reset
-      self.endpoint      = DEFAULT_ENDPOINT
       self.client_id     = DEFAULT_CLIENT_ID
       self.client_secret = DEFAULT_CLIENT_SECRET
+      self.endpoint      = DEFAULT_ENDPOINT
+      self.endpoint_url  = DEFAULT_ENDPOINT_URL
       self.format        = DEFAULT_FORMAT
     end
   end
