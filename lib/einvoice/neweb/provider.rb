@@ -32,7 +32,7 @@ module Einvoice
             request.url endpoint_url || endpoint + action
             request.body = {
               storecode: client_id,
-              xmldata: encode_xml(wrap(serialize(invoice)))
+              xmldata: encode_xml(camelize(wrap(serialize(invoice))))
             }
           end.body
 
