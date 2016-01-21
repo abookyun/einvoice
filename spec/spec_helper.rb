@@ -1,5 +1,7 @@
 require "codeclimate-test-reporter"
 CodeClimate::TestReporter.start
+require "pry"
+require "vcr"
 
 require "einvoice"
 require "einvoice/configuration"
@@ -108,5 +110,23 @@ RSpec.configure do |config|
       with.test_framework :rspec
       with.library :active_model
     end
+  end
+
+  config.before(:all) do |config|
+    Einvoice.configure do |c|
+      c.endpoint = "https://test-sugar.neweb.com.tw/APPSRC/"
+      c.client_id = "800002"
+      c.client_secret = "abcd1234"
+      c.format = "xml"
+    end
+  end
+end
+
+VCR.configure do |config|
+  config.cassette_library_dir = "spec/fixtures/vcr_cassettes"
+  config.hook_into :webmock
+  config.configure_rspec_metadata!
+  config.before_record do |i|
+    i.response.body.force_encoding('UTF-8')
   end
 end
