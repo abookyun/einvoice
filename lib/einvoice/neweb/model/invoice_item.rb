@@ -19,7 +19,7 @@ module Einvoice
         validates :unit, length: { maximum: 6 }
         validates :unit_price, presence: true, length: { maximum: 17 }, unit_price: true
         validates :amount, presence: true, length: { maximum: 17 }, amount: true
-        validates :sequence_number, presence: true, length: { maximum: 3 }
+        validates :sequence_number, presence: true, length: { maximum: 3 }, format: { with: /\A[1-9]|[1-9][0-9]|[1-9][0-9][0-9]\Z/ }
         validates :remark, length: { maximum: 40 }
       end
     end
