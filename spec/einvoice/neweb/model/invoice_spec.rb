@@ -70,4 +70,16 @@ RSpec.describe Einvoice::Neweb::Model::Invoice, type: :model do
       expect { described_class.new }.to raise_error NotImplementedError
     end
   end
+
+  describe "#payload" do
+    pending
+  end
+
+  describe "#wrapped_payload" do
+    let(:invoice) { build(:neweb_pre_invoice) }
+
+    it "wraps needed outter nodes for neweb API" do
+      expect(invoice.wrapped_payload[:invoice_root]).to have_key(:invoice)
+    end
+  end
 end

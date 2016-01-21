@@ -54,6 +54,16 @@ module Einvoice
         def initialize
           raise NotImplementedError, "You should initialize with subclasses"
         end
+
+        def payload
+          serializable_hash(except: [:errors, :validation_context], include: [:invoice_item, :contact, :customer_defined])
+        end
+
+        def wrapped_payload
+          { invoice_root:
+            { invoice: payload }
+          }
+        end
       end
     end
   end

@@ -4,24 +4,11 @@ RSpec.describe Einvoice::Utils do
   let(:dummy_class) { Class.new { include Einvoice::Utils } }
   subject { dummy_class.new }
 
-  describe "#serialize" do
-    pending
-  end
-
-  describe "#wrap" do
-    let(:invoice) { build(:neweb_pre_invoice) }
-
-    it "wraps needed outter nodes for neweb API" do
-      hash = subject.wrap(subject.serialize(invoice))
-      expect(hash[:invoice_root]).to have_key(:invoice)
-    end
-  end
-
   describe "#camelize" do
     let(:invoice) { build(:neweb_pre_invoice) }
 
     it "camelize keys as needed" do
-      hash = subject.camelize(subject.wrap(subject.serialize(invoice)))
+      hash = subject.camelize(invoice.wrapped_payload)
       expect(hash).to have_key("InvoiceRoot")
     end
   end
