@@ -2,6 +2,8 @@ require "spec_helper"
 
 RSpec.describe Einvoice::Neweb::Model::InvoiceItem, type: :model do
   context "validations" do
+    subject { build(:neweb_invoice_item) }
+
     it { is_expected.to validate_presence_of :description }
     it { is_expected.to validate_presence_of :quantity }
     it { is_expected.to validate_presence_of :unit_price }

@@ -1,6 +1,7 @@
 require "active_model"
 
 require "einvoice/neweb/validator/invoice_validator"
+require "einvoice/neweb/validator/invoice_item_validator"
 
 module Einvoice
   module Neweb

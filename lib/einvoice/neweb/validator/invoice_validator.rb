@@ -41,6 +41,14 @@ module Einvoice
           end
         end
       end
+
+      class TotalAmountValidator < ActiveModel::EachValidator
+        def validate_each(record, attribute, value)
+          unless value != record.attributes.values_at("sales_amount", "free_tax_sales_amount", "zero_tax_sales_amount", "tax_amount").map(&:to_i).inject(&:+)
+            record.errors.add attribute, options[:message] || :invalid
+          end
+        end
+      end
     end
   end
 end

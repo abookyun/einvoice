@@ -48,7 +48,7 @@ module Einvoice
         validates :tax_type, presence: true, length: { is: 1 }, inclusion: { in: %w(1 2 3 4 9) }
         validates :tax_rate, presence: true, length: { maximum: 6 }
         validates :tax_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }
-        validates :total_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }
+        validates :total_amount, presence: true, length: { maximum: 12 }, numericality: { greater_than_or_equal_to: 0 }, total_amount: true
         validates :contact, presence: true
 
         def initialize

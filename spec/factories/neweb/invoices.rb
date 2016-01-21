@@ -17,8 +17,8 @@ FactoryGirl.define do
 
     random_number "AAAA"
 
-    FactoryGirl.build(:invoice_item_neweb)
-    FactoryGirl.build(:contact_neweb)
+    FactoryGirl.build(:neweb_invoice_item)
+    FactoryGirl.build(:neweb_contact)
 
     trait :b2c do
       buyer_id "0" * 10
