@@ -7,7 +7,7 @@ FactoryGirl.define do
     unit_price "100.0"
     amount "1000.0"
     sequence :sequence_number do |n|
-      "#{n + 1}"
+      "#{n}"
     end
   end
 end
