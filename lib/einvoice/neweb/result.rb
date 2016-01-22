@@ -18,6 +18,15 @@ module Einvoice
           data["statcode"] == "0000" if data
         end
       end
+
+      def data
+        if response.is_a? ActiveModel::Errors
+          nil
+        else
+          data = response && (response["Result"]["Invoice"] || response["Result"])
+          data["InvoiceMapRoot"] if data["statcode"] == "0000"
+        end
+      end
     end
   end
 end

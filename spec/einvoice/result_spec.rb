@@ -19,4 +19,10 @@ RSpec.describe Einvoice::Result do
       expect { subject.success? }.to raise_error NotImplementedError
     end
   end
+
+  describe "#data" do
+    it "raises NotImplementedError" do
+      expect { subject.data }.to raise_error NotImplementedError
+    end
+  end
 end

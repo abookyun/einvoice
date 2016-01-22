@@ -13,5 +13,9 @@ module Einvoice
     def success?
       raise NotImplementedError, 'You must initialize one of Einvoice::Response subclasses then use it.'
     end
+
+    def data
+      raise NotImplementedError, 'You must initialize one of Einvoice::Response subclasses then use it.'
+    end
   end
 end

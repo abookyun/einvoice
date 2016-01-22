@@ -54,4 +54,8 @@ RSpec.describe Einvoice::Neweb::Result do
       expect(described_class.new(invoice.errors).success?).to be_falsey
     end
   end
+
+  describe "#data" do
+    pending
+  end
 end
