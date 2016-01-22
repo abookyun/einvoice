@@ -7,6 +7,7 @@ require "einvoice/neweb/model/invoice_item"
 require "einvoice/neweb/model/invoice"
 require "einvoice/neweb/model/pre_invoice"
 require "einvoice/neweb/model/seller_invoice"
+require "einvoice/neweb/model/query"
 
 require "einvoice/neweb/result"
 
@@ -39,6 +40,26 @@ module Einvoice
           Einvoice::Neweb::Result.new(response)
         else
           Einvoice::Neweb::Result.new(invoice.errors)
+        end
+      end
+
+      def query(payload, options)
+        action = "IN_InvoiceMapS.action"
+        query = Einvoice::Neweb::Model::Query.new
+        query.from_json(payload.to_json)
+
+        if query.valid?
+          response = connection.post do |request|
+            request.url endpoint_url || endpoint + action
+            request.body = {
+              storecode: client_id,
+              xmldata: encode_xml(camelize(query.wrapped_payload))
+            }
+          end.body
+
+          Einvoice::Neweb::Result.new(response)
+        else
+          Einvoice::Neweb::Result.new(query.errors)
         end
       end
     end
