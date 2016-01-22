@@ -36,24 +36,35 @@ Or install it yourself as:
 
 ## Usage
 
-Assume one of your customer just make an `@order` including all transaction info for your `@product`. After created the order you're ready to issue this invoice.
-
-### 1. Setup initializer with credentials
+### Setup
 
 ```ruby
 Einvoice.configure do |setup|
   setup.endpoint = ENV['EINVOICE_ENDPOINT']
+  setup.endpoint_url = ENV['EINVOICE_ENDPOINT_URL']
   setup.client_id = ENV['EINVOICE_CLIENT_ID']
   setup.client_secret = ENV['EINVOICE_CLIENT_SECRET']
   setup.format = "xml"
 end
 ```
 
-### 2. Create method for produce payload correspond to issuing action needs
+### Initialize a client with your provider e.g. Neweb
 
 ```ruby
-def invoice_payload(order)
-  {
+client = Einvoice::Client.new(Einvoice::Neweb::Provider.new)
+```
+
+### Issue an invoice
+
+Assume one of your customer just make an `order` including all transaction info for your `product`. After created the order you're ready to issue this invoice.
+
+#### Generate invoice payload
+
+```ruby
+order = Order.find(params[:id])
+product = order.product
+
+payload = {
     data_number: "#{order.data_number}",
     data_date: "#{order.created_at}",
     seller_id: "#{order.product.seller_id}",
@@ -94,20 +105,10 @@ def invoice_payload(order)
 end
 ```
 
-### 3. Initialize Einvoice::Client with your provider and fire the action
+#### Issue an invoice and handle results
 
 ```ruby
-client = Einvoice::Client.new(Einvoice::Neweb::Provider.new)
-client.issue(invoice_payload)
-```
-
-See [More Providers docs]()
-
-### 4. Handle Einvoice::Result object
-
-```ruby
-result = client.issue(invoice_payload)
-# => Einvoice::Result
+result = client.issue(payload)
 
 if result.success?
   logger.info "Issue invoice for #{order.id} is successful."
@@ -117,6 +118,38 @@ end
 ```
 
 See [Einvoice::Result](https://github.com/abookyun/einvoice/blob/master/lib/einvoice/result.rb)
+
+### Query invoices
+
+#### Generate invoice payload
+
+```ruby
+payload = {
+  data_number_s: "order_number1",
+  data_number_e: "order_number5",
+  invoice_date_time_s: "201512010000",
+  invoice_date_time_e: "201501202359",
+  sync_status_update: "N"
+}
+```
+
+#### Query and handle results
+
+```ruby
+result = client.query(data)
+if result.success?
+  result.data["InvoiceMap"].each do |data|
+    order_id = data.data_number
+    invoice_number = data.invoice_number
+    invoice_date = data.invoice_date #YYYY/MM/DD
+    invoice_time = data.invoice_time #HH:MM:SS(24h)
+  end
+
+  logger.info "Query invoice for #{order.id} is successful."
+else
+  logger.info "Issue invoice for #{order.id} is failed with #{result.errors}."
+end
+```
 
 ## Development
 
