@@ -7,7 +7,7 @@ module Einvoice
         attr_accessor *TYPE_SPECIFIC_KEYS
 
         validates :invoice_number, presence: true, length: { maximum: 20 }
-        validates :invoice_date, presence: true, length: { maximum: 10 }, format: { with: /\A\d{4}\/\d{2}\/\d{2}\z/ }
+        validates :invoice_date, presence: true, length: { maximum: 10 }, format: { with: /\A\d{4}\/\d{2}\/\d{2}\Z/ }
 
         def initialize
           # overwritten
