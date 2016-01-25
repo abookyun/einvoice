@@ -1,3 +1,3 @@
 module Einvoice
-  VERSION = "0.2.8"
+  VERSION = "1.0.0"
 end

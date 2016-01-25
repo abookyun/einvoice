@@ -9,12 +9,13 @@ To support the thriving e-commerce industry and lower the business costs and bar
 
 Hence, there are several e-invoice services for B2B, B2C in Taiwan as the intermediate and value-adding platform like CHT, allPay, Neweb, ..etc. They mostly provide services like below:
 
-* Manage e-invoices
-* Issue an e-invoice
-* Return an e-invoice
-* Invalidate an e-invoice
-* List e-invoices
-* Others
+* Issue an new invoice
+* Issue an existed invoice
+* Query issued invoices
+* Cancel an issued invoice
+* Allowance of an invoice
+* Cancel allowance of an invoice
+* Manage invoice numbers
 
 Therefore, we need a API wrapper to manage and access the APIs.
 
@@ -35,6 +36,10 @@ Or install it yourself as:
     $ gem install einvoice
 
 ## Usage
+
+### Supported E-Invoice Providers
+
+* [Neweb Technologies Co., Ltd.（藍新科技）](https://github.com/abookyun/einvoice/blob/master/docs/neweb.md)
 
 ### Setup
 
