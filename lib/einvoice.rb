@@ -9,6 +9,7 @@ require "einvoice/utils"
 require "einvoice/version"
 
 require "einvoice/neweb/provider"
+require "einvoice/tradevan/provider"
 
 module Einvoice
   extend Configuration
