@@ -32,6 +32,7 @@ RSpec.describe Einvoice::Provider do
           client_secret: '9999',
           endpoint: 'http://test.com/',
           endpoint_url: 'http://test.com/action',
+          encryption_keys: { key1: "key1", key2: "key2" },
           format: :xml,
         }
       end
