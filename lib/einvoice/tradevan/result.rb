@@ -5,19 +5,19 @@ module Einvoice
         if response.is_a? ActiveModel::Errors
           response.full_messages.join('; ')
         else
-          response&.dig(:Message)
+          response && response["Message"]
         end
       end
 
       def success?
-        !response&.is_a? ActiveModel::Errors || response&.dig(:Success) == 'Y'
+        response && (response["Success"] == 'Y' || !response.is_a?(ActiveModel::Errors))
       end
 
       def data
-        if response&.is_a? ActiveModel::Errors
+        if response.is_a? ActiveModel::Errors
           nil
         else
-          response&.dig(:Message)
+          response && response["Message"]
         end
       end
     end
