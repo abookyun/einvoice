@@ -14,7 +14,15 @@ module Einvoice
         include Einvoice::Tradevan::Validator
 
         def attributes=(hash)
-          send("#{key}=", value)
+          @itemList ||= []
+          hash.each do |key, value|
+            case key.to_sym
+            when :itemList
+              value.each { |v| @itemList << IssueItem.new(v) }
+            else
+              send("#{key}=", value)
+            end
+          end
         end
 
         def attributes
