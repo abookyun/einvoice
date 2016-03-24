@@ -3,7 +3,7 @@ module Einvoice
     module Validator
       class SaleIdentifierValidator < ActiveModel::EachValidator
         def validate_each(record, attribute, value)
-          unless record.saleIdentifier =~ Regexp.new("\A#{record.companyUn}_#{record.orgId}_")
+          unless record.saleIdentifier =~ Regexp.new("\\A#{record.companyUn}_#{record.orgId}_")
             record.errors.add attribute, options[:message] || :invalid
           end
         end
