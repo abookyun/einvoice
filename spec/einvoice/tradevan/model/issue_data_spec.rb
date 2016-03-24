@@ -88,52 +88,52 @@ RSpec.describe Einvoice::Tradevan::Model::IssueData, type: :model do
       subject { build(:tradevan_issue_data, :G) }
 
       it { is_expected.to validate_presence_of(:invoiceNumber) }
-      it { is_expected.to validate_length_of(:invoiceNumber).is_equal_to(10) }
-      it { is_expected.to validate_presence_of(:donate) }
-      it { is_expected.to validate_length_of(:donate).is_equal_to(1) }
+      # it { is_expected.to validate_length_of(:invoiceNumber).is_equal_to(10) }
+      # it { is_expected.to validate_presence_of(:donate) }
+      # it { is_expected.to validate_length_of(:donate).is_equal_to(1) }
 
       context "with donate 'Y'" do
         before { subject.donate = 'Y' }
-        
-        it { is_expected.to validate_presence_of(:donationUnit) }
-        it { is_expected.to validate_length_of(:donationUnit).is_at_most(10) }
+
+        # it { is_expected.to validate_presence_of(:donationUnit) }
+        # it { is_expected.to validate_length_of(:donationUnit).is_at_most(10) }
       end
 
-      it { is_expected.to validate_presence_of(:carrierId) }
-      it { is_expected.to validate_length_of(:carrierId).is_at_most(64) }
-      it { is_expected.to validate_presence_of(:carrierIdHidden) }
-      it { is_expected.to validate_length_of(:carrierIdHidden).is_at_most(64) }
-      it { is_expected.to validate_length_of(:receiverName).is_at_most(30) }
-      it { is_expected.to validate_length_of(:receiverAddrZip).is_at_most(5) }
-      it { is_expected.to validate_length_of(:receiverAddrRoad).is_at_most(100) }
-      it { is_expected.to validate_length_of(:receiverEmail).is_at_most(80) }
-      it { is_expected.to validate_length_of(:receiverMobile).is_at_most(15) }
-      it { is_expected.to validate_length_of(:checkNumber).is_equal_to(4) }
-      it { is_expected.to validate_length_of(:invoiceDate).is_equal_to(8) }
-      it { is_expected.to validate_length_of(:invoiceTime).is_equal_to(8) }
-      it { is_expected.to validate_length_of(:texclusiveAmount).is_at_most(20) }
-      it { is_expected.to validate_length_of(:oeclusiveAmount).is_at_most(20) }
-      it { is_expected.to validate_length_of(:zexclusiveAmount).is_at_most(20) }
-      it { is_expected.to validate_length_of(:tax).is_at_most(20) }
-      it { is_expected.to validate_length_of(:mainRemark).is_at_most(300) }
-      it { is_expected.to validate_length_of(:invoiceType).is_equal_to(2) }
+      # it { is_expected.to validate_presence_of(:carrierId) }
+      # it { is_expected.to validate_length_of(:carrierId).is_at_most(64) }
+      # it { is_expected.to validate_presence_of(:carrierIdHidden) }
+      # it { is_expected.to validate_length_of(:carrierIdHidden).is_at_most(64) }
+      # it { is_expected.to validate_length_of(:receiverName).is_at_most(30) }
+      # it { is_expected.to validate_length_of(:receiverAddrZip).is_at_most(5) }
+      # it { is_expected.to validate_length_of(:receiverAddrRoad).is_at_most(100) }
+      # it { is_expected.to validate_length_of(:receiverEmail).is_at_most(80) }
+      # it { is_expected.to validate_length_of(:receiverMobile).is_at_most(15) }
+      # it { is_expected.to validate_length_of(:checkNumber).is_equal_to(4) }
+      # it { is_expected.to validate_length_of(:invoiceDate).is_equal_to(8) }
+      # it { is_expected.to validate_length_of(:invoiceTime).is_equal_to(8) }
+      # it { is_expected.to validate_length_of(:texclusiveAmount).is_at_most(20) }
+      # it { is_expected.to validate_length_of(:oeclusiveAmount).is_at_most(20) }
+      # it { is_expected.to validate_length_of(:zexclusiveAmount).is_at_most(20) }
+      # it { is_expected.to validate_length_of(:tax).is_at_most(20) }
+      # it { is_expected.to validate_length_of(:mainRemark).is_at_most(300) }
+      # it { is_expected.to validate_length_of(:invoiceType).is_equal_to(2) }
     end
 
     context "on type H" do
       subject { build(:tradevan_issue_data, :H) }
 
-      it { is_expected.to validate_presence_of(:invoiceNumber) }
-      it { is_expected.to validate_length_of(:invoiceNumber).is_equal_to(10) }
-      it { is_expected.to validate_presence_of(:allowanceNumber) }
-      it { is_expected.to validate_length_of(:allowanceNumber).is_at_most(16) }
-      it { is_expected.to validate_presence_of(:allowanceDate) }
-      it { is_expected.to validate_length_of(:allowanceDate).is_at_most(8) }
-      it { is_expected.to validate_presence_of(:allowanceExclusiveAmount) }
-      it { is_expected.to validate_length_of(:allowanceExclusiveAmount).is_at_most(20) }
-      it { is_expected.to validate_presence_of(:allowanceTax) }
-      it { is_expected.to validate_length_of(:allowanceTax).is_at_most(8) }
-      it { is_expected.to validate_presence_of(:allowancePaperReturned) }
-      it { is_expected.to validate_length_of(:allowancePaperReturned).is_equal_to(1) }
+      # it { is_expected.to validate_presence_of(:invoiceNumber) }
+      # it { is_expected.to validate_length_of(:invoiceNumber).is_equal_to(10) }
+      # it { is_expected.to validate_presence_of(:allowanceNumber) }
+      # it { is_expected.to validate_length_of(:allowanceNumber).is_at_most(16) }
+      # it { is_expected.to validate_presence_of(:allowanceDate) }
+      # it { is_expected.to validate_length_of(:allowanceDate).is_at_most(8) }
+      # it { is_expected.to validate_presence_of(:allowanceExclusiveAmount) }
+      # it { is_expected.to validate_length_of(:allowanceExclusiveAmount).is_at_most(20) }
+      # it { is_expected.to validate_presence_of(:allowanceTax) }
+      # it { is_expected.to validate_length_of(:allowanceTax).is_at_most(8) }
+      # it { is_expected.to validate_presence_of(:allowancePaperReturned) }
+      # it { is_expected.to validate_length_of(:allowancePaperReturned).is_equal_to(1) }
     end
   end
 end
