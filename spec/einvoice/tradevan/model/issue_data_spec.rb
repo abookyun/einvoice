@@ -87,7 +87,7 @@ RSpec.describe Einvoice::Tradevan::Model::IssueData, type: :model do
     context "on type G" do
       subject { build(:tradevan_issue_data, :G) }
 
-      it { is_expected.to validate_presence_of(:invoiceNumber) }
+      # it { is_expected.to validate_presence_of(:invoiceNumber) }
       # it { is_expected.to validate_length_of(:invoiceNumber).is_equal_to(10) }
       # it { is_expected.to validate_presence_of(:donate) }
       # it { is_expected.to validate_length_of(:donate).is_equal_to(1) }
