@@ -5,11 +5,11 @@ module Einvoice
   module Connection
     private
 
-    def connection
-      options = {
+    def connection(options = {})
+      connection_options = {
         headers: { "Accept" => "application/#{format}; charset=utf-8" },
         url: endpoint
-      }
+      }.merge(options)
 
       ::Faraday::Connection.new(options) do |connection|
         case self.class

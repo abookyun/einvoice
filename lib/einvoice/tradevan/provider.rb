@@ -14,7 +14,11 @@ module Einvoice
         issue_data.from_json(payload.to_json)
 
         if issue_data.valid?
-          response = connection.post do |request|
+          response = connection(
+            ssl: {
+              verify: false
+            }
+          ).post do |request|
             request.url endpoint_url || endpoint + "/DEFAULTAPI/post/issue"
             request.body = {
               acnt: client_id,
