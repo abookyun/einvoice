@@ -1,5 +1,7 @@
 require "faraday_middleware"
 require "faraday/request/digest_neweb"
+require "faraday/request/encode_tradevan"
+require "faraday/response/decode_tradevan"
 
 module Einvoice
   module Connection
@@ -11,13 +13,12 @@ module Einvoice
         url: endpoint
       }.merge(options)
 
-      ::Faraday::Connection.new(options) do |connection|
-        case self.class
-        when Einvoice::Neweb::Provider
+      ::Faraday::Connection.new(connection_options) do |connection|
+        case self.class.to_s
+        when "Einvoice::Neweb::Provider"
           connection.request :digest_neweb, client_secret
-        when Einvoice::Tradevan::Provider
+        when "Einvoice::Tradevan::Provider"
           connection.request :encode_tradevan, encryption_keys[:key1], encryption_keys[:key2]
-
           connection.response :decode_tradevan, encryption_keys[:key1], encryption_keys[:key2]
         else
           # none

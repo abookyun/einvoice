@@ -18,10 +18,10 @@ module Faraday
       acnt = env[:body].delete(:acnt)
       acntp_digest = Digest::MD5.hexdigest("FinvC" + env[:body].delete(:acntp))
       args = env.delete(:body)
-      encrypted_args = args.each { |_, value| encrypt(@key1, value.to_json) }
+      encrypted_args = args.inject({}) { |h, (k, v)| h[k] = encrypt(@key1, v.to_json); h }
       v_hash = encrypted_args.merge(acnt: acnt, acntp: acntp_digest)
 
-      env[:body][:v] = encrypt(@key2, v_hash.to_json)
+      env[:body] = { v: encrypt(@key2, v_hash.to_json) }
       @app.call env
     end
 
