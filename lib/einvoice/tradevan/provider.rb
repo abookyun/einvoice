@@ -9,7 +9,7 @@ require "einvoice/tradevan/result"
 module Einvoice
   module Tradevan
     class Provider < Einvoice::Provider
-      def issue(payload, options)
+      def issue(payload, options = {})
         issue_data = Einvoice::Tradevan::Model::IssueData.new
         issue_data.from_json(payload.to_json)
 
