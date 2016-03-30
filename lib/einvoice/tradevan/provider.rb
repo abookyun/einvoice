@@ -32,6 +32,21 @@ module Einvoice
           Einvoice::Tradevan::Result.new(issue_data.errors)
         end
       end
+
+      def get_donate_unit_list(options = {})
+        response = connection(
+          ssl: { verify: false }
+        ).get do |request|
+          request.url endpoint_url || endpoint + "/DEFAULTAPI/get/getDonateUnitList"
+          request.body = {
+            acnt: client_id,
+            acntp: client_secret,
+            companyUn: "53086054"
+          }
+        end.body
+
+        Einvoice::Tradevan::Result.new(response)
+      end
     end
   end
 end
