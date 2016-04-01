@@ -7,18 +7,17 @@ module Faraday
       require 'openssl' unless defined?(::OpenSSL)
     end
 
-    def initialize(app, key1, key2)
+    def initialize(app, key)
       super(app)
-      @key1 = key1
-      @key2 = key2
+      @key = key
     end
 
     def call(env)
-      if env[:body][:Success] == 'Y'
-        env[:body][:Message] = decrypt(env[:body][:Message])
+      @app.call(env).on_complete do |env|
+        if env[:body] && env[:body]['Success'] == 'Y'
+          env[:body]['Message'] = decrypt(@key, env[:body]['Message'])
+        end
       end
-
-      @app.call env
     end
 
     private
@@ -27,8 +26,11 @@ module Faraday
       cipher = OpenSSL::Cipher::AES.new(128, :CBC)
       cipher.decrypt
       cipher.key = key
+      cipher.iv = key
+      cipher.padding = 0
 
-      cipher.update(Base64.decode64(content)) + cipher.final
+      decrypted = cipher.update(Base64.decode64(content)) + cipher.final
+      JSON.load(decrypted.strip!)
     end
   end
 end

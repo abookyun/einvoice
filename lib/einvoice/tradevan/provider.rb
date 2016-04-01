@@ -1,3 +1,6 @@
+require 'base64'
+require 'openssl'
+
 require "einvoice/utils"
 
 require "einvoice/tradevan/model/base"
@@ -20,11 +23,7 @@ module Einvoice
             }
           ).post do |request|
             request.url endpoint_url || endpoint + "/DEFAULTAPI/post/issue"
-            request.body = {
-              acnt: client_id,
-              acntp: client_secret,
-              issueData: issue_data.payload
-            }
+            request.params[:v] = encrypted_params(issueData: issue_data.payload)
           end.body
 
           Einvoice::Tradevan::Result.new(response)
@@ -33,19 +32,44 @@ module Einvoice
         end
       end
 
-      def get_donate_unit_list(options = {})
+      def get_donate_unit_list(companyUn, options = {})
         response = connection(
-          ssl: { verify: false }
+          ssl: {
+            verify: false
+          }
         ).get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/getDonateUnitList"
-          request.body = {
-            acnt: client_id,
-            acntp: client_secret,
-            companyUn: "53086054"
-          }
+          request.params[:v] = encrypted_params(companyUn: companyUn)
         end.body
 
         Einvoice::Tradevan::Result.new(response)
+      end
+
+      private
+
+      def encrypted_params(params)
+        encrypted_params = params.dup
+        encrypted_params.each do |key, value|
+          value = value.is_a?(Hash) ? value.to_json : value.to_s
+          encrypted_params[key] = encrypt(encryption_keys[:key1], value)
+        end
+
+        encrypted_v = { acnt: client_id, acntp: client_secret }.merge(encrypted_params).to_json
+        encrypted = encrypt(encryption_keys[:key2], encrypted_v)
+      end
+
+      def encrypt(key, content)
+        cipher = OpenSSL::Cipher::AES.new(128, :CBC)
+        cipher.encrypt
+        cipher.key = key
+        cipher.iv = key
+        cipher.padding = 0
+
+        # padding with "\x00"
+        q, m = content.size.divmod(cipher.block_size)
+        content = content.ljust(cipher.block_size * (q + 1), "\x00") if m != 0
+
+        Base64.strict_encode64(cipher.update(content) + cipher.final)
       end
     end
   end
