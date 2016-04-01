@@ -14,7 +14,7 @@ module Faraday
 
     def call(env)
       @app.call(env).on_complete do |env|
-        if env[:body] && env[:body]['Success'] == 'Y'
+        if env[:body] && env[:body]['Success'] != 'E'
           env[:body]['Message'] = decrypt(@key, env[:body]['Message'])
         end
       end
