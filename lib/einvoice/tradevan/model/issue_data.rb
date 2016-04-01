@@ -57,7 +57,7 @@ module Einvoice
         validates :type, presence: true, length: { is: 1 }, inclusion: { in: %w(I R G H) }
         validates :saleIdentifier, presence: true, length: { maximum: 100 }, saleIdentifier: true
         validates :transactionNumber, presence: true, length: { maximum: 50 }
-        validates :transactionDate, presence: true, length: { is: 8 }, numericality: { only_integer: true }
+        validates :transactionDate, presence: true, length: { is: 8 }, format: { with: /\A\d{8}\Z/ }
         validates :transactionTime, presence: true, length: { is: 8 }, format: { with: /\A\d{2}\:\d{2}\:\d{2}\Z/ }
         validates :total, presence: true, length: { maximum: 20 }, total: true
         validates :transactionSource, length: { maximum: 50 } # Public Affair Firm presence: true
@@ -77,7 +77,7 @@ module Einvoice
 
         # Type H
         validates :allowanceNumber, presence: true, length: { is: 16 }, allowanceNumber: true, if: proc { self.type == 'H' }
-        validates :allowanceDate, presence: true, length: { is: 8 }, numericality: { only_integer: true }, if: proc { self.type == 'H' }
+        validates :allowanceDate, presence: true, length: { is: 8 }, format: { with: /\A\d{8}\Z/ }, if: proc { self.type == 'H' }
         validates :allowanceExclusiveAmount, presence: true, length: { maximum: 20 }, if: proc { self.type == 'H' }
         validates :allowanceTax, presence: true, length: { maximum: 8 }, if: proc { self.type == 'H' }
         validates :allowancePaperReturned, presence: true, length: { is: 1 }, inclusion: { in: %w(Y N) }, if: proc { self.type == 'H' }

@@ -54,8 +54,8 @@ module Einvoice
           encrypted_params[key] = encrypt(encryption_keys[:key1], value)
         end
 
-        encrypted_v = { acnt: client_id, acntp: client_secret }.merge(encrypted_params).to_json
-        encrypted = encrypt(encryption_keys[:key2], encrypted_v)
+        v = { acnt: client_id, acntp: client_secret }.merge(encrypted_params).to_json
+        encrypt(encryption_keys[:key2], v)
       end
 
       def encrypt(key, content)
