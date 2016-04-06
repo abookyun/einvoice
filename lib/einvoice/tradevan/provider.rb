@@ -65,9 +65,10 @@ module Einvoice
         cipher.iv = key
         cipher.padding = 0
 
-        # padding with "\x00"
-        q, m = content.size.divmod(cipher.block_size)
-        content = content.ljust(cipher.block_size * (q + 1), "\x00") if m != 0
+        # padding with "\u0000"
+        q, m = content.bytesize.divmod(cipher.block_size)
+        content_bytes_with_padding = content.bytes.fill(0, content.bytesize..(cipher.block_size * (q + 1) - 1))
+        content = content_bytes_with_padding.pack('C*').force_encoding('utf-8') if m!= 0
 
         Base64.strict_encode64(cipher.update(content) + cipher.final)
       end
