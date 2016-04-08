@@ -45,6 +45,20 @@ module Einvoice
         Einvoice::Tradevan::Result.new(response)
       end
 
+      def get_invoice_content(params, options = {})
+        response = connection(
+          ssl: {
+            verify: false
+          }
+        ).get do |request|
+          request.url endpoint_url || endpoint + "/DEFAULTAPI/get/getInvoiceContent"
+
+          request.params[:v] = encrypted_params(params)
+        end.body
+
+        Einvoice::Tradevan::Result.new(response)
+      end
+
       private
 
       def encrypted_params(params)
