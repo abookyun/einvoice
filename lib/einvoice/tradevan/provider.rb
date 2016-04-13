@@ -86,6 +86,26 @@ module Einvoice
         Einvoice::Tradevan::Result.new(response)
       end
 
+      def send_card_info_to_cust(companyUn = nil, sellTargetCode, invoiceStartYM, invoiceEndYM, receiverEmail = nil, receiverMobile = nil)
+        response = connection(
+          ssl: {
+            verify: false
+          }
+        ).get do |request|
+          request.url endpoint_url || endpoint + "/DEFAULTAPI/get/sendCardInfotoCust"
+          request.params[:v] = encrypted_params(
+            companyUn: companyUn,
+            sellTargetCode: sellTargetCode,
+            invoiceStartYM: invoiceStartYM,
+            invoiceEndYM: invoiceEndYM,
+            receiverEmail: receiverEmail,
+            receiverMobile: receiverMobile
+          )
+        end.body
+
+        Einvoice::Tradevan::Result.new(response)
+      end
+
       def get_donate_unit_list(companyUn, options = {})
         response = connection(
           ssl: {
