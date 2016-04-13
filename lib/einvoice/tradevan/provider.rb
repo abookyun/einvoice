@@ -53,6 +53,26 @@ module Einvoice
         end
       end
 
+      def search_invoice_by_member_id(invoice_start_date, invoice_end_date, companyUn = nil, memberId = nil, carrierId = nil, sellTargetCode = nil)
+        response = connection(
+          ssl: {
+            verify: false
+          }
+        ).get do |request|
+          request.url endpoint_url || endpoint + "/DEFAULTAPI/get/searchInvoiceByMemberId"
+          request.params[:v] = encrypted_params(
+            invoiceStartDate: invoice_start_date,
+            invoiceEndDate: invoice_end_date,
+            companyUn: companyUn,
+            memberId: memberId,
+            carrierId: carrierId,
+            sellTargetCode: sellTargetCode
+          )
+        end.body
+
+        Einvoice::Tradevan::Result.new(response)
+      end
+
       def get_donate_unit_list(companyUn, options = {})
         response = connection(
           ssl: {
