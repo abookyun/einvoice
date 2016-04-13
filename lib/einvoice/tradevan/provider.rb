@@ -73,6 +73,19 @@ module Einvoice
         Einvoice::Tradevan::Result.new(response)
       end
 
+      def search_invoice_detail(invoice_number)
+        response = connection(
+          ssl: {
+            verify: false
+          }
+        ).get do |request|
+          request.url endpoint_url || endpoint + "/DEFAULTAPI/get/searchInvoiceDetail"
+          request.params[:v] = encrypted_params(invoiceNumber: invoice_number)
+        end.body
+
+        Einvoice::Tradevan::Result.new(response)
+      end
+
       def get_donate_unit_list(companyUn, options = {})
         response = connection(
           ssl: {
