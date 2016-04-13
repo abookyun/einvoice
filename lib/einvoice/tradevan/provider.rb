@@ -53,21 +53,14 @@ module Einvoice
         end
       end
 
-      def search_invoice_by_member_id(invoice_start_date, invoice_end_date, companyUn = nil, memberId = nil, carrierId = nil, sellTargetCode = nil)
+      def search_invoice_by_member_id(payload, options = {})
         response = connection(
           ssl: {
             verify: false
           }
         ).get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/searchInvoiceByMemberId"
-          request.params[:v] = encrypted_params(
-            invoiceStartDate: invoice_start_date,
-            invoiceEndDate: invoice_end_date,
-            companyUn: companyUn,
-            memberId: memberId,
-            carrierId: carrierId,
-            sellTargetCode: sellTargetCode
-          )
+          request.params[:v] = encrypted_params(payload)
         end.body
 
         Einvoice::Tradevan::Result.new(response)
@@ -86,40 +79,27 @@ module Einvoice
         Einvoice::Tradevan::Result.new(response)
       end
 
-      def send_card_info_to_cust(companyUn = nil, sellTargetCode, invoiceStartYM, invoiceEndYM, receiverEmail = nil, receiverMobile = nil)
+      def send_card_info_to_cust(payload, options = {})
         response = connection(
           ssl: {
             verify: false
           }
         ).get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/sendCardInfotoCust"
-          request.params[:v] = encrypted_params(
-            companyUn: companyUn,
-            sellTargetCode: sellTargetCode,
-            invoiceStartYM: invoiceStartYM,
-            invoiceEndYM: invoiceEndYM,
-            receiverEmail: receiverEmail,
-            receiverMobile: receiverMobile
-          )
+          request.params[:v] = encrypted_params(payload)
         end.body
 
         Einvoice::Tradevan::Result.new(response)
       end
 
-      def get_invoice_mark_info(companyUn, orgId, uniFiedNumber, bookType, period)
+      def get_invoice_mark_info(payload, options = {})
         response = connection(
           ssl: {
             verify: false
           }
         ).get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/sendCardInfotoCust"
-          request.params[:v] = encrypted_params(
-            companyUn: companyUn,
-            orgId: orgId,
-            uniFiedNumber: uniFiedNumber,
-            bookType: bookType,
-            period: period
-          )
+          request.params[:v] = encrypted_params(payload)
         end.body
 
         Einvoice::Tradevan::Result.new(response)
@@ -138,7 +118,7 @@ module Einvoice
         Einvoice::Tradevan::Result.new(response)
       end
 
-      def get_invoice_content(params, options = {})
+      def get_invoice_content(payload, options = {})
         response = connection(
           ssl: {
             verify: false
@@ -146,7 +126,7 @@ module Einvoice
         ).get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/getInvoiceContent"
 
-          request.params[:v] = encrypted_params(params)
+          request.params[:v] = encrypted_params(payload)
         end.body
 
         Einvoice::Tradevan::Result.new(response)
