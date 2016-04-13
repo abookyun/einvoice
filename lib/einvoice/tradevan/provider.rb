@@ -106,6 +106,25 @@ module Einvoice
         Einvoice::Tradevan::Result.new(response)
       end
 
+      def get_invoice_mark_info(companyUn, orgId, uniFiedNumber, bookType, period)
+        response = connection(
+          ssl: {
+            verify: false
+          }
+        ).get do |request|
+          request.url endpoint_url || endpoint + "/DEFAULTAPI/get/sendCardInfotoCust"
+          request.params[:v] = encrypted_params(
+            companyUn: companyUn,
+            orgId: orgId,
+            uniFiedNumber: uniFiedNumber,
+            bookType: bookType,
+            period: period
+          )
+        end.body
+
+        Einvoice::Tradevan::Result.new(response)
+      end
+
       def get_donate_unit_list(companyUn, options = {})
         response = connection(
           ssl: {
