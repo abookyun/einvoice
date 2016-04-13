@@ -6,6 +6,7 @@ require "einvoice/utils"
 require "einvoice/tradevan/model/base"
 require "einvoice/tradevan/model/issue_data"
 require "einvoice/tradevan/model/issue_item"
+require "einvoice/tradevan/model/void_data"
 
 require "einvoice/tradevan/result"
 
@@ -29,6 +30,26 @@ module Einvoice
           Einvoice::Tradevan::Result.new(response)
         else
           Einvoice::Tradevan::Result.new(issue_data.errors)
+        end
+      end
+
+      def cancel(payload, options = {})
+        void_data = Einvoice::Tradevan::Model::VoidData.new
+        void_data.from_json(payload.to_json)
+
+        if void_data.valid?
+          response = connection(
+            ssl: {
+              verify: false
+            }
+          ).post do |request|
+            request.url endpoint_url || endpoint + "/DEFAULTAPI/post/cancel"
+            request.params[:v] = encrypted_params(voidData: void_data.payload)
+          end.body
+
+          Einvoice::Tradevan::Result.new(response)
+        else
+          Einvoice::Tradevan::Result.new(void_data.errors)
         end
       end
 
