@@ -9,8 +9,8 @@ module Einvoice
         end
       end
 
-      def success?
-        response && (response["Success"] == 'Y' || !response.is_a?(ActiveModel::Errors))
+      def successful?
+        response && !response.is_a?(ActiveModel::Errors) && response["Success"] == 'Y'
       end
 
       def data
