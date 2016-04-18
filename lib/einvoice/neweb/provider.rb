@@ -16,7 +16,7 @@ module Einvoice
     class Provider < Einvoice::Provider
       include Einvoice::Utils
 
-      def issue(payload, options)
+      def issue(payload, options = {})
         case options[:type]
         when :seller_invoice
           action = "IN_SellerInvoiceS.action"
@@ -43,7 +43,7 @@ module Einvoice
         end
       end
 
-      def query(payload, options)
+      def query(payload, options = {})
         action = "IN_InvoiceMapS.action"
         query = Einvoice::Neweb::Model::Query.new
         query.from_json(payload.to_json)
