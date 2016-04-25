@@ -155,7 +155,7 @@ module Einvoice
         # padding with "\u0000"
         q, m = content.bytesize.divmod(cipher.block_size)
         content_bytes_with_padding = content.bytes.fill(0, content.bytesize..(cipher.block_size * (q + 1) - 1))
-        content = content_bytes_with_padding.pack('C*').force_encoding('utf-8') if m!= 0
+        content = content_bytes_with_padding.pack('C*').force_encoding('utf-8') if m!= 0 || q == 0
 
         Base64.strict_encode64(cipher.update(content) + cipher.final)
       end
