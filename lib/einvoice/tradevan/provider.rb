@@ -98,7 +98,7 @@ module Einvoice
             verify: false
           }
         ).get do |request|
-          request.url endpoint_url || endpoint + "/DEFAULTAPI/get/sendCardInfotoCust"
+          request.url endpoint_url || endpoint + "/DEFAULTAPI/get/getInvoiceMarkInfo"
           request.params[:v] = encrypted_params(payload)
         end.body
 
