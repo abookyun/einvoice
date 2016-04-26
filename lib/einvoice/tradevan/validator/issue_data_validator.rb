@@ -33,6 +33,16 @@ module Einvoice
         end
       end
 
+      class DonationUnitValidator < ActiveModel::EachValidator
+        def validate_each(record, attribute, value)
+          units = JSON.parse(File.read("lib/einvoice/donation_unit_list.json"))
+
+          unless units[value]
+            record.errors.add attribute, options[:message] || :invalid
+          end
+        end
+      end
+
       class ItemListValidator < ActiveModel::EachValidator
         def validate_each(record, attribtue, value)
           if %w(A G H).include?(record.type) && record.itemList.map(&:itemExclude).map(&:blank?).reduce(&:|)

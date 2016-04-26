@@ -84,7 +84,7 @@ module Einvoice
 
         # Type I R G
         validates :donate, presence: true, length: { is: 1 }, if: proc { %w(I R G).include?(self.type) && self.buyerUn.blank? && self.paperPrintMode.to_i == 0 }
-        validates :donationUnit, presence: true, length: { maximum: 10 }, if: proc { %w(I R G).include?(self.type) && self.donate == 'Y' }
+        validates :donationUnit, presence: true, length: { maximum: 10 }, donationUnit: true, if: proc { %w(I R G).include?(self.type) && self.donate == 'Y' }
         validates :carrierId, presence: true, length: { maximum: 64 }, if: proc { %w(I R G).include?(self.type) && self.paperPrintMode.to_i == 0 && self.donate == 'N' }
         validates :carrierIdHidden, presence: true, length: { maximum: 64 }, if: proc { %w(I R G).include?(self.type) && self.paperPrintMode.to_i == 0 && self.donate == 'N' }
         validates :receiverName, allow_blank: true, length: { maximum: 30 }, if: proc { %w(I R G).include?(self.type) }
