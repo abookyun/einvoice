@@ -5,10 +5,8 @@ RSpec.describe Einvoice::Utils do
   subject { dummy_class.new }
 
   describe "#camelize" do
-    let(:invoice) { build(:neweb_pre_invoice) }
-
     it "camelize keys as needed" do
-      hash = subject.camelize(invoice.wrapped_payload)
+      hash = subject.camelize({ invoice_root: { key: "value" } })
       expect(hash).to have_key("InvoiceRoot")
     end
   end
