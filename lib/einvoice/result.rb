@@ -10,7 +10,7 @@ module Einvoice
       raise NotImplementedError, 'You must initialize one of Einvoice::Response subclasses then use it.'
     end
 
-    def success?
+    def successful?
       raise NotImplementedError, 'You must initialize one of Einvoice::Response subclasses then use it.'
     end
 

@@ -125,7 +125,6 @@ module Einvoice
           }
         ).get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/getInvoiceContent"
-
           request.params[:v] = encrypted_params(payload)
         end.body
 
