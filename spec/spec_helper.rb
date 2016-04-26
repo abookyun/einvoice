@@ -122,13 +122,4 @@ RSpec.configure do |config|
       with.library :active_model
     end
   end
-
-  config.before(:all) do |config|
-    Einvoice.configure do |c|
-      c.endpoint = "https://test-sugar.neweb.com.tw/APPSRC/"
-      c.client_id = "800002"
-      c.client_secret = "abcd1234"
-      c.format = "xml"
-    end
-  end
 end
