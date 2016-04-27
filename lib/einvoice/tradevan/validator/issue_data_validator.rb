@@ -35,7 +35,6 @@ module Einvoice
 
       class DonationUnitValidator < ActiveModel::EachValidator
         def validate_each(record, attribute, value)
-          puts File.expand_path('../../../', __FILE__)
           donation_unit_list_file = [File.expand_path('../../../', __FILE__), "/donation_unit_list.json"].join
           units = JSON.parse(File.read(donation_unit_list_file))
 
