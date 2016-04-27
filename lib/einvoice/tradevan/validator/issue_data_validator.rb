@@ -35,7 +35,8 @@ module Einvoice
 
       class DonationUnitValidator < ActiveModel::EachValidator
         def validate_each(record, attribute, value)
-          units = JSON.parse(File.read("lib/einvoice/donation_unit_list.json"))
+          donation_unit_list_file = [File.expand_path('../../../', __FILE__), "donation_unit_list.json"].join
+          units = JSON.parse(File.read(donation_unit_list_file))
 
           unless units[value]
             record.errors.add attribute, options[:message] || :invalid
