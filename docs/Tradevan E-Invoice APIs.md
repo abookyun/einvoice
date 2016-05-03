@@ -2,16 +2,46 @@
 
 ## Overview
 
-* Partnership
-* Authentication
-* Encode and Decode
+* Preparation
+* Encode Request
+* Decode Response
 * APIs
 
-## Partnership
+## Preparation
 
-## Authentication
+After contacting with Tradevan, you'll get
 
-## Encode and Decode
+* acnt: your account name
+* acntp: your account password
+* key1: 1st AES encryption key
+* key2: 2nd AES encryption key
+
+## Encode Request
+
+* Method: POST/GET
+* URL: "#{endpoint}/#{path}"
+* Parameters: "#{v}"
+* v: `Base64_strict.encode(AES.encrypt(key2, { acnt: "#{acnt}", acntp: "#{acntp}", api_key1: "#{encryption_of_api_value1}", api_key2: "#{encryption_of_api_value2}", ... }))`
+* `AES.encrypt(key, content)`:
+  * mode: CBC-128
+  * key: use `key2` for outter encryption, use `key1` for inner value encryption
+  * iv: same as key
+  * padding: no, but you should manually pad with `"\u0000"`(character space in bytes format) to fit correct CBC block size
+* encryption_of_api_value1: `Base64_strict.encode(AES.encrypt(key1, api_value1))`
+
+## Decode Response
+
+* Format: JSON, i.e. `{ "Success": "Y", "Message": "#{encryption_of_message}" }`
+* Success: "Y" for OK, "N" for Failure, "E" for Error
+* Message:
+  * Plain Text when `"Success": "E"`
+  * Encryption Text when `"Success": "Y"` or `"Success": "N"`
+  * Decryption: `AES.decrypt(key2, Base64_strict.decode(response["Message"]))`
+* `AES.decrypt(key, content)`:
+  * mode: CBC-128
+  * key: use `key2` for decrypt `response["Message"]` content
+  * iv: key
+  * padding: no
 
 ## APIs
 
