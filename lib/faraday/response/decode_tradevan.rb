@@ -30,7 +30,7 @@ module Faraday
       cipher.padding = 0
 
       decrypted = cipher.update(Base64.decode64(content)) + cipher.final
-      JSON.load(decrypted.strip!)
+      JSON.load(decrypted.strip)
     end
   end
 end
