@@ -1,12 +1,10 @@
 language: ruby
 sudo: false
 cache: bundler
-before_install: gem install bundler -v 1.11.2
+before_install: gem install bundler
 rvm:
-  - 2.0.0
-  - 2.1.0
-  - 2.2.0
-  - 2.3.0
+  - 2.2.5
+  - 2.3.1
 addons:
   code_climate:
     repo_token: 134e1f1cc8b60db4f2a491152c9227a6dbbfbeba5c1d05ee8b44cd78a1069f28
