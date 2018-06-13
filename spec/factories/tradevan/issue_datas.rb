@@ -1,4 +1,4 @@
-FactoryGirl.define do
+FactoryBot.define do
   factory :tradevan_issue_data, class: Einvoice::Tradevan::Model::IssueData do
     companyUn "53086054"
     orgId "ICKEC"
@@ -13,7 +13,7 @@ FactoryGirl.define do
     itemList { [] }
 
     after(:build) do |data|
-      data.itemList << FactoryGirl.build(:tradevan_issue_item)
+      data.itemList << FactoryBot.build(:tradevan_issue_item)
     end
 
     trait :I do
@@ -68,12 +68,25 @@ FactoryGirl.define do
 
     trait :H do
       type "H"
+      allowanceIdentifier "53086054_ICKEC_20160323014320"
       invoiceNumber "EM82930261"
       allowanceNumber "ICKEC20160324001"
       allowanceDate "20160324"
       allowanceExclusiveAmount "100"
       allowanceTax "5"
+      allowanceInclusiveAmount "105"
       allowancePaperReturned "Y"
+    end
+
+    trait :A do
+      type "A"
+      allowanceIdentifier "53086054_ICKEC_20160323014320"
+      allowanceExclusiveAmount "100"
+      allowanceTax "5"
+      allowanceInclusiveAmount "105"
+      allowancePaperReturned "Y"
+      allowaDeclaration "201803"
+      invoicePaperReturned "Y"
     end
   end
 end

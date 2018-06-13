@@ -27,7 +27,6 @@ RSpec.describe Einvoice::Tradevan::Model::IssueData, type: :model do
     it { is_expected.to validate_length_of(:paperPrintMode).is_equal_to(1) }
     it { is_expected.to validate_presence_of(:invoiceAlarmMode) }
     it { is_expected.to validate_length_of(:invoiceAlarmMode).is_equal_to(1) }
-    it { is_expected.to validate_length_of(:InvoicePaperReturned).is_at_most(1) }
     it { is_expected.to validate_presence_of(:carrierType) }
     it { is_expected.to validate_length_of(:carrierType).is_equal_to(6) }
     it { is_expected.to validate_length_of(:buyerUn).is_equal_to(8) }
@@ -132,6 +131,8 @@ RSpec.describe Einvoice::Tradevan::Model::IssueData, type: :model do
     context "on type H" do
       subject { build(:tradevan_issue_data, :H) }
 
+      it { is_expected.to validate_presence_of(:allowanceIdentifier) }
+      it { is_expected.to validate_length_of(:allowanceIdentifier).is_at_most(100) }
       it { is_expected.to validate_presence_of(:invoiceNumber) }
       it { is_expected.to validate_length_of(:invoiceNumber).is_equal_to(10) }
       it { is_expected.to validate_presence_of(:allowanceNumber) }
@@ -144,6 +145,22 @@ RSpec.describe Einvoice::Tradevan::Model::IssueData, type: :model do
       it { is_expected.to validate_length_of(:allowanceTax).is_at_most(8) }
       it { is_expected.to validate_presence_of(:allowancePaperReturned) }
       it { is_expected.to validate_length_of(:allowancePaperReturned).is_equal_to(1) }
+    end
+
+    context "on type A" do
+      subject { build(:tradevan_issue_data, :A) }
+
+      it { is_expected.to validate_presence_of(:allowanceIdentifier) }
+      it { is_expected.to validate_length_of(:allowanceIdentifier).is_at_most(100) }
+      it { is_expected.to validate_presence_of(:allowanceExclusiveAmount) }
+      it { is_expected.to validate_length_of(:allowanceExclusiveAmount).is_at_most(20) }
+      it { is_expected.to validate_presence_of(:allowanceTax) }
+      it { is_expected.to validate_length_of(:allowanceTax).is_at_most(8) }
+      it { is_expected.to validate_presence_of(:allowancePaperReturned) }
+      it { is_expected.to validate_length_of(:allowancePaperReturned).is_equal_to(1) }
+      it { is_expected.to validate_length_of(:allowaDeclaration).is_equal_to(6) }
+      it { is_expected.to validate_presence_of(:invoicePaperReturned) }
+      it { is_expected.to validate_length_of(:invoicePaperReturned).is_at_most(1) }
     end
   end
 end

@@ -7,8 +7,8 @@ require "einvoice/configuration"
 require "pry"
 require "shoulda-matchers"
 
-require "factory_girl"
-FactoryGirl.find_definitions
+require "factory_bot"
+FactoryBot.find_definitions
 
 require "vcr"
 VCR.configure do |config|
@@ -112,8 +112,8 @@ RSpec.configure do |config|
   # as the one that triggered the failure.
   Kernel.srand config.seed
 
-  # FactoryGirl
-  config.include FactoryGirl::Syntax::Methods
+  # FactoryBot
+  config.include FactoryBot::Syntax::Methods
 
   # Shoulda Matcher
   Shoulda::Matchers.configure do |config|

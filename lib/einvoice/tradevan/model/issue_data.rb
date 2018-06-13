@@ -64,7 +64,7 @@ module Einvoice
         validates :transactionTarget, length: { maximum: 50 } # Public Affair Firm presence: true
         validates :paperPrintMode, presence: true, length: { is: 1 }, inclusion: { in: %w(0 1 2 3 4) }
         validates :invoiceAlarmMode, presence: true, length: { is: 1 }, inclusion: { in: %w(0 1 2 3 4 5 6) }
-        validates :invoicePaperReturned, allow_blank: true, length: { maximum: 1 }, inclusion: { in: %w(Y N) }, invoicePaperReturned: true
+        validates :invoicePaperReturned, presence: true, length: { maximum: 1 }, inclusion: { in: %w(Y N) }, invoicePaperReturned: true, if: proc { self.type == 'A' || (self.buyerUn.blank? && self.paperPrintMode.to_i != 0) }
         validates :carrierType, presence: true, length: { is: 6 }, if: proc { self.paperPrintMode.to_i == 0 && self.donate == 'N' && self.type != 'A' }
         validates :buyerUn, length: { is: 8 }, allow_blank: true, unless: proc { %w(A H).include?(self.type) }
         validates :buyerTitle, length: { maximum: 60 }, allow_blank: true, unless: proc { %w(A H).include?(self.type) }
