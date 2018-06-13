@@ -1,4 +1,4 @@
-FactoryGirl.define do
+FactoryBot.define do
   factory :tradevan_issue_item, class: Einvoice::Tradevan::Model::IssueItem do
     saleIdentifier "53086054_ICKEC_20160323014320"
     serialNumber "0001"
@@ -8,6 +8,7 @@ FactoryGirl.define do
     price "100"
     tax "5"
     itemTotal "100"
+    itemExclude "95"
     taxType "T"
   end
 end

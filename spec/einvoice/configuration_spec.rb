@@ -6,7 +6,7 @@ RSpec.describe Einvoice::Configuration do
   describe "#configure" do
     it "provides a syntax sugar to configure" do
       expect { |b|
-        subject.configure &b
+        subject.configure(&b)
       }.to yield_with_args(subject)
     end
   end
