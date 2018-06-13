@@ -4,4 +4,5 @@ source 'https://rubygems.org'
 gemspec
 
 # Integrate CodeClimate Code Coverage into TravisCI
+gem 'simplecov', require: false, group: :test
 gem "codeclimate-test-reporter", group: :test, require: nil
