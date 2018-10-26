@@ -9,6 +9,7 @@ module Einvoice
           :invoicePaperReturned,
           :allowanceNumber,
           :allowancePaperReturned,
+          :companyUn
         ].freeze
 
         attr_accessor *VALID_OPTIONS_KEYS
@@ -21,7 +22,8 @@ module Einvoice
         validates :invoicePaperReturned, presence: true, length: { maximum: 1 }, inclusion: { in: %w(Y N) }, if: proc { %w(C I).include?(self.type) }
 
         # Type A
-        validates :allowanceNumber, presence: true, length: { is: 16 }, allowanceNumber: true, if: proc { self.type == 'A' }
+        validates :companyUn, presence: true, length: { is: 8 }, if: proc { self.type == 'A' }
+        validates :allowanceNumber, presence: true, length: { is: 16 }, if: proc { self.type == 'A' }
         validates :allowancePaperReturned, presence: true, length: { is: 1 }, inclusion: { in: %w(Y N) }, if: proc { self.type == 'A' }
 
         def payload
