@@ -79,6 +79,19 @@ module Einvoice
         Einvoice::Tradevan::Result.new(response)
       end
 
+      def search_invoice_by_transaction_number(payload, options = {})
+        response = connection(
+          ssl: {
+            verify: false
+          }
+        ).get do |request|
+          request.url endpoint_url || endpoint + "/DEFAULTAPI/get/searchInvoiceInfoByTransactionnumber"
+          request.params[:v] = encrypted_params(payload.slice(:companyUn, :orgId, :transactionNumber))
+        end.body
+
+        Einvoice::Tradevan::Result.new(response)
+      end
+
       def send_card_info_to_cust(payload, options = {})
         response = connection(
           ssl: {
