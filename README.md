@@ -1,5 +1,5 @@
 # Einvoice
-[![Build Status](https://travis-ci.com/abookyun/einvoice.svg?branch=master)](https://travis-ci.com/abookyun/einvoice)
+[![Build Status](https://travis-ci.com/abookyun/einvoice.svg)](https://travis-ci.com/abookyun/einvoice)
 [![Code Climate](https://codeclimate.com/github/abookyun/einvoice/badges/gpa.svg)](https://codeclimate.com/github/abookyun/einvoice)
 [![Test Coverage](https://codeclimate.com/github/abookyun/einvoice/badges/coverage.svg)](https://codeclimate.com/github/abookyun/einvoice/coverage)
 
