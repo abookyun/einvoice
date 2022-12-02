@@ -13,6 +13,7 @@ module Einvoice
           :transactionDate,
           :transactionTime,
           :total,
+          :currency,
           :transactionSource,
           :transactionTarget,
           :invoiceNumber,
@@ -22,11 +23,8 @@ module Einvoice
           :allowanceTax,
           :allowancePaperReturned,
           :allowanceInclusiveAmount,
-          :paperPrintMode,
           :invoiceAlarmMode,
           :invoicePaperReturned,
-          :donate,
-          :donationUnit,
           :carrierType,
           :carrierId,
           :carrierIdHidden,
@@ -62,10 +60,8 @@ module Einvoice
         validates :transactionDate, presence: true, length: { is: 8 }, format: { with: /\A\d{8}\Z/ }
         validates :transactionSource, length: { maximum: 50 } # Public Affair Firm presence: true
         validates :transactionTarget, length: { maximum: 50 } # Public Affair Firm presence: true
-        validates :paperPrintMode, presence: true, length: { is: 1 }, inclusion: { in: %w(0 1 2 3 4) }
         validates :invoiceAlarmMode, presence: true, length: { is: 1 }, inclusion: { in: %w(0 1 2 3 4 5 6) }
-        validates :invoicePaperReturned, presence: true, length: { maximum: 1 }, inclusion: { in: %w(Y N) }, invoicePaperReturned: true, if: proc { self.type == 'A' || (self.buyerUn.blank? && self.paperPrintMode.to_i != 0) }
-        validates :carrierType, presence: true, length: { is: 6 }, if: proc { self.paperPrintMode.to_i == 0 && self.donate == 'N' && self.type != 'A' }
+        validates :carrierType, presence: true, length: { is: 6 }
         validates :buyerUn, length: { is: 8 }, allow_blank: true, unless: proc { %w(A H).include?(self.type) }
         validates :buyerTitle, length: { maximum: 60 }, allow_blank: true, unless: proc { %w(A H).include?(self.type) }
         validates :idViewId, allow_blank: true, length: { maximum: 10 }
@@ -95,10 +91,9 @@ module Einvoice
         # Type I R G
         validates :transactionTime, presence: true, length: { is: 8 }, format: { with: /\A\d{2}\:\d{2}\:\d{2}\Z/ }, if: proc { %w(I R G).include?(self.type) }
         validates :total, presence: true, length: { maximum: 20 }, total: true, if: proc { %w(I R G).include?(self.type) }
-        validates :donate, presence: true, length: { is: 1 }, if: proc { %w(I R G).include?(self.type) && self.buyerUn.blank? && self.paperPrintMode.to_i == 0 }
-        validates :donationUnit, presence: true, length: { maximum: 10 }, donationUnit: true, if: proc { %w(I R G).include?(self.type) && self.donate == 'Y' }
-        validates :carrierId, presence: true, length: { maximum: 64 }, if: proc { %w(I R G).include?(self.type) && self.paperPrintMode.to_i == 0 && self.donate == 'N' }
-        validates :carrierIdHidden, presence: true, length: { maximum: 64 }, if: proc { %w(I R G).include?(self.type) && self.paperPrintMode.to_i == 0 && self.donate == 'N' }
+        validates :currency, presence: true, length: { maximum: 20 }, if: proc { %w(I R G).include?(self.type) }
+        validates :carrierId, presence: true, length: { maximum: 64 }, if: proc { %w(I R G).include?(self.type) }
+        validates :carrierIdHidden, presence: true, length: { maximum: 64 }, if: proc { %w(I R G).include?(self.type) }
 
         # Type I R G A
         validates :receiverName, allow_blank: true, length: { maximum: 30 }, if: proc { %w(I R G A).include?(self.type) }
