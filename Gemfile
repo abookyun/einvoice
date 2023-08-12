@@ -5,4 +5,5 @@ gemspec
 
 # Integrate CodeClimate Code Coverage into TravisCI
 # https://github.com/codeclimate/test-reporter/issues/413
-gem 'simplecov', '< 0.18', require: false, group: :test
+gem 'simplecov', require: false, group: :test
+gem "simplecov_json_formatter", require: false, group: :test
