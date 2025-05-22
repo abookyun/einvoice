@@ -61,7 +61,7 @@ RSpec.describe Einvoice::Tradevan::Model::IssueData, type: :model do
       it { is_expected.to validate_presence_of(:carrierIdHidden) }
       it { is_expected.to validate_length_of(:carrierIdHidden).is_at_most(64) }
       it { is_expected.to validate_length_of(:receiverName).is_at_most(30) }
-      it { is_expected.to validate_length_of(:receiverAddrZip).is_at_most(5) }
+      it { is_expected.to validate_length_of(:receiverAddrZip).is_at_most(6) }
       it { is_expected.to validate_length_of(:receiverAddrRoad).is_at_most(100) }
       it { is_expected.to validate_length_of(:receiverEmail).is_at_most(80) }
       it { is_expected.to validate_length_of(:receiverMobile).is_at_most(15) }
@@ -87,7 +87,7 @@ RSpec.describe Einvoice::Tradevan::Model::IssueData, type: :model do
       it { is_expected.to validate_presence_of(:carrierIdHidden) }
       it { is_expected.to validate_length_of(:carrierIdHidden).is_at_most(64) }
       it { is_expected.to validate_length_of(:receiverName).is_at_most(30) }
-      it { is_expected.to validate_length_of(:receiverAddrZip).is_at_most(5) }
+      it { is_expected.to validate_length_of(:receiverAddrZip).is_at_most(6) }
       it { is_expected.to validate_length_of(:receiverAddrRoad).is_at_most(100) }
       it { is_expected.to validate_length_of(:receiverEmail).is_at_most(80) }
       it { is_expected.to validate_length_of(:receiverMobile).is_at_most(15) }
@@ -113,7 +113,7 @@ RSpec.describe Einvoice::Tradevan::Model::IssueData, type: :model do
       it { is_expected.to validate_presence_of(:carrierIdHidden) }
       it { is_expected.to validate_length_of(:carrierIdHidden).is_at_most(64) }
       it { is_expected.to validate_length_of(:receiverName).is_at_most(30) }
-      it { is_expected.to validate_length_of(:receiverAddrZip).is_at_most(5) }
+      it { is_expected.to validate_length_of(:receiverAddrZip).is_at_most(6) }
       it { is_expected.to validate_length_of(:receiverAddrRoad).is_at_most(100) }
       it { is_expected.to validate_length_of(:receiverEmail).is_at_most(80) }
       it { is_expected.to validate_length_of(:receiverMobile).is_at_most(15) }
