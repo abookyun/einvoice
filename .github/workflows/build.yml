@@ -32,6 +32,6 @@ jobs:
         run: bundle exec rspec
 
       - name: Publish code coverage
-        uses: paambaati/codeclimate-action@v4
+        uses: paambaati/codeclimate-action@v9
         env:
           CC_TEST_REPORTER_ID: 134e1f1cc8b60db4f2a491152c9227a6dbbfbeba5c1d05ee8b44cd78a1069f28
