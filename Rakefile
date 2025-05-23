@@ -10,9 +10,8 @@ task :update_donation_unit do
   require "json"
   require "faraday"
   # From https://data.gov.tw/dataset/31868
-  data = Faraday.get("https://www.einvoice.nat.gov.tw/home/DownLoad?fileName=1516074903969_0.csv",
-                     nil, { "accept-encoding": "none" }).body.force_encoding("big5")
-  orgs = data.encode("utf-8").split("\n")[1..-1].map do |line|
+  data = Faraday.get("https://dataset.einvoice.nat.gov.tw/ods/portal/ODS303W/download/3886F055-EB77-4DF9-98E2-F3F49A7D3434/1/8B227A99-042A-4903-8B34-5715442A227D/0/?fileType=csv").body.force_encoding("utf-8")
+  orgs = data.split("\n")[1..-1].map do |line|
     line.split(",").values_at(2, 1)
   end.sort_by(&:first)
 

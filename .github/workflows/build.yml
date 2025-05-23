@@ -13,7 +13,7 @@ jobs:
   test:
     strategy:
       matrix:
-        ruby-version: ['2.6', '2.7', '3.2']
+        ruby-version: ['3.1', '3.2', '3.3', '3.4']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -25,13 +25,12 @@ jobs:
 
       - name: Install Dependency
         run: |
-          gem install bundler
           bundle install
 
       - name: Run tests
         run: bundle exec rspec
 
       - name: Publish code coverage
-        uses: paambaati/codeclimate-action@v4
+        uses: paambaati/codeclimate-action@v9
         env:
           CC_TEST_REPORTER_ID: 134e1f1cc8b60db4f2a491152c9227a6dbbfbeba5c1d05ee8b44cd78a1069f28
