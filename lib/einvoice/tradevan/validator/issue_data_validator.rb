@@ -27,7 +27,7 @@ module Einvoice
 
       class AllowanceNumberValidator < ActiveModel::EachValidator
         def validate_each(record, attribute, value)
-          unless record.allowanceNumber =~ Regexp.new("\A#{record.orgId}")
+          unless record.allowanceNumber =~ Regexp.new("\\A#{record.orgId}")
             record.errors.add attribute, options[:message] || :invalid
           end
         end
