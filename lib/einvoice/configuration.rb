@@ -8,7 +8,8 @@ module Einvoice
       :client_id,
       :client_secret,
       :encryption_keys,
-      :format
+      :format,
+      :ssl_verify
     ].freeze
 
     DEFAULT_CLIENT_ID = nil
@@ -17,6 +18,7 @@ module Einvoice
     DEFAULT_ENDPOINT_URL = nil
     DEFAULT_FORMAT = ""
     DEFAULT_ENCRYPTION_KEYS = {}
+    DEFAULT_SSL_VERIFY = true
 
     attr_accessor *VALID_OPTIONS_KEYS
 
@@ -41,6 +43,7 @@ module Einvoice
       self.endpoint_url    = DEFAULT_ENDPOINT_URL
       self.encryption_keys = DEFAULT_ENCRYPTION_KEYS
       self.format          = DEFAULT_FORMAT
+      self.ssl_verify      = DEFAULT_SSL_VERIFY
     end
   end
 end
