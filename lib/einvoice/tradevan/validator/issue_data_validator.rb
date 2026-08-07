@@ -19,7 +19,7 @@ module Einvoice
 
       class TotalValidator < ActiveModel::EachValidator
         def validate_each(record, attribute, value)
-          unless value != record.itemList.map(&:itemTotal).map(&:to_i).inject(&:+)
+          if value.to_i != record.itemList.map(&:itemTotal).map(&:to_i).sum
             record.errors.add attribute, options[:message] || :invalid
           end
         end
