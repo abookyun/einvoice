@@ -26,8 +26,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.required_ruby_version = '>= 3.1'
-  spec.add_dependency "faraday"
-  spec.add_dependency "faraday_middleware"
+  spec.add_dependency "faraday", "~> 2.1"
   spec.add_dependency "multi_xml"
   spec.add_dependency "activemodel"
   spec.add_dependency "activesupport"

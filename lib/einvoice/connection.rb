@@ -1,5 +1,5 @@
-require "faraday_middleware"
 require "faraday/response/decode_tradevan"
+require "faraday/response/parse_xml"
 
 module Einvoice
   module Connection

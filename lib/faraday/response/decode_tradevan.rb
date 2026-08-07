@@ -1,12 +1,11 @@
+require 'base64'
+require 'json'
+require 'openssl'
+
 require 'faraday'
 
 module Faraday
   class Response::DecodeTradevan < Faraday::Middleware
-    dependency do
-      require 'base64' unless defined?(::Base64)
-      require 'openssl' unless defined?(::OpenSSL)
-    end
-
     def initialize(app, key)
       super(app)
       @key = key
