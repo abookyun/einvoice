@@ -47,6 +47,23 @@ RSpec.describe Einvoice::Tradevan::Model::IssueData, type: :model do
     it { is_expected.to validate_length_of(:memberId).is_at_most(50) }
     # it { is_expected.to validate_presence_of(:itemList) }
 
+    it "accepts items with itemTotal and taxType present" do
+      subject.valid?
+      expect(subject.errors[:itemList]).to be_empty
+    end
+
+    it "rejects items with a blank taxType" do
+      subject.itemList.first.taxType = nil
+      subject.valid?
+      expect(subject.errors[:itemList]).to be_present
+    end
+
+    it "rejects items with a blank itemTotal" do
+      subject.itemList.first.itemTotal = nil
+      subject.valid?
+      expect(subject.errors[:itemList]).to be_present
+    end
+
     context "on type I" do
       it { is_expected.to validate_presence_of(:donate) }
       it { is_expected.to validate_length_of(:donate).is_equal_to(1) }
