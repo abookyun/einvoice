@@ -149,6 +149,18 @@ RSpec.describe Einvoice::Tradevan::Model::IssueData, type: :model do
       it { is_expected.to validate_length_of(:invoiceNumber).is_equal_to(10) }
       it { is_expected.to validate_presence_of(:allowanceNumber) }
       # it { is_expected.to validate_length_of(:allowanceNumber).is_at_most(16) }
+
+      it "accepts an allowanceNumber prefixed with orgId" do
+        subject.allowanceNumber = "ICKEC20160324001"
+        subject.valid?
+        expect(subject.errors[:allowanceNumber]).to be_empty
+      end
+
+      it "rejects an allowanceNumber not prefixed with orgId" do
+        subject.allowanceNumber = "XXXXX20160324001"
+        subject.valid?
+        expect(subject.errors[:allowanceNumber]).to be_present
+      end
       it { is_expected.to validate_presence_of(:allowanceDate) }
       # it { is_expected.to validate_length_of(:allowanceDate).is_at_most(8) }
       it { is_expected.to validate_presence_of(:allowanceExclusiveAmount) }

@@ -9,6 +9,8 @@ RSpec.describe Einvoice::Tradevan::Model::IssueItem, type: :model do
     it { is_expected.to validate_length_of(:invoiceNumber).is_equal_to(10) }
     it { is_expected.to validate_length_of(:invoiceDate).is_equal_to(8) }
     it { is_expected.to validate_length_of(:invoiceTime).is_equal_to(8) }
+    it { is_expected.to allow_value("01:43:30").for(:invoiceTime) }
+    it { is_expected.not_to allow_value("2016/1/1").for(:invoiceTime) }
     it { is_expected.to validate_length_of(:productCode).is_at_most(30) }
     it { is_expected.to validate_presence_of(:productName) }
     it { is_expected.to validate_length_of(:productName).is_at_most(300) }

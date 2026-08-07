@@ -25,7 +25,7 @@ module Einvoice
         validates :serialNumber, presence: true, length: { is: 4 }, numericality: true
         validates :invoiceNumber, allow_blank: true, length: { is: 10 }
         validates :invoiceDate, allow_blank: true, length: { is: 8 }, numericality: true
-        validates :invoiceTime, allow_blank: true, length: { is: 8 }, format: { with: /\Ad{2}\:\d{2}\:\d{2}\Z/ }
+        validates :invoiceTime, allow_blank: true, length: { is: 8 }, format: { with: /\A\d{2}\:\d{2}\:\d{2}\Z/ }
         validates :productCode, allow_blank: true, length: { maximum: 30 }
         validates :productName, presence: true, length: { maximum: 300 }
         validates :qty, presence: true, length: { maximum: 20 }
