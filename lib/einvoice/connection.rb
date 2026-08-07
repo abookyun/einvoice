@@ -8,7 +8,8 @@ module Einvoice
     def connection(options = {})
       connection_options = {
         headers: { "Accept" => "application/#{format}; charset=utf-8" },
-        url: endpoint
+        url: endpoint,
+        ssl: { verify: ssl_verify != false }
       }.merge(options)
 
       ::Faraday::Connection.new(connection_options) do |connection|

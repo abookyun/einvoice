@@ -18,11 +18,7 @@ module Einvoice
         issue_data.from_json(payload.to_json)
 
         if issue_data.valid?
-          response = connection(
-            ssl: {
-              verify: false
-            }
-          ).post do |request|
+          response = connection.post do |request|
             request.url endpoint_url || endpoint + "/DEFAULTAPI/post/issue"
             request.params[:v] = encrypted_params(issueData: issue_data.payload)
           end.body
@@ -38,11 +34,7 @@ module Einvoice
         void_data.from_json(payload.to_json)
 
         if void_data.valid?
-          response = connection(
-            ssl: {
-              verify: false
-            }
-          ).post do |request|
+          response = connection.post do |request|
             request.url endpoint_url || endpoint + "/DEFAULTAPI/post/cancel"
             request.params[:v] = encrypted_params(voidData: void_data.payload)
           end.body
@@ -54,11 +46,7 @@ module Einvoice
       end
 
       def search_invoice_by_member_id(payload, options = {})
-        response = connection(
-          ssl: {
-            verify: false
-          }
-        ).get do |request|
+        response = connection.get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/searchInvoiceByMemberId"
           request.params[:v] = encrypted_params(payload)
         end.body
@@ -67,11 +55,7 @@ module Einvoice
       end
 
       def search_invoice_detail(invoice_number)
-        response = connection(
-          ssl: {
-            verify: false
-          }
-        ).get do |request|
+        response = connection.get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/searchInvoiceDetail"
           request.params[:v] = encrypted_params(invoiceNumber: invoice_number)
         end.body
@@ -80,11 +64,7 @@ module Einvoice
       end
 
       def search_invoice_by_transaction_number(payload, options = {})
-        response = connection(
-          ssl: {
-            verify: false
-          }
-        ).get do |request|
+        response = connection.get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/searchInvoiceInfoByTransactionnumber"
           request.params[:v] = encrypted_params(payload.slice(:companyUn, :orgId, :transactionNumber))
         end.body
@@ -93,11 +73,7 @@ module Einvoice
       end
 
       def send_card_info_to_cust(payload, options = {})
-        response = connection(
-          ssl: {
-            verify: false
-          }
-        ).get do |request|
+        response = connection.get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/sendCardInfotoCust"
           request.params[:v] = encrypted_params(payload)
         end.body
@@ -106,11 +82,7 @@ module Einvoice
       end
 
       def get_invoice_mark_info(payload, options = {})
-        response = connection(
-          ssl: {
-            verify: false
-          }
-        ).get do |request|
+        response = connection.get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/getInvoiceMarkInfo"
           request.params[:v] = encrypted_params(payload)
         end.body
@@ -119,11 +91,7 @@ module Einvoice
       end
 
       def get_donate_unit_list(companyUn, options = {})
-        response = connection(
-          ssl: {
-            verify: false
-          }
-        ).get do |request|
+        response = connection.get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/getDonateUnitList"
           request.params[:v] = encrypted_params(companyUn: companyUn)
         end.body
@@ -132,11 +100,7 @@ module Einvoice
       end
 
       def get_invoice_content(payload, options = {})
-        response = connection(
-          ssl: {
-            verify: false
-          }
-        ).get do |request|
+        response = connection.get do |request|
           request.url endpoint_url || endpoint + "/DEFAULTAPI/get/getInvoiceContent"
           request.params[:v] = encrypted_params(payload)
         end.body

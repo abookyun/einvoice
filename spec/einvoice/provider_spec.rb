@@ -34,6 +34,7 @@ RSpec.describe Einvoice::Provider do
           endpoint_url: 'http://test.com/action',
           encryption_keys: { key1: "key1", key2: "key2" },
           format: :xml,
+          ssl_verify: false,
         }
       end
 
@@ -61,6 +62,18 @@ RSpec.describe Einvoice::Provider do
           end
         end
       end
+    end
+  end
+
+  describe "#connection" do
+    it "verifies TLS certificates by default" do
+      connection = Einvoice::Provider.new.send(:connection)
+      expect(connection.ssl.verify).to be true
+    end
+
+    it "allows opting out with ssl_verify" do
+      connection = Einvoice::Provider.new(ssl_verify: false).send(:connection)
+      expect(connection.ssl.verify).to be false
     end
   end
 
