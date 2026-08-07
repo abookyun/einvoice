@@ -21,6 +21,18 @@ RSpec.describe Einvoice::Tradevan::Model::IssueData, type: :model do
     it { is_expected.to validate_length_of(:transactionTime).is_equal_to(8) }
     it { is_expected.to validate_presence_of(:total) }
     it { is_expected.to validate_length_of(:total).is_at_most(20) }
+
+    it "accepts a total matching the sum of item totals" do
+      subject.total = "100"
+      subject.valid?
+      expect(subject.errors[:total]).to be_empty
+    end
+
+    it "rejects a total that does not match the sum of item totals" do
+      subject.total = "999"
+      subject.valid?
+      expect(subject.errors[:total]).to be_present
+    end
     it { is_expected.to validate_length_of(:transactionSource).is_at_most(50) }
     it { is_expected.to validate_length_of(:transactionTarget).is_at_most(50) }
     it { is_expected.to validate_presence_of(:paperPrintMode) }
