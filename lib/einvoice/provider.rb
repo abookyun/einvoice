@@ -1,7 +1,6 @@
 module Einvoice
   class Provider
     attr_accessor *Configuration::VALID_OPTIONS_KEYS
-    attr_accessor :provider
 
     def initialize(options={})
       options = Einvoice.options.merge(options)
