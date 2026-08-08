@@ -20,7 +20,7 @@ module Einvoice
     DEFAULT_ENCRYPTION_KEYS = {}
     DEFAULT_SSL_VERIFY = true
 
-    attr_accessor *VALID_OPTIONS_KEYS
+    attr_accessor(*VALID_OPTIONS_KEYS)
 
     def self.extended(base)
       base.reset

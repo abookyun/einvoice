@@ -12,7 +12,7 @@ module Einvoice
           :companyUn
         ].freeze
 
-        attr_accessor *VALID_OPTIONS_KEYS
+        attr_accessor(*VALID_OPTIONS_KEYS)
 
         validates :type, presence: true, length: { is: 1 }, inclusion: { in: %w(C I A) }
 
