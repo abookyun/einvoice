@@ -41,7 +41,24 @@ Einvoice.configure do |config|
   config.client_secret = ENV['EINVOICE_CLIENT_SECRET']
   config.encryption_keys = ENV['ENCRYPTION_KEYS']
   config.format = "json"
+  # config.ssl_verify = false # disable TLS certificate verification (default: true)
 end
+```
+### SSL certificate verification
+
+By default, `einvoice` verifies the TLS certificate of the configured
+endpoint (`config.ssl_verify` defaults to `true`). If you need to disable
+this — for example when testing against an endpoint with an incomplete
+certificate chain — you can opt out:
+
+```ruby
+config.ssl_verify = false
+```
+
+Or per-provider:
+
+```ruby
+Einvoice::Tradevan::Provider.new(ssl_verify: false)
 ```
 
 ### Initialize
