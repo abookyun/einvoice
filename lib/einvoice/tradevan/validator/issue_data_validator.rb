@@ -19,7 +19,7 @@ module Einvoice
 
       class TotalValidator < ActiveModel::EachValidator
         def validate_each(record, attribute, value)
-          unless value != record.itemList.map(&:itemTotal).map(&:to_i).inject(&:+)
+          if value.to_i != record.itemList.map(&:itemTotal).map(&:to_i).sum
             record.errors.add attribute, options[:message] || :invalid
           end
         end
@@ -27,7 +27,7 @@ module Einvoice
 
       class AllowanceNumberValidator < ActiveModel::EachValidator
         def validate_each(record, attribute, value)
-          unless record.allowanceNumber =~ Regexp.new("\A#{record.orgId}")
+          unless record.allowanceNumber =~ Regexp.new("\\A#{record.orgId}")
             record.errors.add attribute, options[:message] || :invalid
           end
         end
@@ -55,20 +55,20 @@ module Einvoice
       class ItemListValidator < ActiveModel::EachValidator
         def validate_each(record, attribtue, value)
           if record.itemList.map(&:itemTotal).map(&:blank?).reduce(&:|)
-            record.errors[:itemList] << options[:message] || :invalid
+            record.errors.add :itemList, options[:message] || :invalid
           elsif record.itemList.map(&:taxType).map(&:blank?).reduce(&:|)
-            record.errors[:itemList] << options[:message] || :invalid
+            record.errors.add :itemList, options[:message] || :invalid
           else
             # none
           end
 
           if %w(A H).include?(record.type)
             if record.itemList.map(&:invoiceNumber).map(&:blank?).reduce(&:|)
-              record.errors[:itemList] << options[:message] || :invalid
+              record.errors.add :itemList, options[:message] || :invalid
             elsif record.itemList.map(&:invoiceDate).map(&:blank?).reduce(&:|)
-              record.errors[:itemList] << options[:message] || :invalid
+              record.errors.add :itemList, options[:message] || :invalid
             elsif record.itemList.map(&:itemExclude).map(&:blank?).reduce(&:|)
-              record.errors[:itemList] << options[:message] || :invalid
+              record.errors.add :itemList, options[:message] || :invalid
             else
               # none
             end

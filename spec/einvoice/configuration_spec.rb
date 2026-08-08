@@ -23,6 +23,12 @@ RSpec.describe Einvoice::Configuration do
     end
   end
 
+  describe "#ssl_verify" do
+    it "defaults to true" do
+      expect(subject.ssl_verify).to be true
+    end
+  end
+
   describe "#reset" do
     Einvoice::Configuration::VALID_OPTIONS_KEYS.each do |k|
       it "resets #{k} option to default value" do
