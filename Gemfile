@@ -3,7 +3,6 @@ source 'https://rubygems.org'
 # Specify your gem's dependencies in einvoice.gemspec
 gemspec
 
-# Integrate CodeClimate Code Coverage into TravisCI
-# https://github.com/codeclimate/test-reporter/issues/413
+gem "ostruct", require: false, group: :development
 gem "simplecov", require: false, group: :test
 gem "simplecov-lcov", require: false, group: :test
