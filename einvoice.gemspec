@@ -9,9 +9,16 @@ Gem::Specification.new do |spec|
   spec.authors       = ["David Yun"]
   spec.email         = ["abookyun@gmail.com"]
 
-  spec.summary       = %q{A API wrapper for Taiwan e-invoice services.}
+  spec.summary       = %q{An API wrapper for Taiwan e-invoice services.}
   spec.homepage      = "https://github.com/abookyun/einvoice"
   spec.license       = "MIT"
+
+  spec.metadata = {
+    "source_code_uri" => "https://github.com/abookyun/einvoice",
+    "changelog_uri" => "https://github.com/abookyun/einvoice/blob/main/CHANGELOG.md",
+    "bug_tracker_uri" => "https://github.com/abookyun/einvoice/issues",
+    "rubygems_mfa_required" => "true"
+  }
 
   spec.files         = `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
   spec.bindir        = "exe"
@@ -26,7 +33,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "activesupport"
 
   spec.add_development_dependency "bundler", "> 1.17"
-  spec.add_development_dependency "rake", "~> 12.3"
+  spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "pry"
   spec.add_development_dependency "rspec"
   spec.add_development_dependency "factory_bot"
