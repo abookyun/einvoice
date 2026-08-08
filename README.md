@@ -1,7 +1,6 @@
 # Einvoice
 [![Build Status](https://github.com/abookyun/einvoice/actions/workflows/build.yml/badge.svg)](https://github.com/abookyun/einvoice/actions/workflows/build.yml)
-[![Code Climate](https://codeclimate.com/github/abookyun/einvoice/badges/gpa.svg)](https://codeclimate.com/github/abookyun/einvoice)
-[![Test Coverage](https://codeclimate.com/github/abookyun/einvoice/badges/coverage.svg)](https://codeclimate.com/github/abookyun/einvoice/coverage)
+[![codecov](https://codecov.io/github/abookyun/einvoice/graph/badge.svg?token=yxJNmXiUyp)](https://codecov.io/github/abookyun/einvoice)
 
 ## What's E-Invoice
 

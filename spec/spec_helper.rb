@@ -1,6 +1,15 @@
-require 'simplecov'
-require "simplecov_json_formatter"
-SimpleCov.formatter = SimpleCov::Formatter::JSONFormatter
+require "simplecov"
+require "simplecov-lcov"
+
+SimpleCov::Formatter::LcovFormatter.config do |c|
+  c.report_with_single_file = true
+  c.single_report_path = 'coverage/lcov.info'
+end
+
+SimpleCov.formatters = SimpleCov::Formatter::MultiFormatter.new([
+  SimpleCov::Formatter::HTMLFormatter,  # open coverage/index.html locally
+  SimpleCov::Formatter::LcovFormatter,  # consumed by Codecov
+])
 SimpleCov.start
 
 require "einvoice"
