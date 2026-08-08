@@ -1,7 +1,6 @@
 require 'base64'
 require 'openssl'
 
-require "einvoice/utils"
 
 require "einvoice/tradevan/model/base"
 require "einvoice/tradevan/model/issue_data"
