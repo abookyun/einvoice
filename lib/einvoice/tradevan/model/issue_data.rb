@@ -52,7 +52,7 @@ module Einvoice
           :itemList
         ].freeze
 
-        attr_accessor *VALID_OPTIONS_KEYS
+        attr_accessor(*VALID_OPTIONS_KEYS)
 
         validates :companyUn, presence: true, length: { is: 8 }
         validates :orgId, presence: true, length: { is: 5 }

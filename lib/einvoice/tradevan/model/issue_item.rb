@@ -19,7 +19,7 @@ module Einvoice
           :description
         ]
 
-        attr_accessor *VALID_OPTIONS_KEYS
+        attr_accessor(*VALID_OPTIONS_KEYS)
 
         validates :saleIdentifier, presence: true, length: { maximum: 100 }
         validates :serialNumber, presence: true, length: { is: 4 }, numericality: true
