@@ -165,6 +165,73 @@ result.data
 # }
 ```
 
+### Issue an allowance (折讓)
+
+An allowance against a previously issued invoice is sent through `issue` with `type: "A"`. Each item must reference the original invoice (`invoiceNumber` / `invoiceDate`) and carry its tax-exclusive amount (`itemExclude`).
+
+```ruby
+payload = {
+  companyUn: "12345678",
+  orgId: "ABCDE",
+  type: "A",
+  allowanceIdentifier: "12345678_ABCDE_53b2a44e4b3d",
+  transactionNumber: "53b2a44e4b3d",
+  transactionDate: "20160426",
+  paperPrintMode: "0",
+  invoiceAlarmMode: "4",
+  allowanceExclusiveAmount: "95",
+  allowanceTax: "5",
+  allowanceInclusiveAmount: "100",
+  allowancePaperReturned: "N",
+  invoicePaperReturned: "N",
+  receiverName: "John Appleseed",
+  receiverEmail: "john@gmail.com",
+  itemList: [
+    {
+      saleIdentifier: "12345678_ABCDE_53b2a44e4b3c",
+      serialNumber: "0001",
+      invoiceNumber: "GX38551078",
+      invoiceDate: "20160425",
+      productName: "Coffee Latte",
+      qty: "1000",
+      price: "100",
+      itemExclude: "95",
+      tax: "5",
+      itemTotal: "100",
+      taxType: "T"
+    }
+  ]
+}
+```
+
+```ruby
+result = client.issue(payload)
+result.successful?
+#=> true
+```
+
+Notes:
+
+* `allowanceIdentifier` must be prefixed with `"#{companyUn}_#{orgId}_"`, like `saleIdentifier` on invoices.
+* `allowanceExclusiveAmount` + `allowanceTax` = `allowanceInclusiveAmount`.
+
+### Void an allowance (折讓作廢)
+
+```ruby
+payload = {
+  type: "A",
+  companyUn: "12345678",
+  allowanceNumber: "ABCDE20160426001",
+  allowancePaperReturned: "Y",
+}
+```
+
+```ruby
+result = client.cancel(payload)
+result.successful?
+#=> true
+```
+
 ### Search invoice by memberId/memberId/sellTargetCode
 
 ```ruby
