@@ -67,7 +67,7 @@ Einvoice::Tradevan::Provider.new(ssl_verify: false)
 client = Einvoice::Client.new(Einvoice::Tradevan::Provider.new)
 ```
 
-### Issue an invoice
+### Issue an invoice (開立電子發票)
 
 ```ruby
 payload = {
@@ -138,7 +138,7 @@ result.data
 # }
 ```
 
-### Cancel an invoice
+### Cancel an invoice (作廢電子發票)
 
 ```ruby
 payload = {
@@ -165,7 +165,7 @@ result.data
 # }
 ```
 
-### Issue an allowance (折讓)
+### Issue an allowance (開立折讓單)
 
 An allowance against a previously issued invoice is sent through `issue` with `type: "A"`. Each item must reference the original invoice (`invoiceNumber` / `invoiceDate`) and carry its tax-exclusive amount (`itemExclude`).
 
@@ -215,7 +215,7 @@ Notes:
 * `allowanceIdentifier` must be prefixed with `"#{companyUn}_#{orgId}_"`, like `saleIdentifier` on invoices.
 * `allowanceExclusiveAmount` + `allowanceTax` = `allowanceInclusiveAmount`.
 
-### Void an allowance (折讓作廢)
+### Void an allowance (作廢折讓單)
 
 ```ruby
 payload = {
@@ -232,7 +232,7 @@ result.successful?
 #=> true
 ```
 
-### Search invoice by memberId/memberId/sellTargetCode
+### Search invoice by memberId/sellTargetCode (載具/會員發票查詢)
 
 ```ruby
 payload = {
@@ -278,7 +278,7 @@ result.data
 # ]
 ```
 
-### Search invoice detail
+### Search invoice detail (發票開立明細查詢)
 
 ```ruby
 result = client.search_invoice_detail("GX38551078")
@@ -322,7 +322,7 @@ result.data
 # }
 ```
 
-### Send card info to customer
+### Send card info to customer (電子發票載具歸戶/中獎通知作業)
 
 ```ruby
 payload = {
@@ -342,7 +342,7 @@ result.successful?
 result.data
 ```
 
-### Get invoice mark info
+### Get invoice mark info (電子發票字軌號碼配額取號/分配作業)
 
 ```ruby
 payload = {
@@ -374,13 +374,13 @@ result.data
 # ]
 ```
 
-### Get donate unit list
+### Get donate unit list (受贈機關/社福團體愛心碼清單查詢)
 
 ```ruby
 client.get_donate_unit_list("12345678")
 ```
 
-### Get invoice content
+### Get invoice content (電子發票內容查詢)
 
 ```ruby
 payload = {
