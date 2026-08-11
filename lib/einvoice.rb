@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "einvoice/version"
+require "einvoice/error"
 
 # Provider-agnostic Taiwan e-invoice SDK (財政部 MIG 4.0).
 #
