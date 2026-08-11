@@ -4,6 +4,7 @@ require "einvoice/version"
 require "einvoice/error"
 require "einvoice/capability"
 require "einvoice/types"
+require "einvoice/input"
 
 # Provider-agnostic Taiwan e-invoice SDK (財政部 MIG 4.0).
 #
