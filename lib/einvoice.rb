@@ -1,14 +1,13 @@
-require "active_support"
+# frozen_string_literal: true
 
-require "einvoice/client"
-require "einvoice/configuration"
-require "einvoice/connection"
-require "einvoice/provider"
-require "einvoice/result"
 require "einvoice/version"
 
-require "einvoice/tradevan/provider"
-
+# Provider-agnostic Taiwan e-invoice SDK (財政部 MIG 4.0).
+#
+# The core models the five operations once — issue (開立), void (作廢),
+# allowance (折讓), void-allowance (折讓作廢), query (查詢) — as a unified value
+# model plus a {Einvoice::Provider} contract. Each value-added center ships as a
+# thin adapter mapping the unified model to/from its wire format, so switching
+# providers is a one-line constructor change and never touches business code.
 module Einvoice
-  extend Configuration
 end
