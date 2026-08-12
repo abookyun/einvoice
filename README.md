@@ -2,6 +2,11 @@
 [![Build Status](https://github.com/abookyun/einvoice/actions/workflows/build.yml/badge.svg)](https://github.com/abookyun/einvoice/actions/workflows/build.yml)
 [![codecov](https://codecov.io/github/abookyun/einvoice/graph/badge.svg?token=yxJNmXiUyp)](https://codecov.io/github/abookyun/einvoice)
 
+> **The 1.x line is moving to maintenance mode.** A provider-agnostic 2.0
+> rewrite is in progress on `main`; once it lands, 1.x continues on the
+> [`1-x-stable`](https://github.com/abookyun/einvoice/tree/1-x-stable) branch.
+> If you depend on the current Tradevan client, pin `~> 1.4`.
+
 ## What's E-Invoice
 
 To support the thriving e-commerce industry and lower the business costs and barriers associated with printing paper receipts, the Taiwan Executive Yuan announced plans in August 2000 to implement electronic receipts in Taiwan and launched a comprehensive project in May 2010 to promote e-invoice applications. This initiative employs innovative approaches such as allowing consumers to claim virtual receipts via multiple devices, offering automatic checking of receipt lottery numbers, and providing a variety of channels for retailers to issue receipts.
