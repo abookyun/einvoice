@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "einvoice/ecpay/crypto"
+require "einvoice/ecpay/errors"
 
 module Einvoice
   # Adapter for ECPay 綠界科技's B2C 電子發票 2.0 API.
