@@ -1,0 +1,56 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://einvoice-stage.ecpay.com.tw/B2CInvoice/GetIssue
+    body:
+      encoding: UTF-8
+      string: '{"MerchantID":"2000132","RqHeader":{"Timestamp":1786807750,"Revision":"3.0.0"},"Data":"XeEOdHpTRvxKEqs/JD9RSd16s7VtpyWVCN6AV44pKTUBUbt3mZEoyD3XQjjBRhcwkHFXPz+AMdsNxNp8QV/Nw+ug2oyYaqOjlAjgqjVwHtYyvWjr/cXcyIWI5L9dF4w7PgJjcX+k6m8f/oKDS6N766715hVaj+91r2UJtQT2YkY="}'
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+      Content-Type:
+      - application/json
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Content-Type:
+      - application/json; charset=utf-8
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+      X-Content-Type-Options:
+      - nosniff
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Content-Security-Policy:
+      - ''
+      Content-Length:
+      - '399'
+      Expires:
+      - Sat, 15 Aug 2026 15:29:10 GMT
+      Cache-Control:
+      - max-age=0, no-cache, no-store
+      Pragma:
+      - no-cache
+      Date:
+      - Sat, 15 Aug 2026 15:29:10 GMT
+      Connection:
+      - keep-alive
+      Server-Timing:
+      - ak_p; desc="1786807750612_399640262_1754780434_17495_3915_10_13_-";dur=1
+      - cdn-cache; desc=MISS
+      - edge; dur=166
+      - origin; dur=9
+    body:
+      encoding: UTF-8
+      string: '{"PlatformID":0,"MerchantID":2000132,"RpHeader":{"Timestamp":1786807750,"RqID":"36879a0a-8d0b-42e0-b87d-e65f2398a7c4","Revision":"3.0.0"},"TransCode":1,"TransMsg":"Success","Data":"6xafbXXjyQnBuHWKr5nDl2rWOOa0lucvsiBoUCjIe47TY2551wGzW3WmdZAryQXn/IWz8Ctrnd3zBvkZRNgl3tQynGPuZkYu52+NYo7fQxumv0bVTyCvRrFwh1U0GBOpc9XKN5g9N264gxa64+huV1A6nv8l3cc5VGnvesXQAE2tQRAVAYmtIsxZg28XpRmmdh5SmcsWZlb6dIL/hs06PQ=="}'
+  recorded_at: Sat, 15 Aug 2026 15:29:10 GMT
+recorded_with: VCR 6.4.0

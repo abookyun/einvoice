@@ -188,22 +188,28 @@ The `"an invoice provider"` shared examples
 (`spec/support/shared_examples/`) are the executable contract every adapter
 runs, so a new adapter proves it honours the unified model by including one line.
 
-The ECPay adapter runs that contract against an in-process fake that speaks the
-real wire format — the AES envelope, PHP url-encoding and ECPay's own RtnCodes —
-so a request only passes if the encryption and field mapping are genuinely
-correct. Its specs are offline and deterministic.
+The ECPay adapter is tested in three layers, two of which run offline in CI:
 
-There is also an opt-in suite that drives ECPay's real stage API, which is what
-keeps that fake honest:
+1. **The contract, against a wire-format fake.** The shared examples run through
+   an in-process fake that speaks the real protocol — AES envelope, PHP
+   url-encoding, ECPay's own RtnCodes — so a request only passes if the
+   encryption and field mapping are genuinely correct. It is stateful, which is
+   what lets the contract drive issue → allowance → void as a sequence.
+2. **Recorded real responses (VCR).** `spec/einvoice/ecpay/recorded_spec.rb`
+   replays cassettes captured from ECPay's stage host, so the field names, value
+   types and error codes under test are ECPay's own rather than our reading of
+   the docs. Re-record with `VCR_RECORD=1` after bumping the epoch in that
+   spec — cassettes only ever hold sandbox traffic.
+3. **The live API, opt-in.** What keeps the other two honest:
 
-```bash
-ECPAY_LIVE=1 bundle exec rspec spec/einvoice/ecpay/live_spec.rb
-```
+   ```bash
+   ECPAY_LIVE=1 bundle exec rspec spec/einvoice/ecpay/live_spec.rb
+   ```
 
-It defaults to the public sandbox credentials, so no setup is needed; override
-with `ECPAY_MERCHANT_ID` / `ECPAY_HASH_KEY` / `ECPAY_HASH_IV` to point it at your
-own stage account. It is excluded from CI because it needs the network and a
-shared sandbox.
+   It defaults to the public sandbox credentials, so no setup is needed; override
+   with `ECPAY_MERCHANT_ID` / `ECPAY_HASH_KEY` / `ECPAY_HASH_IV` to point it at
+   your own stage account. Excluded from CI because it needs the network and a
+   shared sandbox.
 
 ## License
 

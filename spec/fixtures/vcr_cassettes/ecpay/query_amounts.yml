@@ -1,0 +1,109 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://einvoice-stage.ecpay.com.tw/B2CInvoice/Issue
+    body:
+      encoding: UTF-8
+      string: '{"MerchantID":"2000132","RqHeader":{"Timestamp":1786807746,"Revision":"3.0.0"},"Data":"XeEOdHpTRvxKEqs/JD9RSd16s7VtpyWVCN6AV44pKTV7XoPByaStato0iqOI39rIbe0TZ4zcKHQZG5PC5+h2wvHlhohvaK3MNKnspy9HB38EFasckSl9+CkTv2/4vkunTaC/b9dOr34wSmvuAWVrFxLX4sPcGRE+ndHXbb7Y3lyW0A0LyuKOuqiuCkyjbVCDmNV+ZdErRjbjY/Gq43ty9UC7W4x39n6PwR7F9tbdqLmrZffR9hMySlzJvigL4D8cgn9IBBwWpIHxhMYSpTbBcRibSuZWvXZVCnLxjyXp80gwnb2P0KAWXp86yA7kcQVNHtKhEtqjA1m03izAcoFTO5PTnV0VzKfTK7VPBj1/8Eaj0FUjji66Zt/roYY49qyIJ90bnXtgjhhrxB9r+bvzjYhz1OZQAi73ezJvaunwGcPco2bxw7PHQxxKo42TNYH1u90UqriqxH9+V2A/gsXbB4BUcZj7I+32whdOvwoCPCU7I7UCPNHXIYnlNCfvf0q0O1iKiX7SCICFWNhyu60zfNG0BdDnV/3U5oXpcCJ2G85G5CfySP/0ff37IJJz0twBjfMY+AMLswFomtl3CSWjodHHrxABys27BgLRAykxTvbHOPb1+h79ruKIkXdSoYajpXp9zFvCMwjDLD/iLUjRW1IoCvg0dAD+He9K4FQA4dkzVaE+9YP9mfIm87ko8h5rIP8ZzxlvLyTZ/wRSG9dxpJ5R2uNdX87qOinrc69Uq+A7cJkuBOnDa1qct9tLMrW/OCrGSitKhSdMGeIWPm3RGDOtHKJ/L7E83U/CJm6VaQPJF00MdxwXttdeNzaAgoCOnTph/xCe8sOPYfmQcUho8aUiElzVi1JNmWF1F/DcRRndsdyOTXDKtSlfDmUVo2qu4JYNeFIJhNafOQBsJsOfANi/1TD75uCjrGOrORfeUS53LRum8R/FOPOb/BIENmRBoSlRFgOE97lL8/XFV/exYAnhacydJR2Gnp6tu9FMtzITjPCQAa/XK7+Da3eZnxzB26WCeda9Tyt4J50DUDiY4Ed0eH3ELDhgCBn8KPl2yBLzgEMhGAyKOrmGF80FLLtc18C2d9IDG/G8We49BUSZVQ=="}'
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+      Content-Type:
+      - application/json
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Content-Type:
+      - application/json; charset=utf-8
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+      X-Content-Type-Options:
+      - nosniff
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Content-Security-Policy:
+      - ''
+      Content-Length:
+      - '503'
+      Expires:
+      - Sat, 15 Aug 2026 15:29:07 GMT
+      Cache-Control:
+      - max-age=0, no-cache, no-store
+      Pragma:
+      - no-cache
+      Date:
+      - Sat, 15 Aug 2026 15:29:07 GMT
+      Connection:
+      - keep-alive
+      Server-Timing:
+      - ak_p; desc="1786807746293_399640262_1754764477_85471_3828_9_13_-";dur=1
+      - cdn-cache; desc=MISS
+      - edge; dur=168
+      - origin; dur=689
+    body:
+      encoding: UTF-8
+      string: '{"PlatformID":0,"MerchantID":2000132,"RpHeader":{"Timestamp":1786807747,"RqID":"35fc8026-a1a3-46be-a41a-ff3c54d55bf6","Revision":"3.0.0"},"TransCode":1,"TransMsg":"Success","Data":"6xafbXXjyQnBuHWKr5nDl3elIhyu1OUPiZsXnreThwQMIYbPFyWZHL9ALxDT9maQm1zzov+o2Suh56+NpeqrtK7A6EwTVdAJGbl/4ATxEScKukTLEjpSflzkNBeN513sqfGsjM8REOlO29AJFOeRnrOo5432DG/4QTh9AKByqLTE6VNlmgq96wwCVk/yZwbuyjdHxD2gXE95kohUpJL+AM/urHUPGRYY4pqmuYoj1WpcNzzb0H8FYGQ5k89BHZ2oOrhvQiW4mwTZXv19KRZhDX8UtcX+KIPlxGp49CvFFeG+DtuGw2k+AE0dp06/jYjI"}'
+  recorded_at: Sat, 15 Aug 2026 15:29:07 GMT
+- request:
+    method: post
+    uri: https://einvoice-stage.ecpay.com.tw/B2CInvoice/GetIssue
+    body:
+      encoding: UTF-8
+      string: '{"MerchantID":"2000132","RqHeader":{"Timestamp":1786807747,"Revision":"3.0.0"},"Data":"XeEOdHpTRvxKEqs/JD9RSd16s7VtpyWVCN6AV44pKTV7XoPByaStato0iqOI39rIbe0TZ4zcKHQZG5PC5+h2wvHlhohvaK3MNKnspy9HB3/jUAGSm4gRyTKLOSL2ZEgu"}'
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+      Content-Type:
+      - application/json
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Content-Type:
+      - application/json; charset=utf-8
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+      X-Content-Type-Options:
+      - nosniff
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Content-Security-Policy:
+      - ''
+      Content-Length:
+      - '2851'
+      Expires:
+      - Sat, 15 Aug 2026 15:29:07 GMT
+      Cache-Control:
+      - max-age=0, no-cache, no-store
+      Pragma:
+      - no-cache
+      Date:
+      - Sat, 15 Aug 2026 15:29:07 GMT
+      Connection:
+      - keep-alive
+      Server-Timing:
+      - ak_p; desc="1786807747193_399640262_1754767624_19023_3225_10_28_-";dur=1
+      - cdn-cache; desc=MISS
+      - edge; dur=175
+      - origin; dur=15
+    body:
+      encoding: UTF-8
+      string: '{"PlatformID":0,"MerchantID":2000132,"RpHeader":{"Timestamp":1786807747,"RqID":"ba02f5d8-80f1-4cb9-ab8a-d4060113e7db","Revision":"3.0.0"},"TransCode":1,"TransMsg":"Success","Data":"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"}'
+  recorded_at: Sat, 15 Aug 2026 15:29:07 GMT
+recorded_with: VCR 6.4.0

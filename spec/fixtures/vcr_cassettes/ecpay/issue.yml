@@ -1,0 +1,56 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://einvoice-stage.ecpay.com.tw/B2CInvoice/Issue
+    body:
+      encoding: UTF-8
+      string: '{"MerchantID":"2000132","RqHeader":{"Timestamp":1786807738,"Revision":"3.0.0"},"Data":"XeEOdHpTRvxKEqs/JD9RSd16s7VtpyWVCN6AV44pKTV7XoPByaStato0iqOI39rIbe0TZ4zcKHQZG5PC5+h2wp9Lfce8OsOVE+w5x9eg+JgmZOqW0tM9ehNzTmymHHXqj9fds2VULjJxREQObvswLfiHQJXSsAxy+bWN9ktrpUV0SkybR42aB6iAojsmguuflqncxARBAfIOsAFjb9KItUCrPzlM8JC6J/eNleZiEzl/qHRjzJvN2/Zpy5Ef2diQC6Zgm04MQUSN1syTqHMGsUuxVo3zl6wup0StNtn4hqY80RcDrhAijjOpBx7Ry4pRJ+uOwKVq7gWkGXbD3omo1LXbNVjNyKXDqMt9IyQnM/FY3iKO34qd/BVzomzqDDcRRwfdpZDc8qr1WebRL4E3Lx0+K6BAbQZmeiWyGJo8oeVssZMExJ8L76g6KCMOKX/wceQdoMve8POWEabHoEkH+Wwug+egn1oNLRVzl38XCrguJbK8p37wMLf59JwEIYl4n2kC3kJKeOM9ZKzwLsQRS+4gkx6onr0dQ+0HMrQMeyv66n+h9L616/a7PKSeycLtGgw484LbNmLjszgcs1ynX1l1iTX8vi1FlgXlNveOKgU2DqsMAJMN2695E/5XtMiSdlBcpGp4un40ioOkcXz1EAr4RIs8LIOKj8FH8FbfTc4SNNn4ketQPof30pIIW7PyuGO1Dgs6bhLsI9rndOdUP/0WIBa1e1leaYYb7LRQcF7T+LQaVtW0G/MeS0ZP1HkEgmSHkCyj/MTXLa3r/T7ujPI9E/zV4I5DQMVBRn3/MHtRfbO8MPOCm7pGtHtNMGcynKkI/CXA1aKqof8W5j9muKwaD/7t7JQ3JksJ4DFfe9rSElydl3QYg5YFxmGYACpsj9X2H58ZHKi6d3N3zO8GySdXshAl/upF7AWgR/0eSdRUnpGVH3yU4OYKsmGkfg5JdePYS1AO970RMdy2dP56V3mXlwAMBg3RE6QFeUiAYjyUo+i4ORD0kssI7CPBJZk5iHcfohtUnVSOl4JnsT8hiJib7X9fSjd1uaiQP7mDJFB22KxD4gfJI1nAC2wRRhOLn/3nPx8W5x3ao2kRceULbA=="}'
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+      Content-Type:
+      - application/json
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Content-Type:
+      - application/json; charset=utf-8
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+      X-Content-Type-Options:
+      - nosniff
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Content-Security-Policy:
+      - ''
+      Content-Length:
+      - '503'
+      Expires:
+      - Sat, 15 Aug 2026 15:28:59 GMT
+      Cache-Control:
+      - max-age=0, no-cache, no-store
+      Pragma:
+      - no-cache
+      Date:
+      - Sat, 15 Aug 2026 15:28:59 GMT
+      Connection:
+      - keep-alive
+      Server-Timing:
+      - ak_p; desc="1786807738792_399640262_1754737601_82876_4373_11_20_-";dur=1
+      - cdn-cache; desc=MISS
+      - edge; dur=184
+      - origin; dur=646
+    body:
+      encoding: UTF-8
+      string: '{"PlatformID":0,"MerchantID":2000132,"RpHeader":{"Timestamp":1786807739,"RqID":"c62778a1-877b-45f6-9a7e-5fbdd27492af","Revision":"3.0.0"},"TransCode":1,"TransMsg":"Success","Data":"6xafbXXjyQnBuHWKr5nDl3elIhyu1OUPiZsXnreThwQMIYbPFyWZHL9ALxDT9maQm1zzov+o2Suh56+NpeqrtK7A6EwTVdAJGbl/4ATxEScKukTLEjpSflzkNBeN513sqfGsjM8REOlO29AJFOeRnrOo5432DG/4QTh9AKByqLSlhPUF3m8JVtD2PCjzFD+GIb7xK0NFqRMpkflmXMJAZ0HAcXyVf5L+yKaLVlOPxXU9i3+pcssi1OfRGwfnwCT9VAK7OQzLXPPZYGD4JLEIiSautMmwmU3DJbXkjE9UAVWEGHpA7xiH0jSBhzg9d1mu"}'
+  recorded_at: Sat, 15 Aug 2026 15:28:59 GMT
+recorded_with: VCR 6.4.0
