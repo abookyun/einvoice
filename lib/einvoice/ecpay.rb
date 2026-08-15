@@ -3,6 +3,7 @@
 require "einvoice/ecpay/crypto"
 require "einvoice/ecpay/errors"
 require "einvoice/ecpay/client"
+require "einvoice/ecpay/payload"
 
 module Einvoice
   # Adapter for ECPay 綠界科技's B2C 電子發票 2.0 API.
