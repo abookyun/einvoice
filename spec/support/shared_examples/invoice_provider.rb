@@ -8,7 +8,15 @@
 # The host group must supply `let(:provider)` (a fresh instance). Capability-
 # dependent expectations are guarded by `provider.supports?`, so a partial
 # adapter only gets held to what it declares.
-RSpec.shared_examples "an invoice provider" do
+#
+# Options:
+#   unknown_invoice_number: a number that is well-formed for the provider but
+#     does not exist there. Real APIs check the shape before they look anything
+#     up, so an adapter whose numbers have a fixed format must supply one that
+#     passes that check — otherwise the lookup fails as invalid, not missing.
+RSpec.shared_examples "an invoice provider" do |options = {}|
+  unknown_invoice_number = options.fetch(:unknown_invoice_number, "NOPE00000000")
+
   def issue_payload(order_id: "ORDER_1", **overrides)
     {
       order_id: order_id,
@@ -59,7 +67,7 @@ RSpec.shared_examples "an invoice provider" do
     end
 
     it "raises NotFoundError for an unknown invoice" do
-      expect { provider.query({ invoice_number: "NOPE00000000" }) }
+      expect { provider.query({ invoice_number: unknown_invoice_number }) }
         .to raise_error(Einvoice::NotFoundError)
     end
   end
