@@ -26,12 +26,14 @@ is swapping the constructor.
 
 ## Status
 
-Under active development toward 2.0. The provider-agnostic **core** —
-value types, the `Provider` contract, capabilities, the normalized error
-hierarchy, input validation, and an in-memory `MockProvider` — is in place.
-Concrete adapters land next, **ECPay first** (it's the one value-added center
-with public docs and a public sandbox). Coverage and completeness for other
-centers will vary: their docs are less complete, and an adapter built from docs
+Under active development toward 2.0. The provider-agnostic **core** — value
+types, the `Provider` contract, capabilities, the normalized error hierarchy,
+input validation, and an in-memory `MockProvider` — is in place, and the first
+real adapter, **ECPay (綠界)**, ships with it: the five operations plus carrier
+validation, verified against ECPay's public stage API.
+
+Other centers follow. Coverage and completeness for those will vary: their docs
+are less complete and they have no public sandbox, so an adapter built from docs
 alone carries some uncertainty until real production use confirms it.
 
 ## Installation
@@ -102,6 +104,49 @@ provider.supports?(Einvoice::Capability::FOREIGN_CURRENCY)  # => true / false
 provider.assert_supports!(Einvoice::Capability::B2B)        # raises UnsupportedError if absent
 ```
 
+## Providers
+
+### ECPay 綠界
+
+```ruby
+provider = Einvoice::ECPay::Provider.new(
+  merchant_id: "2000132",
+  hash_key: "...",          # 16 bytes, server-side only
+  hash_iv: "...",           # 16 bytes, server-side only
+  mode: :production         # :test (default) targets the stage host
+)
+```
+
+Everything above works unchanged — `issue` / `void` / `allowance` /
+`void_allowance` / `query` take the same unified input and return the same value
+types. The AES-128-CBC envelope, ECPay's two layers of result codes, and its
+field rules stay inside the adapter.
+
+To try it without an account, use ECPay's published sandbox credentials
+(shared with every other developer — never for anything real):
+
+```ruby
+provider = Einvoice::ECPay::Provider.new(**Einvoice::ECPay::SANDBOX)
+```
+
+A few things worth knowing:
+
+- **Paper vs. electronic is derived.** An invoice with a carrier or a donation is
+  electronic (`Print=0`); anything else prints, and ECPay then requires a buyer
+  name and address.
+- **Mixed tax rates are derived too.** Items that disagree on `tax_type` produce
+  a 混合稅率 (TaxType 9) invoice; you don't ask for it explicitly.
+- **Void and allowance need the invoice's issue date**, which the unified input
+  has no field for. It defaults to today (Asia/Taipei) — for an older invoice
+  pass `provider_options: { invoice_date: "2026-08-01" }`, or query by `order_id`.
+- **No foreign currency.** ECPay's B2C API has no such field, so a non-TWD
+  `currency` raises `UnsupportedError` rather than being filed as TWD.
+- **Carrier validation**: `validate_mobile_barcode("/ABC1234")`,
+  `validate_love_code("168001")`, `love_code_organ_name("168001")`.
+- **Anything else**: ECPay has ~25 further B2C endpoints (延遲開立, 字軌設定,
+  列印, 通知 …). Reach them through `provider.raw(path, payload)`, which applies
+  the envelope, encryption and error mapping for you.
+
 ## 財政部 lookups
 
 Provider-independent clients for 財政部's own public services. They issue
@@ -142,6 +187,23 @@ bundle exec rake   # default task: rspec
 The `"an invoice provider"` shared examples
 (`spec/support/shared_examples/`) are the executable contract every adapter
 runs, so a new adapter proves it honours the unified model by including one line.
+
+The ECPay adapter runs that contract against an in-process fake that speaks the
+real wire format — the AES envelope, PHP url-encoding and ECPay's own RtnCodes —
+so a request only passes if the encryption and field mapping are genuinely
+correct. Its specs are offline and deterministic.
+
+There is also an opt-in suite that drives ECPay's real stage API, which is what
+keeps that fake honest:
+
+```bash
+ECPAY_LIVE=1 bundle exec rspec spec/einvoice/ecpay/live_spec.rb
+```
+
+It defaults to the public sandbox credentials, so no setup is needed; override
+with `ECPAY_MERCHANT_ID` / `ECPAY_HASH_KEY` / `ECPAY_HASH_IV` to point it at your
+own stage account. It is excluded from CI because it needs the network and a
+shared sandbox.
 
 ## License
 
