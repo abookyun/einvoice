@@ -150,6 +150,29 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
     end
   end
 
+  describe "crediting a voided invoice", vcr: { cassette_name: "ecpay/allowance_on_voided" } do
+    # The contract requires a ConflictError here, and ECPay reports it with a
+    # code and wording that read nothing like its other conflicts — which is
+    # exactly why this is pinned against real traffic rather than a guess.
+    it "is refused as a conflict, not a field error" do
+      order = order_id("voidalw")
+      issued = provider.issue(issue_input(order))
+      provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢")
+
+      expect do
+        provider.allowance(
+          invoice_number: issued.invoice_number, allowance_id: "AL_#{order}",
+          items: [{ description: "整合測試商品", quantity: 1, unit_price: 50, amount: 50 }],
+          amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 }
+        )
+      end.to raise_error(Einvoice::ConflictError) { |error|
+        expect(error.reason).to eq(Einvoice::Reason::ALREADY_VOIDED)
+        expect(error.raw_code).to eq("2000042")
+        expect(error.raw_message).to include("作廢發票號碼不能折讓")
+      }
+    end
+  end
+
   describe "B2B", vcr: { cassette_name: "ecpay/b2b" } do
     it "issues against a 統一編號 and reads it back" do
       order = order_id("b2b")

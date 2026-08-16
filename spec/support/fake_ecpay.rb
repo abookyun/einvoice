@@ -143,6 +143,7 @@ class FakeECPay
   def allowance(data)
     invoice = @invoices[data["InvoiceNo"].to_s]
     return business(1_600_003, "無發票號碼資料") unless invoice
+    return business(2_000_042, "作廢發票號碼不能折讓") if invoice["voided"]
 
     amount = data["AllowanceAmount"].to_i
     if amount <= 0 || amount > invoice["remaining"]

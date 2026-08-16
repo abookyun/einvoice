@@ -117,6 +117,23 @@ RSpec.describe "ECPay live stage API", :live do
         }
     end
 
+    it "maps crediting a voided invoice to a conflict" do
+      order = order_id
+      issued = provider.issue(issue_input(order))
+      provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢")
+
+      expect do
+        provider.allowance(
+          invoice_number: issued.invoice_number, allowance_id: "AL_#{order}",
+          items: [{ description: "整合測試商品", quantity: 1, unit_price: 50, amount: 50 }],
+          amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 }
+        )
+      end.to raise_error(Einvoice::ConflictError) { |error|
+        expect(error.reason).to eq(Einvoice::Reason::ALREADY_VOIDED)
+        expect(error.raw_code).to eq("2000042")
+      }
+    end
+
     it "maps an unknown invoice to not found" do
       expect { provider.query(invoice_number: "ZZ00000000") }
         .to raise_error(Einvoice::NotFoundError)

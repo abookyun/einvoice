@@ -27,6 +27,7 @@ module Einvoice
       BUSINESS = {
         1_600_003 => [:not_found, nil],                            # 無發票號碼資料
         2_000_039 => [:not_found, nil],                            # 查無折讓單資料
+        2_000_042 => [:conflict, Reason::ALREADY_VOIDED],          # 作廢發票號碼不能折讓
         2_000_063 => [:conflict, Reason::ALREADY_VOIDED],          # 該折讓單已作廢過
         5_070_357 => [:conflict, Reason::DUPLICATE_ORDER],         # 自訂編號重覆
         5_070_450 => [:conflict, Reason::VOID_BLOCKED_BY_ALLOWANCE], # 該發票已被折讓過
@@ -42,7 +43,11 @@ module Einvoice
       # 重複 and 重覆 are both current spellings and ECPay uses both — matching only
       # one silently demotes a duplicate-order conflict to a generic validation error.
       DUPLICATE     = /重[複覆]/
-      ALREADY_VOID  = /已作廢/
+      # 已作廢 is the plain "already voided" wording. The second shape is
+      # "作廢…不能…" — the invoice is voided, so the operation is refused — which
+      # is how 2000042 (作廢發票號碼不能折讓) reads; it is the same conflict, and
+      # matching only the first spelling files it as a field error instead.
+      ALREADY_VOID  = /已作廢|作廢.*不能/
       ALLOWANCE_MADE = /已折讓|折讓過/
       CONFLICTING   = /已開立|已存在|同意/
       MISSING       = /查無|查不到|無.*資料|不存在/

@@ -10,7 +10,9 @@ RSpec.describe Einvoice::ECPay::Provider do
   # The whole point of the adapter: it honours the same contract the mock does,
   # here over the real wire format — AES envelope, PHP url-encoding and ECPay's
   # own RtnCodes included.
-  it_behaves_like "an invoice provider", unknown_invoice_number: "ZZ00000000"
+  it_behaves_like "an invoice provider",
+                  unknown_invoice_number: "ZZ00000000",
+                  unknown_allowance_number: "9999999999999999"
 
   it "identifies itself and declares what it can do" do
     expect(provider.name).to eq("ecpay")

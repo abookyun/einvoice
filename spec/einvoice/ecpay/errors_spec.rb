@@ -30,6 +30,8 @@ RSpec.describe Einvoice::ECPay::Errors do
       [2_000_063, "該折讓單已作廢過，請確認"] =>
         [:conflict, Einvoice::Reason::ALREADY_VOIDED],
       [2_000_039, "查無折讓單資料，請確認!"] => [:not_found, nil],
+      [2_000_042, "作廢發票號碼不能折讓"] =>
+        [:conflict, Einvoice::Reason::ALREADY_VOIDED],
       [1_600_003, "無發票號碼資料"] => [:not_found, nil],
       [2, "查無發票資料，請重新確認"] => [:not_found, nil],
       [5_000_022, "驗證發票金額發現錯誤，與商品合計金額不符"] => [:validation, nil],
@@ -72,6 +74,17 @@ RSpec.describe Einvoice::ECPay::Errors do
     it "recognises an already-voided invoice from the message alone" do
       expect(described_class.classify(0, "該發票已作廢"))
         .to eq([:conflict, Einvoice::Reason::ALREADY_VOIDED])
+    end
+
+    # "作廢…不能…" is the other way ECPay says it: the invoice is voided, so the
+    # operation is refused. Reading only 已作廢 files this as a field error.
+    it "recognises a refusal caused by the invoice being voided" do
+      expect(described_class.classify(0, "作廢發票號碼不能折讓"))
+        .to eq([:conflict, Einvoice::Reason::ALREADY_VOIDED])
+    end
+
+    it "does not mistake a field error that merely mentions 作廢 for a conflict" do
+      expect(described_class.classify(0, "作廢原因長度錯誤")).to eq([:validation, nil])
     end
 
     it "recognises a void blocked by an allowance from the message alone" do
