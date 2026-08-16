@@ -44,8 +44,7 @@ module Einvoice
     def issue(input)
       check_failure!
       parsed = Input.issue(input, provider: name)
-      # A provider without FOREIGN_CURRENCY must reject a non-TWD currency.
-      assert_supports!(Capability::FOREIGN_CURRENCY) if parsed.currency && parsed.currency != "TWD"
+      assert_currency_supported!(parsed.currency)
 
       invoice_number = next_invoice_number
       result = IssueInvoiceResult.new(

@@ -44,4 +44,30 @@ RSpec.describe Einvoice::Capability do
         end
     end
   end
+
+  describe "#assert_currency_supported!" do
+    let(:domestic) do
+      Einvoice::MockProvider.new(
+        capabilities: Einvoice::Capability::ALL - [Einvoice::Capability::FOREIGN_CURRENCY]
+      )
+    end
+    let(:global) { Einvoice::MockProvider.new }
+
+    it "allows an absent currency" do
+      expect { domestic.assert_currency_supported!(nil) }.not_to raise_error
+    end
+
+    it "allows TWD, which every center files in" do
+      expect { domestic.assert_currency_supported!("TWD") }.not_to raise_error
+    end
+
+    it "refuses another currency when FOREIGN_CURRENCY is not declared" do
+      expect { domestic.assert_currency_supported!("USD") }
+        .to raise_error(Einvoice::UnsupportedError, /foreign_currency/)
+    end
+
+    it "allows another currency when it is" do
+      expect { global.assert_currency_supported!("USD") }.not_to raise_error
+    end
+  end
 end

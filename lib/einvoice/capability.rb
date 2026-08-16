@@ -41,6 +41,9 @@ module Einvoice
 
     # Mixed into anything that exposes a +#capabilities+ set and a +#name+.
     module Support
+      # The MIG filing currency. Anything else needs FOREIGN_CURRENCY.
+      TWD = "TWD"
+
       # Whether this provider declares support for +capability+.
       def supports?(capability)
         capabilities.include?(capability)
@@ -54,6 +57,19 @@ module Einvoice
           %(Provider "#{name}" does not support capability "#{capability}"),
           provider: name
         )
+      end
+
+      # Statutory amounts are always filed in TWD, so a +currency+ is an
+      # annotation of the original sale that only some centers can carry. Every
+      # adapter owes the caller the same answer here — refuse rather than file a
+      # foreign-currency sale as though it were TWD — so the check lives once.
+      #
+      # It belongs to the provider rather than to {Input}, which knows a provider
+      # only by name and has no capability set to consult.
+      def assert_currency_supported!(currency)
+        return if currency.nil? || currency == TWD
+
+        assert_supports!(Capability::FOREIGN_CURRENCY)
       end
     end
   end
