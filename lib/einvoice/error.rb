@@ -10,9 +10,19 @@ module Einvoice
   # Each value implies a concrete consumer action, e.g. +:duplicate_order+ →
   # query-and-adopt the existing invoice; +:void_blocked_by_allowance+ → issue an
   # allowance instead; +:already_voided+ → treat as idempotent success.
+  #
+  # That last one is why the two "wrong state" reasons are separate. Voiding an
+  # already-voided invoice reached the state the caller wanted, so doing nothing
+  # is correct. Crediting a voided invoice did not: no allowance exists, and
+  # treating it as success would record a refund that never happened.
   module Reason
     DUPLICATE_ORDER           = :duplicate_order
+    # 作廢 refused: the invoice carries a live 折讓 — void that first.
     VOID_BLOCKED_BY_ALLOWANCE = :void_blocked_by_allowance
+    # 折讓 refused: the invoice is already 作廢 — there is nothing to credit, and
+    # nothing was credited. Not idempotent success; the caller has to reconcile.
+    ALLOWANCE_BLOCKED_BY_VOID = :allowance_blocked_by_void
+    # 作廢 of an invoice already 作廢 — the requested state, so safe to ignore.
     ALREADY_VOIDED            = :already_voided
     DUPLICATE_ALLOWANCE       = :duplicate_allowance
     PAST_DEADLINE             = :past_deadline
@@ -26,7 +36,8 @@ module Einvoice
     STALE_TIMESTAMP           = :stale_timestamp
 
     ALL = [
-      DUPLICATE_ORDER, VOID_BLOCKED_BY_ALLOWANCE, ALREADY_VOIDED, DUPLICATE_ALLOWANCE,
+      DUPLICATE_ORDER, VOID_BLOCKED_BY_ALLOWANCE, ALLOWANCE_BLOCKED_BY_VOID,
+      ALREADY_VOIDED, DUPLICATE_ALLOWANCE,
       PAST_DEADLINE, CARRIER_NOT_REGISTERED, RATE_LIMITED, CREDENTIALS_INVALID,
       NOT_ENROLLED, CONTRACT_EXPIRED, IP_BLOCKED, ACCOUNT_SUSPENDED, STALE_TIMESTAMP
     ].freeze

@@ -77,9 +77,10 @@ module Einvoice
       check_failure!
       parsed = Input.allowance(input, provider: name)
       stored = require_invoice(parsed.invoice_number)
-      # A voided invoice has nothing left to credit — the same conflict a real
-      # center reports, so it carries the same reason.
-      fail!(ConflictError, "Cannot credit a voided invoice", Reason::ALREADY_VOIDED) if
+      # A voided invoice has nothing left to credit. Deliberately not
+      # ALREADY_VOIDED: that one means "already in the state you asked for, treat
+      # as success", which here would record a refund that never happened.
+      fail!(ConflictError, "Cannot credit a voided invoice", Reason::ALLOWANCE_BLOCKED_BY_VOID) if
         stored[:status] == InvoiceStatus::VOIDED
 
       stored[:status] = InvoiceStatus::ALLOWANCE

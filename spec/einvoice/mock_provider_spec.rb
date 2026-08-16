@@ -88,7 +88,7 @@ RSpec.describe Einvoice::MockProvider do
         }
     end
 
-    it "reports crediting a voided invoice as already voided too" do
+    it "reports crediting a voided invoice as blocked, not as idempotent success" do
       issued = issue!
       provider.void(invoice_number: issued.invoice_number, reason: "x")
 
@@ -98,7 +98,9 @@ RSpec.describe Einvoice::MockProvider do
                                      amount: 50 }],
                            amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 })
       end.to raise_error(Einvoice::ConflictError) { |error|
-        expect(error.reason).to eq(Einvoice::Reason::ALREADY_VOIDED)
+        # Not ALREADY_VOIDED: no credit was recorded, so "treat as success" —
+        # what that reason instructs — would invent a refund.
+        expect(error.reason).to eq(Einvoice::Reason::ALLOWANCE_BLOCKED_BY_VOID)
       }
     end
 
