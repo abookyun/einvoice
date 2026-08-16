@@ -64,4 +64,49 @@ RSpec.describe Einvoice::MockProvider do
       end.to raise_error(Einvoice::ConflictError)
     end
   end
+
+  # Every failure the mock raises should be as informative as a real adapter's,
+  # since it is what callers write their error handling against.
+  describe "the reasons it reports" do
+    def issue!(order_id: "ORDER_1")
+      provider.issue(
+        order_id: order_id,
+        buyer: { email: "b@x.com" },
+        items: [{ description: "商品", quantity: 1, unit_price: 100, amount: 100 }],
+        amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 },
+        tax_type: "TAXABLE", price_mode: "TAX_INCLUSIVE"
+      )
+    end
+
+    it "reports a second void as already voided" do
+      issued = issue!
+      provider.void(invoice_number: issued.invoice_number, reason: "x")
+
+      expect { provider.void(invoice_number: issued.invoice_number, reason: "x") }
+        .to raise_error(Einvoice::ConflictError) { |error|
+          expect(error.reason).to eq(Einvoice::Reason::ALREADY_VOIDED)
+        }
+    end
+
+    it "reports crediting a voided invoice as already voided too" do
+      issued = issue!
+      provider.void(invoice_number: issued.invoice_number, reason: "x")
+
+      expect do
+        provider.allowance(invoice_number: issued.invoice_number, allowance_id: "AL_1",
+                           items: [{ description: "商品", quantity: 1, unit_price: 50,
+                                     amount: 50 }],
+                           amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 })
+      end.to raise_error(Einvoice::ConflictError) { |error|
+        expect(error.reason).to eq(Einvoice::Reason::ALREADY_VOIDED)
+      }
+    end
+
+    it "tags every failure with the provider name" do
+      expect { provider.query(invoice_number: "NOPE00000000") }
+        .to raise_error(Einvoice::NotFoundError) { |error|
+          expect(error.provider).to eq("mock")
+        }
+    end
+  end
 end

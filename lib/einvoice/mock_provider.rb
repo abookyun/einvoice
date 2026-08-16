@@ -65,10 +65,8 @@ module Einvoice
       check_failure!
       parsed = Input.void(input, provider: name)
       stored = require_invoice(parsed.invoice_number)
-      if stored[:status] == InvoiceStatus::VOIDED
-        raise ConflictError.new("Invoice already voided", provider: name,
-                                reason: Reason::ALREADY_VOIDED)
-      end
+      fail!(ConflictError, "Invoice already voided", Reason::ALREADY_VOIDED) if
+        stored[:status] == InvoiceStatus::VOIDED
 
       stored[:status] = InvoiceStatus::VOIDED
       VoidInvoiceResult.new(invoice_number: parsed.invoice_number, status: InvoiceStatus::VOIDED,
@@ -79,9 +77,10 @@ module Einvoice
       check_failure!
       parsed = Input.allowance(input, provider: name)
       stored = require_invoice(parsed.invoice_number)
-      if stored[:status] == InvoiceStatus::VOIDED
-        raise ConflictError.new("Cannot credit a voided invoice", provider: name)
-      end
+      # A voided invoice has nothing left to credit — the same conflict a real
+      # center reports, so it carries the same reason.
+      fail!(ConflictError, "Cannot credit a voided invoice", Reason::ALREADY_VOIDED) if
+        stored[:status] == InvoiceStatus::VOIDED
 
       stored[:status] = InvoiceStatus::ALLOWANCE
       @allowance_seq += 1
@@ -99,9 +98,8 @@ module Einvoice
     def void_allowance(input)
       check_failure!
       parsed = Input.void_allowance(input, provider: name)
-      unless @allowances.include?(parsed.allowance_number)
-        raise NotFoundError.new("Allowance not found", provider: name)
-      end
+      fail!(NotFoundError, "Allowance not found") unless
+        @allowances.include?(parsed.allowance_number)
 
       @allowances.delete(parsed.allowance_number)
       VoidAllowanceResult.new(allowance_number: parsed.allowance_number, raw: { mock: true })
@@ -112,7 +110,7 @@ module Einvoice
       parsed = Input.query(input, provider: name)
       invoice_number = parsed.invoice_number || (parsed.order_id && @by_order_id[parsed.order_id])
       stored = invoice_number && @invoices[invoice_number]
-      raise NotFoundError.new("Invoice not found", provider: name) unless stored
+      fail!(NotFoundError, "Invoice not found") unless stored
 
       QueryInvoiceResult.new(
         invoice_number: invoice_number,
@@ -144,7 +142,12 @@ module Einvoice
     end
 
     def require_invoice(invoice_number)
-      @invoices[invoice_number] || raise(NotFoundError.new("Invoice not found", provider: name))
+      @invoices[invoice_number] || fail!(NotFoundError, "Invoice not found")
+    end
+
+    # One raise site shape, so a missing reason is visible rather than incidental.
+    def fail!(error_class, message, reason = nil)
+      raise error_class.new(message, provider: name, reason: reason)
     end
   end
 end
