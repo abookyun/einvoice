@@ -61,4 +61,15 @@ RSpec.describe Einvoice::Error do
       expect(error.cause).to eq(original)
     end
   end
+
+  # Same drift guard as Capability::ALL — a reason that exists but is missing
+  # from the list is one no consumer can enumerate.
+  describe "Reason::ALL" do
+    it "lists every reason defined in the module" do
+      declared = Einvoice::Reason.constants
+                                 .map { |const| Einvoice::Reason.const_get(const) }
+                                 .grep(Symbol)
+      expect(Einvoice::Reason::ALL).to match_array(declared)
+    end
+  end
 end

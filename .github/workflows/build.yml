@@ -2,9 +2,12 @@ name: build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 2.0.0-alpha ]
   pull_request:
-    branches: [ main ]
+    # Branch filters match the *base* of a pull request. Without 2.0.0-alpha here
+    # the 2.0 integration branch and everything stacked onto it would merge with
+    # no CI at all.
+    branches: [ main, 2.0.0-alpha ]
 
 permissions:
   contents: read
