@@ -1,420 +1,120 @@
 # Einvoice
+
 [![Build Status](https://github.com/abookyun/einvoice/actions/workflows/build.yml/badge.svg)](https://github.com/abookyun/einvoice/actions/workflows/build.yml)
 [![codecov](https://codecov.io/github/abookyun/einvoice/graph/badge.svg?token=yxJNmXiUyp)](https://codecov.io/github/abookyun/einvoice)
 
-> **The 1.x line is moving to maintenance mode.** A provider-agnostic 2.0
-> rewrite is in progress on `main`; once it lands, 1.x continues on the
+A provider-agnostic **Taiwan e-invoice SDK** (財政部 MIG 4.0). The core models the
+five operations once — issue (開立) / void (作廢) / allowance (折讓) /
+void-allowance (折讓作廢) / query (查詢) — as a unified value model plus a
+`Einvoice::Provider` contract. Each value-added center ships as a thin adapter
+mapping the unified model to/from its wire format, so switching providers is a
+one-line constructor change and never touches business code.
+
+> **2.0 is a ground-up rewrite, and the 1.x line is now in maintenance mode.**
+> 1.x was a single-provider (Tradevan) wire-format client with a different API.
+> If you depend on that, pin `~> 1.4` — it continues on the
 > [`1-x-stable`](https://github.com/abookyun/einvoice/tree/1-x-stable) branch.
-> If you depend on the current Tradevan client, pin `~> 1.4`.
+> 2.0's unified model is not backward compatible.
 
-## What's E-Invoice
+## What this is
 
-To support the thriving e-commerce industry and lower the business costs and barriers associated with printing paper receipts, the Taiwan Executive Yuan announced plans in August 2000 to implement electronic receipts in Taiwan and launched a comprehensive project in May 2010 to promote e-invoice applications. This initiative employs innovative approaches such as allowing consumers to claim virtual receipts via multiple devices, offering automatic checking of receipt lottery numbers, and providing a variety of channels for retailers to issue receipts.
+Every Taiwan value-added center wraps the same MOF MIG spec; only the wire
+format (field names, signing, envelope) differs. This SDK models the operations
+once and keeps each provider a thin adapter. Application code depends only on
+`Einvoice::Provider` and the unified types, so moving from one center to another
+is swapping the constructor.
 
-Hence, there are several e-invoice services for B2B, B2C in Taiwan as the intermediate and value-adding platform like [CHT](https://invoice.cht.com.tw/invoice/login.jsp), [allPay](https://www.allpay.com.tw/Business/invoice), [Tradevan](http://www.tradevan.com.tw/services/index.do?act=services_info&type=16), Neweb, ..[etc](https://www.einvoice.nat.gov.tw/index!showAddCenter?linkIsNew=Y&CSRT=3716270004994188830).
+## Status
 
-## Supported E-Invoice Providers
-
-* Tradevan
+Under active development toward 2.0. The provider-agnostic **core** —
+value types, the `Provider` contract, capabilities, the normalized error
+hierarchy, input validation, and an in-memory `MockProvider` — is in place.
+Concrete adapters land next, **ECPay first** (it's the one value-added center
+with public docs and a public sandbox). Coverage and completeness for other
+centers will vary: their docs are less complete, and an adapter built from docs
+alone carries some uncertainty until real production use confirms it.
 
 ## Installation
 
-Add this line to your application's Gemfile:
-
 ```ruby
-gem 'einvoice'
+gem "einvoice", ">= 2.0.0.alpha1"
 ```
-
-And then execute:
-
-    $ bundle
-
-Or install it yourself as:
-
-    $ gem install einvoice
 
 ## Usage
 
-### Configure
+Depend on the `Einvoice::Provider` contract, not a concrete adapter. Every
+provider is constructed per-instance (no global configuration), so a
+multi-merchant app just holds one provider per set of credentials.
 
 ```ruby
-Einvoice.configure do |config|
-  config.endpoint = ENV['EINVOICE_ENDPOINT']
-  # endpoint_url will override endpoint for testing purpose
-  # config.endpoint_url = ENV['EINVOICE_ENDPOINT_URL']
-  config.client_id = ENV['EINVOICE_CLIENT_ID']
-  config.client_secret = ENV['EINVOICE_CLIENT_SECRET']
-  config.encryption_keys = ENV['ENCRYPTION_KEYS']
-  config.format = "json"
-  # config.ssl_verify = false # disable TLS certificate verification (default: true)
+# Any adapter — here the in-memory reference provider — is an Einvoice::Provider.
+provider = Einvoice::MockProvider.new
+
+result = provider.issue(
+  order_id: "ORDER_1",
+  buyer: { email: "buyer@example.com" },       # a ubn present ⇒ B2B (三聯式)
+  items: [
+    { description: "咖啡拿鐵", quantity: 1, unit_price: 100, amount: 100 }
+  ],
+  amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }, # integer TWD
+  tax_type: "TAXABLE",
+  price_mode: "TAX_INCLUSIVE",
+  carrier: { type: "MEMBER" }
+)
+
+result.invoice_number   # => "MK10000000"
+result.status           # => :issued
+
+invoice = provider.query(order_id: "ORDER_1")
+invoice.status          # => :issued
+
+provider.void(invoice_number: result.invoice_number, reason: "客戶取消")
+```
+
+Inputs accept plain hashes (string or symbol keys) — enum fields take the
+canonical symbol (`:taxable`) or a wire-style string (`"TAXABLE"`). They are
+validated and coerced into immutable value objects before anything hits the
+network; a malformed request raises `Einvoice::ValidationError` locally.
+
+### Errors
+
+Every failure is an `Einvoice::Error` subclass carrying a stable `#code`, the
+provider's `#raw_code` / `#raw_message`, and an optional action-oriented
+`#reason`. Rescue precisely or broadly:
+
+```ruby
+begin
+  provider.void(invoice_number: "AB12345678", reason: "customer cancelled")
+rescue Einvoice::ConflictError => e
+  e.reason   # => :already_voided  (idempotent — treat as success)
+rescue Einvoice::Error => e
+  e.code     # => :network, :auth, :not_found, …
 end
 ```
-### SSL certificate verification
 
-By default, `einvoice` verifies the TLS certificate of the configured
-endpoint (`config.ssl_verify` defaults to `true`). If you need to disable
-this — for example when testing against an endpoint with an incomplete
-certificate chain — you can opt out:
+### Capabilities
 
-```ruby
-config.ssl_verify = false
-```
-
-Or per-provider:
+A provider declares what it supports; feature-detect instead of discovering a
+gap when a request fails.
 
 ```ruby
-Einvoice::Tradevan::Provider.new(ssl_verify: false)
-```
-
-### Initialize
-
-```ruby
-client = Einvoice::Client.new(Einvoice::Tradevan::Provider.new)
-```
-
-### Issue an invoice (開立電子發票)
-
-```ruby
-payload = {
-  companyUn: "12345678",
-  orgId: "ABCDE",
-  type: "I",
-  saleIdentifier: "12345678_ABCDE_53b2a44e4b3c",
-  transactionNumber: "53b2a44e4b3c",
-  transactionDate: "20160425",
-  transactionTime: "12:34:56",
-  total: "20000",
-  paperPrintMode: "0",
-  invoiceAlarmMode: "4",
-  donate: "N",
-  donationUnit: nil,
-  carrierType: "3J0002",
-  carrierId: "TP03000001234567",
-  carrierIdHidden: "TP03000001234567",
-  receiverName: "John Appleseed",
-  receiverAddrZip: "95014",
-  receiverAddrRoad: "1 Infinite Loop - Cupertino CA",
-  receiverEmail: "john@gmail.com",
-  receiverMobile: "415-284-0579",
-  memberId: nil,
-  itemList: [
-    {
-      saleIdentifier: "12345678_ABCDE_53b2a44e4b3c",
-      serialNumber: "0001",
-      productName: "Coffee Latte",
-      qty: "4000",
-      price: "5",
-      itemTotal: "20000",
-      taxType: "T",
-      tax: "952"
-    }
-  ]
-}
-```
-
-```ruby
-result = client.issue(payload)
-result.successful?
-#=> true
-result.data
-#=>
-# {
-#   "saleIdentifier"=>"12345678_ABCDE_53b2a44e4b3c",
-#   "issueStatus"=>"Y",
-#   "failReason"=>"",
-#   "invoiceNumber"=>"GX38551078",
-#   "checkNumber"=>"4229",
-#   "invoiceDate"=>"20160425",
-#   "invoiceTime"=>"12:34:58",
-#   "texclusiveAmount"=>"19048",
-#   "oexclusiveAmount"=>"0",
-#   "zexclusiveAmount"=>"0",
-#   "tax"=>"952",
-#   "inclusiveAmount"=>"20000",
-#   "mainRemark"=>"",
-#   "invoiceType"=>"",
-#   "invoiceStatus"=>"V",
-#   "allowanceNumber"=>"",
-#   "allowanceDate"=>"",
-#   "allowanceExclusiveAmount"=>"",
-#   "allowanceTax"=>"",
-#   "allowanceTotalAmount"=>"0",
-#   "allowanceStatus"=>""
-# }
-```
-
-### Cancel an invoice (作廢電子發票)
-
-```ruby
-payload = {
-  type: "I",
-  saleIdentifier: "12345678_ABCDE_53b2a44e4b3c",
-  invoiceNumber: "GX38551078",
-  invoicePaperReturned: "Y",
-}
-```
-
-```ruby
-result = client.cancel(payload)
-result.successful?
-#=> true
-result.data
-#=>
-# {
-#   "saleIdentifier"=>"12345678_ABCDE_53b2a44e4b3c",
-#   "voidStatus"=>"Y",
-#   "failReason"=>"",
-#   "type"=>"I",
-#   "invoiceNumber"=>"GX38551078",
-#   "allowanceNumber"=>""
-# }
-```
-
-### Issue an allowance (開立折讓單)
-
-An allowance against a previously issued invoice is sent through `issue` with `type: "A"`. Each item must reference the original invoice (`invoiceNumber` / `invoiceDate`) and carry its tax-exclusive amount (`itemExclude`).
-
-```ruby
-payload = {
-  companyUn: "12345678",
-  orgId: "ABCDE",
-  type: "A",
-  allowanceIdentifier: "12345678_ABCDE_53b2a44e4b3d",
-  transactionNumber: "53b2a44e4b3d",
-  transactionDate: "20160426",
-  paperPrintMode: "0",
-  invoiceAlarmMode: "4",
-  allowanceExclusiveAmount: "95",
-  allowanceTax: "5",
-  allowanceInclusiveAmount: "100",
-  allowancePaperReturned: "N",
-  invoicePaperReturned: "N",
-  receiverName: "John Appleseed",
-  receiverEmail: "john@gmail.com",
-  itemList: [
-    {
-      saleIdentifier: "12345678_ABCDE_53b2a44e4b3c",
-      serialNumber: "0001",
-      invoiceNumber: "GX38551078",
-      invoiceDate: "20160425",
-      productName: "Coffee Latte",
-      qty: "1000",
-      price: "100",
-      itemExclude: "95",
-      tax: "5",
-      itemTotal: "100",
-      taxType: "T"
-    }
-  ]
-}
-```
-
-```ruby
-result = client.issue(payload)
-result.successful?
-#=> true
-```
-
-Notes:
-
-* `allowanceIdentifier` must be prefixed with `"#{companyUn}_#{orgId}_"`, like `saleIdentifier` on invoices.
-* `allowanceExclusiveAmount` + `allowanceTax` = `allowanceInclusiveAmount`.
-
-### Void an allowance (作廢折讓單)
-
-```ruby
-payload = {
-  type: "A",
-  companyUn: "12345678",
-  allowanceNumber: "ABCDE20160426001",
-  allowancePaperReturned: "Y",
-}
-```
-
-```ruby
-result = client.cancel(payload)
-result.successful?
-#=> true
-```
-
-### Search invoice by memberId/sellTargetCode (載具/會員發票查詢)
-
-```ruby
-payload = {
-  companyUn: "12345678",
-  invoiceStartDate: "20160401",
-  invoiceEndDate: "20160425",
-  carrierId: "TP03000001234567",
-  memberId: "",
-  sellTargetCode: "",
-}
-```
-
-```ruby
-result = client.search_invoice_by_member_id(payload)
-result.successful?
-#=> true
-result.data
-#=>
-# [
-#   {
-#     "saleIdentifier"=>"12345678_ABCDE_53b2a44e4b3c",
-#     "invoiceNumber"=>"GX38551078",
-#     "checkNumber"=>"4229",
-#     "invoiceDate"=>"20160425",
-#     "invoiceTime"=>"12:34:58",
-#     "exclusiveAmount"=>"19048",
-#     "tax"=>"952",
-#     "total"=>"20000",
-#     "status"=>"V",
-#     "hasAllowance"=>"N",
-#     "sellerName"=>"Starbucks",
-#     "sellerUN"=>"12345678",
-#     "sellerAddr"=>"1 Infinite Loop - Cupertino CA",
-#     "sellerTel"=>"415-284-0579",
-#     "receiverName"=>"John Appleseed",
-#     "receiverAddr"=>"1 Infinite Loop - Cupertino CA",
-#     "paper"=>"N",
-#     "win"=>"N",
-#     "donate"=>"N",
-#     "carrierType"=>"CQ0001",
-#     "carrierId"=>"TP03000001234567"
-#   }
-# ]
-```
-
-### Search invoice detail (發票開立明細查詢)
-
-```ruby
-result = client.search_invoice_detail("GX38551078")
-result.successful?
-#=> true
-result.data
-#=>
-# {
-#   "saleIdentifier"=>"12345678_ABCDE_53b2a44e4b3c",
-#   "invoiceNumber"=>"GX38551078",
-#   "checkNumber"=>"4229",
-#   "invoiceDate"=>"20160425",
-#   "invoiceTime"=>"12:34:58",
-#   "exclusiveAmount"=>"19048",
-#   "tax"=>"952",
-#   "total"=>"20000",
-#   "status"=>"I",
-#   "hasAllowance"=>"N",
-#   "sellerName"=>"Starbucks",
-#   "sellerUN"=>"12345678",
-#   "sellerAddr"=>"1 Infinite Loop - Cupertino CA",
-#   "sellerTel"=>"415-284-0579",
-#   "receiverName"=>"John Appleseed",
-#   "receiverAddr"=>"1 Infinite Loop - Cupertino CA",
-#   "receiverPhone"=>"415-284-0579",
-#   "paper"=>"Y",
-#   "win"=>"N",
-#   "donate"=>"N",
-#   "carrierType"=>"CQ0001",
-#   "detailList"=>[
-#     {
-#       "saleIdentifier"=>"12345678_ABCDE_53b2a44e4b3c",
-#       "serialNumber"=>"0001",
-#       "productName"=>"Coffee Latte",
-#       "qty"=>"4000",
-#       "price"=>"5",
-#       "total"=>"20000",
-#       "taxType"=>"T"
-#     }
-#   ]
-# }
-```
-
-### Send card info to customer (電子發票載具歸戶/中獎通知作業)
-
-```ruby
-payload = {
-  companyUn: "12345678",
-  sellTargetCode: "xxx",
-  invoiceStartYM: "201604",
-  invoiceEndYM: "201604",
-  receiverEmail: "john@gmail.com",
-  receiverMobile: "",
-}
-```
-
-```ruby
-result = client.send_card_info_to_cust(payload)
-result.successful?
-#=> true
-result.data
-```
-
-### Get invoice mark info (電子發票字軌號碼配額取號/分配作業)
-
-```ruby
-payload = {
-  companyUn: "12345678",
-  orgId: "ABCDE",
-  uniFiedNumber: "12345678",
-  bookType: "API",
-  period: "201604",
-}
-```
-
-```ruby
-result = client.get_invoice_mark_info(payload)
-result.successful?
-#=> true
-result.data
-#=>
-# [
-#   {
-#     "unifiedNumber"=>"12345678",
-#     "bookNumber"=>"API_M1",
-#     "bookType"=>"API",
-#     "period"=>"201604",
-#     "duration"=>"201604",
-#     "mark"=>"GX",
-#     "start"=>"38551050",
-#     "end"=>"38551249"
-#   }
-# ]
-```
-
-### Get donate unit list (受贈機關/社福團體愛心碼清單查詢)
-
-```ruby
-client.get_donate_unit_list("12345678")
-```
-
-### Get invoice content (電子發票內容查詢)
-
-```ruby
-payload = {
-  invoiceNumber: "GX38551078",
-  sellTargetCode: "",
-  invoiceStartDate: "",
-  invoiceEndDate: "",
-}
-```
-
-```ruby
-result = client.get_invoice_content(payload)
-result.successful?
-#=> true
-result.data
-#=>
+provider.supports?(Einvoice::Capability::FOREIGN_CURRENCY)  # => true / false
+provider.assert_supports!(Einvoice::Capability::B2B)        # raises UnsupportedError if absent
 ```
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+```bash
+bin/setup          # install dependencies
+bundle exec rspec  # run the specs
+bundle exec rake   # default task: rspec
+```
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
-
-## Contributing
-
-Bug reports and pull requests are welcome on GitHub at https://github.com/abookyun/einvoice.
-
+The `"an invoice provider"` shared examples
+(`spec/support/shared_examples/`) are the executable contract every adapter
+runs, so a new adapter proves it honours the unified model by including one line.
 
 ## License
 
-The gem is available as open source under the terms of the [MIT License](http://opensource.org/licenses/MIT).
+The gem is available as open source under the terms of the
+[MIT License](http://opensource.org/licenses/MIT).
