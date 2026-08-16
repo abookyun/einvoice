@@ -70,4 +70,17 @@ RSpec.describe Einvoice::Capability do
       expect { global.assert_currency_supported!("USD") }.not_to raise_error
     end
   end
+
+  # ALL is hand-written so each entry can carry the comment explaining what the
+  # capability means, and so the set stays greppable. The cost is drift: add a
+  # capability, forget the list, and MockProvider silently stops declaring it
+  # while every supports? check quietly answers false. This makes that a failure.
+  describe "ALL" do
+    it "lists every capability defined in the module" do
+      declared = Einvoice::Capability.constants
+                                     .map { |const| Einvoice::Capability.const_get(const) }
+                                     .grep(Symbol)
+      expect(Einvoice::Capability::ALL).to match_array(declared)
+    end
+  end
 end
