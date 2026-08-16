@@ -22,9 +22,8 @@ module Einvoice
       h = hash!(input, "input", provider)
       items = build_items(h[:items], provider)
       amount = build_amount(h[:amount], provider)
-      require_present!(h, :order_id, provider)
       IssueInvoiceInput.new(
-        order_id: h.fetch(:order_id),
+        order_id: fetch!(h, :order_id, provider),
         buyer: build_buyer(h[:buyer], provider),
         items: items,
         amount: amount,
@@ -46,11 +45,9 @@ module Einvoice
       return input if input.is_a?(VoidInvoiceInput)
 
       h = hash!(input, "input", provider)
-      require_present!(h, :invoice_number, provider)
-      require_present!(h, :reason, provider)
       VoidInvoiceInput.new(
-        invoice_number: h.fetch(:invoice_number),
-        reason: h.fetch(:reason),
+        invoice_number: fetch!(h, :invoice_number, provider),
+        reason: fetch!(h, :reason, provider),
         date: h[:date],
         provider_options: h[:provider_options]
       )
@@ -60,11 +57,9 @@ module Einvoice
       return input if input.is_a?(AllowanceInput)
 
       h = hash!(input, "input", provider)
-      require_present!(h, :invoice_number, provider)
-      require_present!(h, :allowance_id, provider)
       AllowanceInput.new(
-        invoice_number: h.fetch(:invoice_number),
-        allowance_id: h.fetch(:allowance_id),
+        invoice_number: fetch!(h, :invoice_number, provider),
+        allowance_id: fetch!(h, :allowance_id, provider),
         items: build_items(h[:items], provider),
         amount: build_amount(h[:amount], provider),
         date: h[:date],
@@ -76,11 +71,9 @@ module Einvoice
       return input if input.is_a?(VoidAllowanceInput)
 
       h = hash!(input, "input", provider)
-      require_present!(h, :invoice_number, provider)
-      require_present!(h, :allowance_number, provider)
       VoidAllowanceInput.new(
-        invoice_number: h.fetch(:invoice_number),
-        allowance_number: h.fetch(:allowance_number),
+        invoice_number: fetch!(h, :invoice_number, provider),
+        allowance_number: fetch!(h, :allowance_number, provider),
         reason: h[:reason],
         provider_options: h[:provider_options]
       )
@@ -178,13 +171,12 @@ module Einvoice
       fail!("#{field} must be an integer (TWD), got #{value.inspect}", provider)
     end
 
-    def require_present!(hash, key, provider)
-      fail!("#{key} is required", provider) if blank?(hash[key])
-    end
-
+    # Read a required field, or fail naming it. "Required" means present, not
+    # merely non-nil: an empty string is a missing value everywhere in this
+    # model, and letting one through only defers the failure to the provider.
     def fetch!(hash, key, provider)
       value = hash[key]
-      fail!("#{key} is required", provider) if value.nil?
+      fail!("#{key} is required", provider) if blank?(value)
       value
     end
 

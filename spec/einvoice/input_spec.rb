@@ -75,6 +75,43 @@ RSpec.describe Einvoice::Input do
     end
   end
 
+  # "Required" has to mean the same thing for every field. Two helpers used to
+  # disagree — one treated an empty string as missing, the other only checked
+  # for nil — so an empty description or npoban sailed through to the provider.
+  describe "required fields" do
+    it "rejects an empty string the same way as a missing key" do
+      {
+        "order_id" => /order_id is required/,
+        "items" => /description is required/
+      }.each do |field, message|
+        hash = field == "items" ? issue_hash.merge("items" => [issue_hash["items"].first.merge("description" => "")]) : issue_hash.merge(field => "")
+        expect { described_class.issue(hash) }.to raise_error(Einvoice::ValidationError, message)
+      end
+    end
+
+    it "rejects an empty npoban" do
+      expect { described_class.issue(issue_hash.merge("donation" => { "npoban" => "" })) }
+        .to raise_error(Einvoice::ValidationError, /npoban is required/)
+    end
+
+    it "rejects an empty reason on a void" do
+      expect { described_class.void({ "invoice_number" => "JU1", "reason" => "" }) }
+        .to raise_error(Einvoice::ValidationError, /reason is required/)
+    end
+
+    # A zero is a value, not an absence — blank? must not swallow it.
+    it "still accepts zero quantities and amounts" do
+      input = described_class.issue(issue_hash.merge(
+                                      "items" => [{ "description" => "贈品", "quantity" => 0,
+                                                    "unit_price" => 0, "amount" => 0 }],
+                                      "amount" => { "sales_amount" => 0, "tax_amount" => 0,
+                                                    "total_amount" => 0 }
+                                    ))
+      expect(input.items.first.quantity).to eq(0)
+      expect(input.amount.total_amount).to eq(0)
+    end
+  end
+
   # The promise of this layer is that bad input fails the same way everywhere.
   # A value of the wrong shape used to escape as a raw NoMethodError/TypeError
   # from wherever it was first indexed, which is neither catchable as
