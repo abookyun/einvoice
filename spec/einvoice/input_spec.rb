@@ -74,4 +74,70 @@ RSpec.describe Einvoice::Input do
       expect(described_class.void({ "invoice_number" => "JU1", "reason" => "x" }).reason).to eq("x")
     end
   end
+
+  # The promise of this layer is that bad input fails the same way everywhere.
+  # A value of the wrong shape used to escape as a raw NoMethodError/TypeError
+  # from wherever it was first indexed, which is neither catchable as
+  # Einvoice::Error nor any help in locating the offending field.
+  describe "input that is not the right shape" do
+    it "rejects a top-level value that is not an object, on every operation" do
+      %i[issue void allowance void_allowance query].each do |operation|
+        [nil, "string", [], 42].each do |value|
+          expect { described_class.public_send(operation, value) }
+            .to raise_error(Einvoice::ValidationError, /input must be an object/),
+                "#{operation}(#{value.inspect}) did not raise a ValidationError"
+        end
+      end
+    end
+
+    it "names the nested field that was the wrong shape" do
+      {
+        "buyer" => /buyer must be an object, got String/,
+        "carrier" => /carrier must be an object, got String/,
+        "amount" => /amount must be an object, got String/,
+        "donation" => /donation must be an object, got String/
+      }.each do |field, message|
+        expect { described_class.issue(issue_hash.merge(field => "nope")) }
+          .to raise_error(Einvoice::ValidationError, message)
+      end
+    end
+
+    it "names the item index that was the wrong shape" do
+      expect { described_class.issue(issue_hash.merge("items" => [nil])) }
+        .to raise_error(Einvoice::ValidationError, /items\[0\] must be an object, got nil/)
+
+      expect { described_class.issue(issue_hash.merge("items" => [issue_hash["items"].first, 42])) }
+        .to raise_error(Einvoice::ValidationError, /items\[1\] must be an object, got Integer/)
+    end
+
+    it "still accepts an absent optional object" do
+      input = described_class.issue(issue_hash.merge("buyer" => nil, "carrier" => nil))
+      expect(input.buyer).to be_nil
+      expect(input.carrier).to be_nil
+    end
+  end
+
+  # donation was the one nested shape that never had its keys normalized, so a
+  # string-keyed one — the whole point of this layer — was rejected as missing.
+  describe "donation" do
+    it "accepts string keys like every other nested object" do
+      input = described_class.issue(issue_hash.merge("donation" => { "npoban" => "168001" }))
+      expect(input.donation).to eq(Einvoice::Donation.new(npoban: "168001"))
+    end
+
+    it "accepts symbol keys" do
+      input = described_class.issue(issue_hash.merge("donation" => { npoban: "168001" }))
+      expect(input.donation.npoban).to eq("168001")
+    end
+
+    it "passes an already-built Donation through" do
+      donation = Einvoice::Donation.new(npoban: "168001")
+      expect(described_class.issue(issue_hash.merge("donation" => donation)).donation).to be(donation)
+    end
+
+    it "requires the npoban" do
+      expect { described_class.issue(issue_hash.merge("donation" => {})) }
+        .to raise_error(Einvoice::ValidationError, /npoban is required/)
+    end
+  end
 end
