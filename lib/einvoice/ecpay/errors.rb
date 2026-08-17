@@ -27,7 +27,7 @@ module Einvoice
       BUSINESS = {
         1_600_003 => [:not_found, nil],                            # 無發票號碼資料
         2_000_039 => [:not_found, nil],                            # 查無折讓單資料
-        2_000_042 => [:conflict, Reason::ALREADY_VOIDED],          # 作廢發票號碼不能折讓
+        2_000_042 => [:conflict, Reason::ALLOWANCE_BLOCKED_BY_VOID], # 作廢發票號碼不能折讓
         2_000_063 => [:conflict, Reason::ALREADY_VOIDED],          # 該折讓單已作廢過
         5_070_357 => [:conflict, Reason::DUPLICATE_ORDER],         # 自訂編號重覆
         5_070_450 => [:conflict, Reason::VOID_BLOCKED_BY_ALLOWANCE], # 該發票已被折讓過
@@ -43,11 +43,16 @@ module Einvoice
       # 重複 and 重覆 are both current spellings and ECPay uses both — matching only
       # one silently demotes a duplicate-order conflict to a generic validation error.
       DUPLICATE     = /重[複覆]/
-      # 已作廢 is the plain "already voided" wording. The second shape is
-      # "作廢…不能…" — the invoice is voided, so the operation is refused — which
-      # is how 2000042 (作廢發票號碼不能折讓) reads; it is the same conflict, and
-      # matching only the first spelling files it as a field error instead.
-      ALREADY_VOID  = /已作廢|作廢.*不能/
+      # Two different conflicts that both mention 作廢, and they call for opposite
+      # responses. 已作廢 on a void means the invoice already reached the state
+      # asked for — safe to treat as success. "作廢…不能…" means the operation was
+      # refused *because* the invoice is voided, and nothing happened; treating
+      # that as success would record a credit that does not exist.
+      # ECPay writes both 已作廢 and 已被作廢; matching only the first meant the
+      # fallback missed 5070453's actual wording, which went unnoticed because
+      # that code is in the table above.
+      ALREADY_VOID    = /已(被)?作廢/
+      BLOCKED_BY_VOID = /作廢.*不能/
       ALLOWANCE_MADE = /已折讓|折讓過/
       CONFLICTING   = /已開立|已存在|同意/
       MISSING       = /查無|查不到|無.*資料|不存在/
@@ -75,7 +80,7 @@ module Einvoice
         when UPSTREAM_DOWN then :network
         when CREDENTIALS, NOT_ENROLLED then :auth
         when EXHAUSTED then :number_exhausted
-        when DUPLICATE, ALREADY_VOID, ALLOWANCE_MADE, CONFLICTING then :conflict
+        when DUPLICATE, ALREADY_VOID, BLOCKED_BY_VOID, ALLOWANCE_MADE, CONFLICTING then :conflict
         # AUTH already claimed 特店/平台商不存在 above, so a bare 不存在 here is a
         # missing record rather than an unknown merchant.
         when MISSING then :not_found
@@ -88,6 +93,9 @@ module Einvoice
         case msg
         when CREDENTIALS then Reason::CREDENTIALS_INVALID
         when NOT_ENROLLED then Reason::NOT_ENROLLED
+        # Checked before ALREADY_VOID: a message carrying both ("已作廢，不能折讓")
+        # is a refusal, and the refusal is the actionable half.
+        when BLOCKED_BY_VOID then Reason::ALLOWANCE_BLOCKED_BY_VOID
         when ALREADY_VOID then Reason::ALREADY_VOIDED
         # Only the void API emits 已折讓/折讓過, so it always means "void the
         # allowance first" rather than a plain conflict.

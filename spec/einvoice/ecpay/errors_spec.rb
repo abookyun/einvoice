@@ -31,7 +31,7 @@ RSpec.describe Einvoice::ECPay::Errors do
         [:conflict, Einvoice::Reason::ALREADY_VOIDED],
       [2_000_039, "查無折讓單資料，請確認!"] => [:not_found, nil],
       [2_000_042, "作廢發票號碼不能折讓"] =>
-        [:conflict, Einvoice::Reason::ALREADY_VOIDED],
+        [:conflict, Einvoice::Reason::ALLOWANCE_BLOCKED_BY_VOID],
       [1_600_003, "無發票號碼資料"] => [:not_found, nil],
       [2, "查無發票資料，請重新確認"] => [:not_found, nil],
       [5_000_022, "驗證發票金額發現錯誤，與商品合計金額不符"] => [:validation, nil],
@@ -80,6 +80,16 @@ RSpec.describe Einvoice::ECPay::Errors do
     # operation is refused. Reading only 已作廢 files this as a field error.
     it "recognises a refusal caused by the invoice being voided" do
       expect(described_class.classify(0, "作廢發票號碼不能折讓"))
+        .to eq([:conflict, Einvoice::Reason::ALLOWANCE_BLOCKED_BY_VOID])
+    end
+
+    # The two 作廢 conflicts imply opposite responses — "already in the state you
+    # wanted" versus "refused, and nothing happened" — so a message carrying both
+    # has to resolve to the refusal.
+    it "prefers the refusal when a message reads as both" do
+      expect(described_class.classify(0, "該發票已作廢，不能折讓"))
+        .to eq([:conflict, Einvoice::Reason::ALLOWANCE_BLOCKED_BY_VOID])
+      expect(described_class.classify(0, "該發票已被作廢過"))
         .to eq([:conflict, Einvoice::Reason::ALREADY_VOIDED])
     end
 

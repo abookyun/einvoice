@@ -166,7 +166,7 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
           amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 }
         )
       end.to raise_error(Einvoice::ConflictError) { |error|
-        expect(error.reason).to eq(Einvoice::Reason::ALREADY_VOIDED)
+        expect(error.reason).to eq(Einvoice::Reason::ALLOWANCE_BLOCKED_BY_VOID)
         expect(error.raw_code).to eq("2000042")
         expect(error.raw_message).to include("作廢發票號碼不能折讓")
       }

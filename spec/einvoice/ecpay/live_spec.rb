@@ -129,7 +129,7 @@ RSpec.describe "ECPay live stage API", :live do
           amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 }
         )
       end.to raise_error(Einvoice::ConflictError) { |error|
-        expect(error.reason).to eq(Einvoice::Reason::ALREADY_VOIDED)
+        expect(error.reason).to eq(Einvoice::Reason::ALLOWANCE_BLOCKED_BY_VOID)
         expect(error.raw_code).to eq("2000042")
       }
     end
