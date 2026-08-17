@@ -1,0 +1,147 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://dataset.einvoice.nat.gov.tw/ods/portal/api/v1/DonateCodeList?donateCode=105
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Date:
+      - Mon, 17 Aug 2026 00:13:05 GMT
+      Server:
+      - Apache
+      Expires:
+      - '0'
+      Cache-Control:
+      - no-cache, no-store, max-age=0, must-revalidate
+      X-Xss-Protection:
+      - 1; mode=block
+      Pragma:
+      - no-cache
+      X-Frame-Options:
+      - SAMEORIGIN
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Content-Security-Policy:
+      - 'default-src ''self'' *.gov.tw; frame-ancestors ''self''; connect-src ''self''
+        *.gov.tw *.tgos.tw *.googleapis.com *.google.com http://localhost:*; frame-src
+        ''self'' www.adsensecustomsearchads.com; script-src ''unsafe-inline'' ''unsafe-eval''
+        ''self'' *.gov.tw *.tgos.tw *.googleapis.com *.google.com static.cloudflareinsights.com
+        http://localhost:*; style-src ''unsafe-inline'' *.gov.tw *.tgos.tw *.googleapis.com
+        *.google.com http://localhost:*; img-src ''self'' *.gov.tw *.tgos.tw *.googleapis.com
+        *.google.com http://localhost:* *.gstatic.com data:; font-src ''self'' *.gov.tw
+        data:'
+      Vary:
+      - Origin,Accept-Encoding,User-Agent,Access-Control-Request-Method,Access-Control-Request-Headers
+      X-Inv-Params:
+      - "%5B%5D"
+      X-Inv-Alert:
+      - ODS-ODS001W-0001-S
+      X-Content-Type-Options:
+      - nosniff
+      Strict-Transport-Security:
+      - max-age=15552000; includeSubDomains; preload
+      Permissions-Policy:
+      - geolocation=(),midi=(),sync-xhr=(),microphone=(),camera=(),magnetometer=(),gyroscope=(),fullscreen=(self),payment=()
+      Content-Type:
+      - application/json
+      X-Inv-Traceid:
+      - cc1b7f648ccf14d2
+      Connection:
+      - close
+      Transfer-Encoding:
+      - chunked
+      Set-Cookie:
+      - hicloudL=!zDdutLTxWum4+pelIJs3w1aEmg+7ABK75mQ6cneavmQl7LFQaHmn5KKTSDUE+KIAhzmjAdC2qXqxaw==;
+        path=/; Httponly; Secure
+      - hicloudW=!V3ASje+h1+mtqXWVA4XliDGx9u2jC6cH0aiQBM8HzWGq+CXYa11M69oJxtghj3sKvrSd380sgV1VxZg=;
+        path=/; Httponly; Secure
+    body:
+      encoding: ASCII-8BIT
+      string: "[ ]"
+  recorded_at: Mon, 17 Aug 2026 00:13:05 GMT
+- request:
+    method: get
+    uri: https://dataset.einvoice.nat.gov.tw/ods/portal/api/v1/DonateCodeList?donateCode=105
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Date:
+      - Mon, 17 Aug 2026 00:13:06 GMT
+      Server:
+      - Apache
+      Expires:
+      - '0'
+      Cache-Control:
+      - no-cache, no-store, max-age=0, must-revalidate
+      X-Xss-Protection:
+      - 1; mode=block
+      Pragma:
+      - no-cache
+      X-Frame-Options:
+      - SAMEORIGIN
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Content-Security-Policy:
+      - 'default-src ''self'' *.gov.tw; frame-ancestors ''self''; connect-src ''self''
+        *.gov.tw *.tgos.tw *.googleapis.com *.google.com http://localhost:*; frame-src
+        ''self'' www.adsensecustomsearchads.com; script-src ''unsafe-inline'' ''unsafe-eval''
+        ''self'' *.gov.tw *.tgos.tw *.googleapis.com *.google.com static.cloudflareinsights.com
+        http://localhost:*; style-src ''unsafe-inline'' *.gov.tw *.tgos.tw *.googleapis.com
+        *.google.com http://localhost:*; img-src ''self'' *.gov.tw *.tgos.tw *.googleapis.com
+        *.google.com http://localhost:* *.gstatic.com data:; font-src ''self'' *.gov.tw
+        data:'
+      Vary:
+      - Origin,Accept-Encoding,User-Agent,Access-Control-Request-Method,Access-Control-Request-Headers
+      X-Inv-Params:
+      - "%5B%5D"
+      X-Inv-Alert:
+      - ODS-ODS001W-0001-S
+      X-Content-Type-Options:
+      - nosniff
+      Strict-Transport-Security:
+      - max-age=15552000; includeSubDomains; preload
+      Permissions-Policy:
+      - geolocation=(),midi=(),sync-xhr=(),microphone=(),camera=(),magnetometer=(),gyroscope=(),fullscreen=(self),payment=()
+      Content-Type:
+      - application/json
+      X-Inv-Traceid:
+      - ccb687566776e6d3
+      Connection:
+      - close
+      Transfer-Encoding:
+      - chunked
+      Set-Cookie:
+      - hicloudL=!E2KijeFyjXVWAqOlIJs3w1aEmg+7ANv+FbwYbMlMeoVDks2Oki86+slMGKIZaj1e44ayFf/voSL4Ug==;
+        path=/; Httponly; Secure
+      - hicloudW=!IRGOQHMjycDhooSVA4XliDGx9u2jC/GmMpYGOA3Db6NVVIV9Yhlahsu0QJHjLq1ii1uLOgWBXs/fLaI=;
+        path=/; Httponly; Secure
+    body:
+      encoding: ASCII-8BIT
+      string: "[ ]"
+  recorded_at: Mon, 17 Aug 2026 00:13:06 GMT
+recorded_with: VCR 6.4.0
