@@ -102,6 +102,35 @@ provider.supports?(Einvoice::Capability::FOREIGN_CURRENCY)  # => true / false
 provider.assert_supports!(Einvoice::Capability::B2B)        # raises UnsupportedError if absent
 ```
 
+## 財政部 lookups
+
+Provider-independent clients for 財政部's own public services. They issue
+nothing and hold no credentials, so they work whichever center you use — or
+before you have picked one.
+
+```ruby
+codes = Einvoice::MOF::DonationCodes.new
+
+codes.lookup("2718")
+# => #<data Einvoice::MOF::DonationCode code="2718",
+#      name="社團法人台北市喜願協會", short_name="喜願協會",
+#      ubn="92000392", city="臺北市">
+
+codes.exist?("105")          # => false — well-formed, not registered
+codes.for_ubn("92000392")    # => every 愛心碼 that organisation holds
+codes.all                    # => the whole dataset (~2,000, five requests)
+```
+
+This is **not** wired into `Input`, and deliberately so: validation there is
+local and synchronous, and issuing an invoice must never depend on a third party
+being reachable. `Input` checks the shape of a 愛心碼; whether it is *registered*
+is a question you ask when it suits you — at order time, or once at boot via
+`#all` to build your own set for offline checks.
+
+The dataset needs no credentials today. Its published OpenAPI declares `api_key`
+and `oauth2` schemes even so, so a 401/403 raises `Einvoice::AuthError` saying
+exactly that rather than surfacing as a parse failure.
+
 ## Development
 
 ```bash
