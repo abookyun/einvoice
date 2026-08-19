@@ -79,8 +79,17 @@ module Einvoice
     end
   end
 
-  # 捐贈 — donating the invoice to a charity by 愛心碼 (3–7 digits).
+  # 捐贈 — donating the invoice to a charity by 愛心碼.
   Donation = Data.define(:npoban)
+
+  # 愛心碼 are 3–7 digits (MIG 捐贈碼). The single definition of that shape:
+  # {Input} enforces it on the way in, and both the adapters and
+  # {MOF::DonationCodes} refer to it rather than restating the pattern.
+  #
+  # Assigned here rather than inside a +Data.define+ block, where a constant
+  # would land in +Einvoice+ instead of on this class — the block is evaluated
+  # with the enclosing lexical scope, so +Donation::CODE_FORMAT+ would not exist.
+  Donation::CODE_FORMAT = /\A\d{3,7}\z/
 
   # A single invoice line. +tax_type+ is required only on mixed-tax invoices.
   InvoiceItem = Data.define(:description, :quantity, :unit_price, :amount, :unit, :tax_type, :remark) do
