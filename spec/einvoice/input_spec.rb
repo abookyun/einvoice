@@ -176,5 +176,43 @@ RSpec.describe Einvoice::Input do
       expect { described_class.issue(issue_hash.merge("donation" => {})) }
         .to raise_error(Einvoice::ValidationError, /npoban is required/)
     end
+
+    # Present but nonsense used to sail through to the provider, which is the
+    # one thing this layer exists to prevent.
+    it "rejects an npoban that is not a 3–7 digit 愛心碼" do
+      ["abc", "1", "12", "12345678", "168-001", "16 8001", "１６８００１"].each do |bad|
+        expect { described_class.issue(issue_hash.merge("donation" => { "npoban" => bad })) }
+          .to raise_error(Einvoice::ValidationError, /npoban must be 3–7 digits/)
+      end
+    end
+
+    it "accepts the full 3–7 digit range" do
+      %w[105 0096 168001 1234567].each do |good|
+        input = described_class.issue(issue_hash.merge("donation" => { "npoban" => good }))
+        expect(input.donation.npoban).to eq(good)
+      end
+    end
+
+    # A JSON payload can carry the code as a number. Normalizing to a String
+    # keeps it comparable with 財政部's data, which returns strings.
+    it "normalizes a numeric npoban to a String" do
+      input = described_class.issue(issue_hash.merge("donation" => { "npoban" => 168_001 }))
+      expect(input.donation.npoban).to eq("168001")
+    end
+
+    # 0096 is a real 愛心碼. As an Integer it is 96, which is not a valid code,
+    # so this has to fail rather than be padded back into something plausible.
+    it "refuses a numeric code whose leading zero was already lost" do
+      expect { described_class.issue(issue_hash.merge("donation" => { "npoban" => 96 })) }
+        .to raise_error(Einvoice::ValidationError, /npoban must be 3–7 digits/)
+    end
+
+    # The rule is applied in three places — here, the ECPay payload and the
+    # 財政部 client. Core used to accept "abc" while the other two rejected it,
+    # so sharing one object is what stops them drifting apart again. Identity,
+    # not equality: an inlined copy of the same pattern would pass ==.
+    it "is the same object the 財政部 client matches against" do
+      expect(Einvoice::MOF::DonationCodes::CODE_FORMAT).to be(Einvoice::Donation::CODE_FORMAT)
+    end
   end
 end

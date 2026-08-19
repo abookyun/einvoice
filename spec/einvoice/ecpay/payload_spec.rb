@@ -163,8 +163,11 @@ RSpec.describe Einvoice::ECPay::Payload do
         .to include("CarrierType" => "3", "CarrierNum" => "/ABC1234")
     end
 
-    it "requires a love code when donating" do
-      expect { build(carrier: nil, donation: { npoban: "abc" }) }
+    # Input rejects a malformed 愛心碼 first, so reaching this rule takes a
+    # Donation value object, which Input passes through untouched. Worth keeping
+    # both: the adapter is what talks to ECPay, and 5000007 is its answer.
+    it "requires a love code when donating, even if the code bypassed Input" do
+      expect { build(carrier: nil, donation: Einvoice::Donation.new(npoban: "abc")) }
         .to raise_error(Einvoice::ValidationError, /LoveCode .* is required when donating/)
     end
   end

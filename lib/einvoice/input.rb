@@ -116,7 +116,14 @@ module Einvoice
       return nil if value.nil?
       return value if value.is_a?(Donation)
 
-      Donation.new(npoban: fetch!(hash!(value, "donation", provider), :npoban, provider))
+      # Kept as a String: a 愛心碼 is an identifier, not a number, and real ones
+      # carry a leading zero (0096) that an integer round-trip would destroy.
+      npoban = fetch!(hash!(value, "donation", provider), :npoban, provider).to_s
+      unless npoban.match?(Donation::CODE_FORMAT)
+        fail!("npoban must be 3–7 digits (愛心碼), got #{npoban.inspect}", provider)
+      end
+
+      Donation.new(npoban: npoban)
     end
 
     def build_amount(value, provider)

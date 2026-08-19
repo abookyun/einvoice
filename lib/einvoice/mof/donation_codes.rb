@@ -32,8 +32,9 @@ module Einvoice
       BASE_URL = "https://dataset.einvoice.nat.gov.tw/ods/portal"
       PATH = "/api/v1/DonateCodeList"
 
-      # 愛心碼 are 3–7 digits (MIG 捐贈碼).
-      CODE_FORMAT = /\A\d{3,7}\z/
+      # The same shape {Einvoice::Donation} defines, deliberately shared: a code
+      # this client accepts is one you can put on an invoice.
+      CODE_FORMAT = Donation::CODE_FORMAT
       # The API's documented ceiling; the dataset is ~2,000 rows, so a full sweep
       # is a handful of requests.
       MAX_PAGE = 500
