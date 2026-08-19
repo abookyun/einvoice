@@ -1,0 +1,56 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://einvoice-stage.ecpay.com.tw/B2CInvoice/CheckBarcode
+    body:
+      encoding: UTF-8
+      string: '{"MerchantID":"2000132","RqHeader":{"Timestamp":1786807749,"Revision":"3.0.0"},"Data":"XeEOdHpTRvxKEqs/JD9RSd16s7VtpyWVCN6AV44pKTW3DVa6yI7vKmjBRp2eulDhGmpvMUaOOYcW0RZTU38OUtDrAnXSvZH+lpm68ikoerM="}'
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+      Content-Type:
+      - application/json
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Content-Type:
+      - application/json; charset=utf-8
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+      X-Content-Type-Options:
+      - nosniff
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Content-Security-Policy:
+      - ''
+      Content-Length:
+      - '291'
+      Expires:
+      - Sat, 15 Aug 2026 15:29:10 GMT
+      Cache-Control:
+      - max-age=0, no-cache, no-store
+      Pragma:
+      - no-cache
+      Date:
+      - Sat, 15 Aug 2026 15:29:10 GMT
+      Connection:
+      - keep-alive
+      Server-Timing:
+      - ak_p; desc="1786807750110_399640262_1754778638_18413_3137_10_16_-";dur=1
+      - cdn-cache; desc=MISS
+      - edge; dur=167
+      - origin; dur=18
+    body:
+      encoding: UTF-8
+      string: '{"PlatformID":0,"MerchantID":2000132,"RpHeader":{"Timestamp":1786807750,"RqID":"779b6e6f-fe22-4f14-a5e4-b3aeacc343b7","Revision":"3.0.0"},"TransCode":1,"TransMsg":"Success","Data":"XiPrW0fY9qcvZyZ3p4YO9Lmy/26tRJYNg7kUScZ2pi06H5MOkNrfjBoVlmHsgviRNhXCC/Yz23SCLGIngPcFb1bnPaiiFUDaYymbdwdX9SA="}'
+  recorded_at: Sat, 15 Aug 2026 15:29:10 GMT
+recorded_with: VCR 6.4.0

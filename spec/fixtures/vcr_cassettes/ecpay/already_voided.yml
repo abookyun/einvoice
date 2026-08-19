@@ -1,0 +1,162 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://einvoice-stage.ecpay.com.tw/B2CInvoice/Issue
+    body:
+      encoding: UTF-8
+      string: '{"MerchantID":"2000132","RqHeader":{"Timestamp":1786807752,"Revision":"3.0.0"},"Data":"XeEOdHpTRvxKEqs/JD9RSd16s7VtpyWVCN6AV44pKTV7XoPByaStato0iqOI39rIbe0TZ4zcKHQZG5PC5+h2wt5DdZfw+6oP5rDLOCV7bKI0wwCUbEy41qEMVHf8ZAgwVDC9td3HYny7zkrAKBWUFhTZ0VI6kKZT+luivc5nLChCHICKK/bMHPDeypay8NR+eOX4kXfdS3fardgwbefmKUVfvEIe+XbXqGGgDGnEIL7sPhv1ThzWeEbr5FSAGSw7zWpQ5WlYekI/4NujddPUlYcSovFQZsb3O7vZb7jT49J4A14S/xS0ueRT0iaY6WT5Ytpxq74UHSqZRUe7ePTr0ocGnWhhk+d9JWyOmQjsWr2+4O76LF8KqYa1bMqTx+XXE+X2B4mz6cRytQ6pmJvWkaUZV5YVe9kj4rQQ7wiV2J9Hn0agM+ZldZXKtueeBd90VEVH5/vxR/02uU9nCQb27+wVDGEY1Vil/rz1ap7UzseGpOoUSQShjr0N8UX3DB/oCiKwrADf5Ne8DuwLHz6wddve4AvJqJUsNOghjLmEdSV1clEXSytDYujox1W9ZSu9inFuDESc36jdtRUpCklP590sa8UPhFm46e3QrVof1oS9FBq1+lOKUg2DNKbx8ML9OU7V+4/069C6GgF2WQutdOs3rTgQHy9k/Zj7G0LI/lyCW9xWSiybDJZ3RiXFojREO7iTHeOwSC8VplotUwD+BaM/eien+tejdMFdzT69mZItE46+CLnk+D2ugi9gWfrGrmu0/DVRdZmKpFxA3cIMoRmqUr9QqzPDVABpC0rSUDkTt9YG/7+SSei81VNnMVz/DhcTkdVRt4Fl2A7dCEWLsWicG6ayUg9tYZYhxa62heriNpzIghfd/xHrnT6kNhvW5fHgagpQLzoCGAlXCU3tcc5ce4ohKXuh4RqIjf+A3yKCKIYVSuDvFS2LsuHVQWpNdPhx0NS0EPicWX/01qGa5K8LbHuk6mqK64sGT5Q3Vni4B3xK+NQeGJehFaSazt1gHcyNaT7LLWP0Ecntl93FT5YxkA9fEsk0ketGfMitTl2esAWPPNpm0MJVSAPfNBPFu6ft016QycdRKR9NTM3xqQ=="}'
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+      Content-Type:
+      - application/json
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Content-Type:
+      - application/json; charset=utf-8
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+      X-Content-Type-Options:
+      - nosniff
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Content-Security-Policy:
+      - ''
+      Content-Length:
+      - '503'
+      Expires:
+      - Sat, 15 Aug 2026 15:29:13 GMT
+      Cache-Control:
+      - max-age=0, no-cache, no-store
+      Pragma:
+      - no-cache
+      Date:
+      - Sat, 15 Aug 2026 15:29:13 GMT
+      Connection:
+      - keep-alive
+      Server-Timing:
+      - ak_p; desc="1786807752198_399640262_1754786041_82278_3772_10_13_-";dur=1
+      - cdn-cache; desc=MISS
+      - edge; dur=168
+      - origin; dur=656
+    body:
+      encoding: UTF-8
+      string: '{"PlatformID":0,"MerchantID":2000132,"RpHeader":{"Timestamp":1786807752,"RqID":"6c2aa156-a7e2-4a5d-842c-e0b0147cc456","Revision":"3.0.0"},"TransCode":1,"TransMsg":"Success","Data":"6xafbXXjyQnBuHWKr5nDl3elIhyu1OUPiZsXnreThwQMIYbPFyWZHL9ALxDT9maQm1zzov+o2Suh56+NpeqrtK7A6EwTVdAJGbl/4ATxEScKukTLEjpSflzkNBeN513sqfGsjM8REOlO29AJFOeRnrOo5432DG/4QTh9AKByqLT/ZEXjYArEp4BXSRJlv2LohMVlUcvgJDm8yo6A3qStzZyTLgvX9aSW5cnrbVVF5TZ64tgZs3NRszKJdBAhsyREpOoqagVPr1zrQ9pldcXundVK2ZJKqm6L5PdoDjrjjPvEbmJlvgYkf9rjzA8VhASd"}'
+  recorded_at: Sat, 15 Aug 2026 15:29:12 GMT
+- request:
+    method: post
+    uri: https://einvoice-stage.ecpay.com.tw/B2CInvoice/Invalid
+    body:
+      encoding: UTF-8
+      string: '{"MerchantID":"2000132","RqHeader":{"Timestamp":1786807752,"Revision":"3.0.0"},"Data":"XeEOdHpTRvxKEqs/JD9RSd16s7VtpyWVCN6AV44pKTUBUbt3mZEoyD3XQjjBRhcw8Ro6l/RjH43Gydj0JjSArlCaJebhhuUN1SLHjpts7aD19vam3tYkS01CtYtKdFjRdVQl1sPYbRC8b9m40Ssg6eq+7y1csUSNivTtTlkyTN/CXmvCAZYTxvS/hgbw8U+x13QKc7Y16U8vK1wvdjtC0L/wUPWkQoPNoLEbB+7F/434NtfqZmW49ecbX//QLeNOytky4SANYMcmjpkvr1sBNQ=="}'
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+      Content-Type:
+      - application/json
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Content-Type:
+      - application/json; charset=utf-8
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+      X-Content-Type-Options:
+      - nosniff
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Content-Security-Policy:
+      - ''
+      Content-Length:
+      - '375'
+      Expires:
+      - Sat, 15 Aug 2026 15:29:13 GMT
+      Cache-Control:
+      - max-age=0, no-cache, no-store
+      Pragma:
+      - no-cache
+      Date:
+      - Sat, 15 Aug 2026 15:29:13 GMT
+      Connection:
+      - keep-alive
+      Server-Timing:
+      - ak_p; desc="1786807753064_399640262_1754789087_24992_3677_10_14_-";dur=1
+      - cdn-cache; desc=MISS
+      - edge; dur=194
+      - origin; dur=56
+    body:
+      encoding: UTF-8
+      string: '{"PlatformID":0,"MerchantID":2000132,"RpHeader":{"Timestamp":1786807753,"RqID":"b57b1450-1067-41df-a3e3-719c5fc66797","Revision":"3.0.0"},"TransCode":1,"TransMsg":"Success","Data":"6xafbXXjyQnBuHWKr5nDl3elIhyu1OUPiZsXnreThwTxF5b6RYxResOUVFlRaxGE+q6YnnTW+7AzTDJD85oqkYNlaTeXOzROnfPHMTRHFnVlmQY+ahyhbrRQyfkOz1aYk2Y/z4e8ReRdP849cew5TzWkrn/q7iv/rYUqDuCzD+c0FYFKI70bzS1PPb9ZNXGq"}'
+  recorded_at: Sat, 15 Aug 2026 15:29:13 GMT
+- request:
+    method: post
+    uri: https://einvoice-stage.ecpay.com.tw/B2CInvoice/Invalid
+    body:
+      encoding: UTF-8
+      string: '{"MerchantID":"2000132","RqHeader":{"Timestamp":1786807753,"Revision":"3.0.0"},"Data":"XeEOdHpTRvxKEqs/JD9RSd16s7VtpyWVCN6AV44pKTUBUbt3mZEoyD3XQjjBRhcw8Ro6l/RjH43Gydj0JjSArlCaJebhhuUN1SLHjpts7aD19vam3tYkS01CtYtKdFjRdVQl1sPYbRC8b9m40Ssg6eq+7y1csUSNivTtTlkyTN/CXmvCAZYTxvS/hgbw8U+x13QKc7Y16U8vK1wvdjtC0L/wUPWkQoPNoLEbB+7F/434NtfqZmW49ecbX//QLeNOytky4SANYMcmjpkvr1sBNQ=="}'
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+      Content-Type:
+      - application/json
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Content-Type:
+      - application/json; charset=utf-8
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+      X-Content-Type-Options:
+      - nosniff
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Content-Security-Policy:
+      - ''
+      Content-Length:
+      - '463'
+      Expires:
+      - Sat, 15 Aug 2026 15:29:13 GMT
+      Cache-Control:
+      - max-age=0, no-cache, no-store
+      Pragma:
+      - no-cache
+      Date:
+      - Sat, 15 Aug 2026 15:29:13 GMT
+      Connection:
+      - keep-alive
+      Server-Timing:
+      - ak_p; desc="1786807753358_399640262_1754790260_22775_3610_11_13_-";dur=1
+      - cdn-cache; desc=MISS
+      - edge; dur=175
+      - origin; dur=53
+    body:
+      encoding: UTF-8
+      string: '{"PlatformID":0,"MerchantID":2000132,"RpHeader":{"Timestamp":1786807753,"RqID":"aefd348e-b663-4718-ba7a-55918bbae671","Revision":"3.0.0"},"TransCode":1,"TransMsg":"Success","Data":"6xafbXXjyQnBuHWKr5nDlzoEHehS6qx0Iyc5ckaPNZG3PatoB0HTelrZA8aDdwaOeO0a1tDKXOZ2GBRkoikS9oU86CSrb5gva50o8JGWFfsqk8p3JIVGeI3cJdMEUSbEU06n+7AP9U/PWoJW5tn5BGykguQKQkY6zhLWaK808L1M01VNaYT7j4GsFNle5haR7IcbPanpagOOPw8tdS2BCTmR9rrIHk+QKNrq9itTebPy2sMWAH3Y8nUjxBZX7Y46PSSVkjU/2GZK6QmCaFWN4Q=="}'
+  recorded_at: Sat, 15 Aug 2026 15:29:13 GMT
+recorded_with: VCR 6.4.0

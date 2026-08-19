@@ -1,0 +1,56 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://einvoice-stage.ecpay.com.tw/B2CInvoice/AllowanceInvalid
+    body:
+      encoding: UTF-8
+      string: '{"MerchantID":"2000132","RqHeader":{"Timestamp":1786807753,"Revision":"3.0.0"},"Data":"XeEOdHpTRvxKEqs/JD9RSd16s7VtpyWVCN6AV44pKTUBUbt3mZEoyD3XQjjBRhcwkHFXPz+AMdsNxNp8QV/Nw5ASmI+vsxz0Q9l6AkYbd/wlV/rjVgphs1dWRgRouHy2tHMtGuAsNM8i83WeURKXvGKSWcOj9T88VZUFBfx99Gnyno2CVOvo+Jo4aXZlRVdfRX7J+b7y4udupqk1Rhfgs9yC9ceSf7o9e8Pv0MSKu672EJ7S/OmW1wAMfkOWYcV4"}'
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+      Content-Type:
+      - application/json
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Content-Type:
+      - application/json; charset=utf-8
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+      X-Content-Type-Options:
+      - nosniff
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Content-Security-Policy:
+      - ''
+      Content-Length:
+      - '439'
+      Expires:
+      - Sat, 15 Aug 2026 15:29:14 GMT
+      Cache-Control:
+      - max-age=0, no-cache, no-store
+      Pragma:
+      - no-cache
+      Date:
+      - Sat, 15 Aug 2026 15:29:14 GMT
+      Connection:
+      - keep-alive
+      Server-Timing:
+      - ak_p; desc="1786807753630_399640262_1754791606_36197_4235_11_79_-";dur=1
+      - cdn-cache; desc=MISS
+      - edge; dur=189
+      - origin; dur=174
+    body:
+      encoding: UTF-8
+      string: '{"PlatformID":0,"MerchantID":2000132,"RpHeader":{"Timestamp":1786807753,"RqID":"8db550af-9e74-4d4e-ad28-364cce700223","Revision":"3.0.0"},"TransCode":1,"TransMsg":"Success","Data":"6xafbXXjyQnBuHWKr5nDl/6oPjV8AQbv/vUuEYUnRHPmyLyl164e2z2p/hz+0nWyna50Xzy1f5jfoFsc3iPEmXO6vYxwg+cN6zq5pn59A4Q1V9mE4gaq0jnzVDGzRZx+laePF+jsihpzhO9JbV5SI4PPg216AIl38rUw+4axBDxbaeEC1xQBnyNTP6nOAlpj5EDGueR/yXHN1+WaRQBVHY+iOfZvjlHKpMSvyy4rHlRZszCdQOTYiwGBjmflbV1q"}'
+  recorded_at: Sat, 15 Aug 2026 15:29:13 GMT
+recorded_with: VCR 6.4.0
