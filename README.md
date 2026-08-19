@@ -142,7 +142,10 @@ A few things worth knowing:
 - **No foreign currency.** ECPay's B2C API has no such field, so a non-TWD
   `currency` raises `UnsupportedError` rather than being filed as TWD.
 - **Carrier validation**: `validate_mobile_barcode("/ABC1234")`,
-  `validate_love_code("168001")`, `love_code_organ_name("168001")`.
+  `validate_love_code("168001")`, `love_code_organ_name("168001")` — these ask
+  ECPay, so they need this adapter and its credentials. For 愛心碼 there is also
+  `Einvoice::MOF::DonationCodes` (below), which asks 財政部 directly and needs
+  neither.
 - **Anything else**: ECPay has ~25 further B2C endpoints (延遲開立, 字軌設定,
   列印, 通知 …). Reach them through `provider.raw(path, payload)`, which applies
   the envelope, encryption and error mapping for you.
