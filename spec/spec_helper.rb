@@ -17,6 +17,7 @@ SimpleCov.start do
 end
 
 require "einvoice"
+require "webmock/rspec"
 
 Dir[File.join(__dir__, "support", "**", "*.rb")].each { |f| require f }
 
@@ -38,4 +39,15 @@ RSpec.configure do |config|
   Kernel.srand config.seed
 
   config.expect_with(:rspec) { |c| c.max_formatted_output_length = 400 }
+
+  # `webmock/rspec` blocks the network for every example, and VCR intercepts what
+  # gets through. The :live specs are the deliberate exception — they drive a
+  # real provider sandbox and are opt-in — so both have to stand down, or VCR
+  # rejects the request as one it has no cassette for.
+  config.around(:each, :live) do |example|
+    WebMock.allow_net_connect!
+    VCR.turned_off { example.run }
+  ensure
+    WebMock.disable_net_connect!
+  end
 end

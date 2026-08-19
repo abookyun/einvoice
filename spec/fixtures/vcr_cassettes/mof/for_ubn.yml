@@ -1,0 +1,76 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://dataset.einvoice.nat.gov.tw/ods/portal/api/v1/DonateCodeList?donateBan=92000392
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+      User-Agent:
+      - Ruby
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Date:
+      - Mon, 17 Aug 2026 00:12:57 GMT
+      Server:
+      - Apache
+      Expires:
+      - '0'
+      Cache-Control:
+      - no-cache, no-store, max-age=0, must-revalidate
+      X-Xss-Protection:
+      - 1; mode=block
+      Pragma:
+      - no-cache
+      X-Frame-Options:
+      - SAMEORIGIN
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Content-Security-Policy:
+      - 'default-src ''self'' *.gov.tw; frame-ancestors ''self''; connect-src ''self''
+        *.gov.tw *.tgos.tw *.googleapis.com *.google.com http://localhost:*; frame-src
+        ''self'' www.adsensecustomsearchads.com; script-src ''unsafe-inline'' ''unsafe-eval''
+        ''self'' *.gov.tw *.tgos.tw *.googleapis.com *.google.com static.cloudflareinsights.com
+        http://localhost:*; style-src ''unsafe-inline'' *.gov.tw *.tgos.tw *.googleapis.com
+        *.google.com http://localhost:*; img-src ''self'' *.gov.tw *.tgos.tw *.googleapis.com
+        *.google.com http://localhost:* *.gstatic.com data:; font-src ''self'' *.gov.tw
+        data:'
+      Vary:
+      - Origin,Accept-Encoding,User-Agent,Access-Control-Request-Method,Access-Control-Request-Headers
+      X-Inv-Params:
+      - "%5B%5D"
+      X-Inv-Alert:
+      - ODS-ODS001W-0001-S
+      X-Content-Type-Options:
+      - nosniff
+      Strict-Transport-Security:
+      - max-age=15552000; includeSubDomains; preload
+      Permissions-Policy:
+      - geolocation=(),midi=(),sync-xhr=(),microphone=(),camera=(),magnetometer=(),gyroscope=(),fullscreen=(self),payment=()
+      Content-Type:
+      - application/json
+      X-Inv-Traceid:
+      - cc5db24f331e27d6
+      Connection:
+      - close
+      Transfer-Encoding:
+      - chunked
+      Set-Cookie:
+      - hicloudL=!z7aTRVVqRua08sGlIJs3w1aEmg+7ANRwQ3gV/E/3I/4O7pO4bWJorZ5CH7w8RAqdIVTrAUI2/Pa/Bw==;
+        path=/; Httponly; Secure
+      - hicloudW=!LdrQc8aYu7KuXlGVA4XliDGx9u2jC3mzZeO1rYlDZOjR0J9bI/bIceVeAv3uoCFIkZH0DH+uCIDOktI=;
+        path=/; Httponly; Secure
+    body:
+      encoding: ASCII-8BIT
+      string: !binary |-
+        WyB7CiAgImRvbmF0ZUJhbiIgOiAiOTIwMDAzOTIiLAogICJkb25hdGVObSIgOiAi56S+5ZyY5rOV5Lq65Y+w5YyX5biC5Zac6aGY5Y2U5pyDIiwKICAiZG9uYXRlQ29kZSIgOiAiMjcxOCIsCiAgImRvbmF0ZVNob3J0Tm0iIDogIuWWnOmhmOWNlOacgyIsCiAgImhzbk5tIiA6ICLoh7rljJfluIIiLAogICJzZXEiIDogMQp9IF0=
+  recorded_at: Mon, 17 Aug 2026 00:12:57 GMT
+recorded_with: VCR 6.4.0
