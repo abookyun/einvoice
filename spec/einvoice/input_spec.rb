@@ -206,5 +206,13 @@ RSpec.describe Einvoice::Input do
       expect { described_class.issue(issue_hash.merge("donation" => { "npoban" => 96 })) }
         .to raise_error(Einvoice::ValidationError, /npoban must be 3–7 digits/)
     end
+
+    # The rule is applied in three places — here, the ECPay payload and the
+    # 財政部 client. Core used to accept "abc" while the other two rejected it,
+    # so sharing one object is what stops them drifting apart again. Identity,
+    # not equality: an inlined copy of the same pattern would pass ==.
+    it "is the same object the 財政部 client matches against" do
+      expect(Einvoice::MOF::DonationCodes::CODE_FORMAT).to be(Einvoice::Donation::CODE_FORMAT)
+    end
   end
 end

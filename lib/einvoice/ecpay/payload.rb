@@ -133,8 +133,10 @@ module Einvoice
         ubn = data["CustomerIdentifier"].to_s
         errors << "CustomerIdentifier must be 8 digits" unless ubn.empty? || ubn.match?(/\A\d{8}\z/)
 
+        # Input enforces the same rule, so this only fires for a Donation value
+        # object built directly, which Input passes through untouched.
         love_code = data["LoveCode"].to_s
-        if data["Donation"] == "1" && !love_code.match?(/\A\d{3,7}\z/)
+        if data["Donation"] == "1" && !love_code.match?(Donation::CODE_FORMAT)
           errors << "LoveCode (3–7 digits) is required when donating"
         end
 
