@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+2.0 is a ground-up, provider-agnostic rewrite. The 1.x line (a single-provider
+Tradevan wire-format client) is now in maintenance mode on `1-x-stable`; pin
+`~> 1.4` if you depend on it. **2.0's unified model is not backward
+compatible.**
+
+### Added
+- A `Einvoice::Provider` contract modeling the five e-invoice operations
+  (issue / void / allowance / void-allowance / query) once, provider-agnostic,
+  backed by unified value types (`Data.define`) and an input coercion +
+  validation layer that raises `Einvoice::ValidationError` locally before
+  anything hits the network.
+- A normalized error hierarchy (`Einvoice::Error` and subclasses) carrying a
+  stable `#code`, the provider's raw `#raw_code` / `#raw_message`, and an
+  optional action-oriented `#reason` (e.g. `:already_voided`).
+- A `Capability` system so providers declare what they support
+  (`#supports?`, `#assert_supports!`) instead of feature gaps surfacing as
+  runtime failures. This alpha's only adapter (ECPay) declares issue / void /
+  allowance / void-allowance / query, B2B, and carrier validation; it does not
+  yet declare foreign-currency, mixed-tax-rate, or query-by-order-id support.
+- `Einvoice::MockProvider`, an in-memory reference implementation of the
+  `Provider` contract for testing application code without a real adapter.
+- **ECPay (綠界) provider**: the first real adapter on the unified core,
+  covering all five operations plus carrier validation, with AES envelope
+  crypto and specs replayed from VCR cassettes recorded against ECPay's
+  public stage API.
+- ECPay error mapping distinguishes a voided invoice being idempotently
+  re-voided (no-op, safe to treat as success) from an allowance being
+  refused because the invoice was already voided (no credit was recorded;
+  treating it as success would book a refund that never happened). Reusing
+  one reason for both was a real risk of double-crediting a customer.
+- A live client for 財政部's 愛心碼 (donation code) dataset
+  (`Einvoice::MOF::DonationCodes`), replacing the previously bundled static
+  snapshot with a real-time lookup.
+
+### Fixed
+- Core input claimed to validate a donation's 愛心碼 but only checked that
+  `npoban` was present, so `"abc"`, `"1"`, and a 14-digit code all reached
+  the provider unrejected. It now enforces the MIG shape (3–7 digits) up
+  front, via a single pattern (`Donation::CODE_FORMAT`) shared with the
+  ECPay payload check and the 財政部 client, instead of three copies that
+  could silently drift apart.
+
+### Removed
+- The legacy Tradevan direct-API layer (`Client`, `Configuration`,
+  `Connection`, `Result`, and the Tradevan-specific models) — superseded by
+  the unified core and the provider adapter model.
+- `lib/einvoice/donation_unit_list.json` and the scheduled workflow that
+  refreshed it, now that donation codes are looked up live against 財政部
+  instead of shipped as a static snapshot.
+
+### Changed
+- CI now also runs for pull requests targeting `2.0.0-alpha`.
+
 ## [1.4.0] - 2026-08-08
 
 ### Changed
