@@ -1,0 +1,14 @@
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!lib/einvoice/donation_unit_list.json"
+  path_instructions:
+    - path: "lib/einvoice/tradevan/**"
+      instructions: >
+        This is legacy 1.x code kept for backward compatibility.
+        Do not suggest large-scale refactors or architecture changes here.
+        Focus only on correctness bugs and security issues.
