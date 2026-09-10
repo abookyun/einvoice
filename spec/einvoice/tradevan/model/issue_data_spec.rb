@@ -204,4 +204,29 @@ RSpec.describe Einvoice::Tradevan::Model::IssueData, type: :model do
       it { is_expected.to validate_length_of(:invoicePaperReturned).is_at_most(1) }
     end
   end
+
+  context "#payload" do
+    # Rails 8.0 renamed ActiveModel's internal :validation_context ivar to
+    # :context_for_validation. Tradevan rejects any request containing a field
+    # outside its declared schema, so once #valid? has run, a stale exclusion
+    # list leaks that ivar into the payload and the whole request is rejected.
+    it "excludes both internal validation ivars before validation" do
+      expect(subject.payload.keys.map(&:to_sym)).not_to include(:validation_context, :context_for_validation)
+    end
+
+    it "excludes both internal validation ivars after #valid? has run" do
+      subject.valid?
+      expect(subject.payload.keys.map(&:to_sym)).not_to include(:validation_context, :context_for_validation)
+    end
+
+    it "still includes business fields such as itemList" do
+      expect(subject.payload.keys.map(&:to_sym)).to include(:itemList)
+    end
+
+    it "does not break validation itself" do
+      expect(subject.valid?).to be(true)
+      subject.companyUn = nil
+      expect(subject.valid?).to be(false)
+    end
+  end
 end
