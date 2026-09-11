@@ -27,7 +27,7 @@ module Einvoice
         validates :allowancePaperReturned, presence: true, length: { is: 1 }, inclusion: { in: %w(Y N) }, if: proc { self.type == 'A' }
 
         def payload
-          serializable_hash(except: [:errors, :validation_context, :itemList])
+          serializable_hash(except: [:errors, :validation_context, :context_for_validation, :itemList])
         end
       end
     end

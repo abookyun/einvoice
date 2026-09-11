@@ -121,7 +121,7 @@ module Einvoice
         validates :invoiceType, allow_blank: true, length: { is: 2 }, inclusion: { in: %w(07 08) }, if: proc { self.type == 'G' }
 
         def payload
-          serializable_hash(except: [:errors, :validation_context], include: [:itemList])
+          serializable_hash(except: [:errors, :validation_context, :context_for_validation], include: [:itemList])
         end
       end
     end
