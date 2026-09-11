@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-09-11
+
+### Fixed
+- Tradevan `IssueData#payload` and `VoidData#payload` now exclude
+  `context_for_validation`. On Rails 8 this internal ivar was sent as a
+  business field once `valid?` had run, and Tradevan rejected the whole
+  request. Thanks @dlackty.
+
+### Changed
+- **Ruby 3.1 or newer is now required.** CI covers 3.1 through 3.4.
+- **Faraday 2 is now required** (`~> 2.1`); `faraday_middleware` is gone,
+  replaced by a built-in `Faraday::Response::ParseXml`. If you pin
+  `faraday` to 1.x, stay on 1.4.0.
+- `Einvoice::Utils` and the `gyoku` dependency have been removed. Nothing
+  in the gem called them.
+
+### Internal
+- Added request-level Tradevan provider specs.
+- CI runs on `1-x-stable`; the donation unit list task parses with `CSV`.
+- README documents the allowance operations and 1.x maintenance mode.
+
 ## [1.4.0] - 2026-08-08
 
 ### Changed
