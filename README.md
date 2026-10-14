@@ -418,3 +418,13 @@ Bug reports and pull requests are welcome on GitHub at https://github.com/abooky
 ## License
 
 The gem is available as open source under the terms of the [MIT License](http://opensource.org/licenses/MIT).
+
+### Donation code list
+
+`lib/einvoice/donation_unit_list.json` is built from an open dataset of the Ministry of Finance. The gem uses it to check donation codes (`donationUnit`). A scheduled job updates it every week. The MIT License above does not cover this file. The dataset's own license does:
+
+財政部財政資訊中心「受捐贈機關或團體捐贈碼清單」（https://data.gov.tw/dataset/31868）
+
+此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，使用者於遵守本條款各項規定之前提下，得利用之。
+
+政府資料開放授權條款：https://data.gov.tw/license
