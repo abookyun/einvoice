@@ -16,6 +16,7 @@ All providers send their invoices to the Ministry of Finance in the formats of t
 
 | Provider | API | Adapter in 2.x | Note |
 | --- | --- | --- | --- |
+| ECPay 綠界 | B2C 電子發票 API | `Einvoice::ECPay::Provider` | [ecpay/b2c.md](ecpay/b2c.md) |
 | Tradevan 關貿 | DEFAULTAPI | none yet | [tradevan/defaultapi.md](tradevan/defaultapi.md) |
 
 ## How to read a note
