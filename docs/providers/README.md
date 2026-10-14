@@ -4,6 +4,14 @@ These notes are for people who build or maintain an adapter. They are not user d
 
 Each provider publishes its API in its own way. Some publish full public docs. Some only send a PDF to customers. Some publish nothing. We read what the provider gives us, and then we write down the parts that adapter work needs, in one shape for every provider.
 
+## The MOF standard
+
+All providers send their invoices to the Ministry of Finance in the formats of the MIG. So the MIG is the reference when a provider's docs are unclear, or when two providers disagree. Read it first.
+
+| Standard | Version | Note |
+| --- | --- | --- |
+| MIG 電子發票資料交換標準訊息建置指引 | 4.1 | [mof/mig-4.1.md](mof/mig-4.1.md) |
+
 ## Providers
 
 | Provider | API | Adapter in 2.x | Note |
