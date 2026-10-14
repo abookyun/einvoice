@@ -18,6 +18,7 @@ All providers send their invoices to the Ministry of Finance in the formats of t
 | --- | --- | --- | --- |
 | Amego 光貿 | 電子發票 API | none yet | [amego/api.md](amego/api.md) |
 | ECPay 綠界 | B2C 電子發票 API | `Einvoice::ECPay::Provider` | [ecpay/b2c.md](ecpay/b2c.md) |
+| ezPay 簡單行動支付 | 電子發票 API (EZP_INVI 1.2.2) | none yet | [ezpay/invoice.md](ezpay/invoice.md) |
 | Tradevan 關貿 | DEFAULTAPI | none yet | [tradevan/defaultapi.md](tradevan/defaultapi.md) |
 
 ## How to read a note
