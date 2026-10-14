@@ -22,6 +22,8 @@ Everything in these notes is **documented**. The MIG is the standard itself, so 
 | [codes.md](codes.md) | Shared types and code lists (MIG 第肆章) |
 | [storage.md](storage.md) | Storage messages F0401, F0501, F0701, G0401, G0501 |
 | [exchange.md](exchange.md) | B2B exchange messages A0101 to A0302, B0101 to B0202 |
+| [numbering.md](numbering.md) | Number range messages E0401, E0402, E0501 |
+| [platform.md](platform.md) | Platform files E0502, E0503, E0504, and the replies ProcessResult and SummaryResult |
 
 ### Recent changes that matter for adapters
 
@@ -41,8 +43,9 @@ The MIG has 21 messages `[mig 表 3-1]`. B2B trades can use exchange (交換) or
 | --- | --- | --- | --- |
 | Storage | F0401, F0501, F0701, G0401, G0501 | B2C and B2B | [storage.md](storage.md) |
 | Exchange | A0101, A0102, A0201, A0202, A0301, A0302, B0101, B0102, B0201, B0202 | B2B only | [exchange.md](exchange.md) |
-| Number ranges | E0401, E0402, E0501 | all | not covered yet |
-| Platform files | E0502, E0503, E0504 | all | not covered yet |
+| Number ranges | E0401, E0402, E0501 | all | [numbering.md](numbering.md) |
+| Platform files | E0502, E0503, E0504 | all | [platform.md](platform.md) |
+| Replies | ProcessResult, SummaryResult | all | [platform.md](platform.md) |
 
 ## 4. Mapping to the unified API
 
@@ -68,6 +71,7 @@ These are the points where the MIG settles a question for us, or where our model
 - **Mixed tax is header-level only.** The header `TaxType` can be `9` (mixed), but an item cannot `[mig 表 15-5, 4-12]`.
 - **B2B exchange has states that the unified API does not have.** In exchange, an invoice is agreed only after the buyer confirms it (A0102), and the buyer can reject it (A0301). `InvoiceStatus` has no state for "waiting for the buyer" or "rejected". This matters only for a provider that sends B2B invoices through exchange (see 5, question 4). Details are in [exchange.md](exchange.md).
 - **A B2B invoice through exchange cannot carry a carrier or mixed tax.** A0101 has no carrier fields, and its `TaxType` must not be `9`. F0401 allows both for a business buyer. So the `B2B` and `MIXED_TAX` capabilities can depend on which message a provider uses.
+- **The MOF has its own invoice status list.** E0502 reports one of seven statuses: issued, voided or rejected, each confirmed or not, and cancelled ([codes](codes.md#invoice-status-currentstatus)). The unified `InvoiceStatus` has `issued`, `voided` and `allowance`. `allowance` is not an MOF invoice status: the MOF tracks an allowance as its own document with its own status. When a provider reports a status, check it against this list first.
 - **F0701 is not a fix-up tool.** The MIG warns that F0701 must not be used to correct an invoice. Errors in an invoice need a void and a new invoice. Returns and discounts need an allowance `[mig F0701 訊息功能]`. The unified API has no operation for F0701, and should not get one without care.
 
 ## 5. Open questions

@@ -108,6 +108,38 @@ The buyer's mark for a zero rate sale to a bonded area, an ocean fishing busines
 
 `0` not donated, `1` donated `[mig 表 4-11]`. A seller must accept a donation code that the buyer gives at the time of sale. Cross-border sellers (營業稅法第 6 條第 4 款) are the exception.
 
+## Invoice period (`YearMonth`)
+
+5 digits: the ROC year (民國) and the even month that ends the two-month period. `11102` is January and February of ROC 111 (2022). The month is always `02`, `04`, `06`, `08`, `10` or `12` `[mig 表 20-3]`.
+
+## Invoice status (`CurrentStatus`)
+
+The status of an invoice on the MOF platform, as E0502 reports it `[mig 表 23-2]`:
+
+| Code | Meaning |
+| --- | --- |
+| `1` | Issued, not confirmed (開立未確認) |
+| `2` | Issued, confirmed (開立已確認) |
+| `3` | Voided, not confirmed (作廢未確認) |
+| `4` | Voided, confirmed (作廢已確認) |
+| `5` | Rejected, not confirmed (退回未確認) |
+| `6` | Rejected, confirmed (退回已確認) |
+| `7` | Record cancelled (已註銷) |
+
+"Confirmed" is the other side's confirm message in B2B exchange (see [exchange.md](exchange.md)).
+
+## Allowance status (`CurrentStatus`)
+
+The status of an allowance on the MOF platform, as E0503 reports it `[mig 表 24-3]`:
+
+| Code | Meaning |
+| --- | --- |
+| `1` | Issued, not confirmed (折讓未確認) |
+| `2` | Issued, confirmed (折讓已確認) |
+| `3` | Voided, not confirmed (作廢未確認) |
+| `4` | Voided, confirmed (作廢已確認) |
+| `7` | Record cancelled (已註銷) |
+
 ## Currency (`CurrencyCodeEnum`)
 
 ISO 4217 codes `[mig 表 4-14]`.
