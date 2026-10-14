@@ -10,7 +10,7 @@ All providers send their invoices to the Ministry of Finance in the formats of t
 
 | Standard | Version | Note |
 | --- | --- | --- |
-| MIG 電子發票資料交換標準訊息建置指引 | 4.1 | [mof/mig-4.1.md](mof/mig-4.1.md) |
+| MIG 電子發票資料交換標準訊息建置指引 | 4.1 | [mof/mig-4.1/](mof/mig-4.1/README.md) |
 
 ## Providers
 
