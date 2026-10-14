@@ -19,6 +19,8 @@ Tradevan has newer API versions. This note covers only DEFAULTAPI.
 
 The 1.x specs are not a source. Their responses are hand-written stubs from 2026.
 
+The MOF standard is in [../mof/mig-4.1/](../mof/mig-4.1/README.md). References to it use `[mig]`. Our DEFAULTAPI sources are from 2016, years before MIG 4.0 (2024). Tradevan must map DEFAULTAPI fields to the new messages, and we do not know how.
+
 ## 2. Connection
 
 ### 2.1 Credentials
@@ -191,7 +193,7 @@ Header fields `[rules]`. "Req" means required, "opt" means optional.
 | `idViewId` | opt, max 10 | all |
 | `memberId` | opt, max 50 | all |
 | `tax` | opt, max 20 | I G |
-| `checkNumber` | opt, 4 chars | G |
+| `checkNumber` | opt, 4 chars. MIG 4.0 dropped `CheckNumber` from F0401 `[mig]` | G |
 | `invoiceDate` | opt, 8 chars | G |
 | `invoiceTime` | opt, 8 chars | G |
 | `texclusiveAmount`, `oeclusiveAmount`, `zexclusiveAmount` | opt, max 20 | G |
@@ -295,17 +297,21 @@ No source lists these codes. We inferred them from the type `G` amount fields: `
 
 | Code | Meaning | Status |
 | --- | --- | --- |
-| `T` | Taxable (應稅) | inferred |
-| `Z` | Zero rated (零稅率) | inferred |
-| `O` | Tax free (免稅) | inferred |
+| `T` | Taxable (應稅). MIG `1` | inferred |
+| `Z` | Zero rated (零稅率). MIG `2` | inferred |
+| `O` | Tax free (免稅). MIG `3` | inferred |
+
+The MIG also has `4` (special rate) and `9` (mixed, header only) `[mig 表 4-12]`. DEFAULTAPI has no letter for either.
 
 ### 6.2 Carrier type (`carrierType`)
 
 | Code | Meaning | Status |
 | --- | --- | --- |
-| `3J0002` | Mobile barcode (手機條碼) | MOF code, used in `[readme]` |
-| `CQ0001` | Citizen certificate (自然人憑證) | MOF code, used in `[readme]` |
-| merchant code | Member carrier | inferred. The 1.x factories use `1K0001` |
+| `3J0002` | Mobile barcode (手機條碼) | MIG code `[mig 表 4-13]`, used in `[readme]` |
+| `CQ0001` | Citizen certificate (自然人憑證) | MIG code `[mig 表 4-13]`, used in `[readme]` |
+| merchant code | Member carrier | The MIG says the MOF platform gives each seller or center its own 6-char code `[mig 表 15-3]`. The 1.x factories use `1K0001` |
+
+`carrierType` is the MIG field as it is, so DEFAULTAPI passes it to the MOF without change (inferred).
 
 ### 6.3 Status
 
@@ -314,6 +320,8 @@ No source lists these codes. We inferred them from the type `G` amount fields: `
 | `invoiceStatus` (issue response) | `V` | unknown |
 | `status` (search responses) | `I`, `V` | unknown |
 | `issueStatus`, `voidStatus` | `Y` | `Y` is success. `N` is failure (from the 1.x spec stubs, not seen in a real response) |
+
+The MOF's own status list (E0502 `CurrentStatus`) uses the digits `1` to `7` `[mig 表 23-2]`. So `I` and `V` are Tradevan's own codes, and the MIG cannot tell us what they mean.
 
 ### 6.4 Errors
 
