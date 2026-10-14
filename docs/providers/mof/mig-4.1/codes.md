@@ -45,6 +45,15 @@ Date is `yyyyMMdd` in the western calendar, for example `20240101`. Time is `xsd
 
 1 to 16 chars. The seller's system assigns it. The platform rejects a number that was used before, also in an earlier year `[mig 表 4-5]`.
 
+## Allowance type (`AllowanceTypeEnum`)
+
+| Code | Meaning |
+| --- | --- |
+| `1` | The buyer issues (or voids) the allowance |
+| `2` | The seller issues (or voids) the allowance notice |
+
+Since V4.1 the seller issues and voids every allowance, so new allowances use `2` `[mig 表 4-6]`.
+
 ## Carrier type (`CarrierTypeEnum`)
 
 6 chars `[mig 表 4-13, 15-3]`:
@@ -83,6 +92,10 @@ Tax rate `[mig 表 4-18]`: one of `0`, `0.01`, `0.02`, `0.05`, `0.15`, `0.25`. A
 
 Required for zero rated invoices `[mig 表 4-9]`.
 
+## Bonded area (`BondedAreaEnum`)
+
+The buyer's mark for a zero rate sale to a bonded area, an ocean fishing business or a free trade zone. `1` to `4`, where `4` is "other" `[mig 表 4-17]`.
+
 ## Buyer remark (`BuyerRemarkEnum`)
 
 `1` deductible purchases and expenses, `2` deductible fixed assets, `3` non-deductible purchases and expenses, `4` non-deductible fixed assets `[mig 表 4-8]`.
@@ -94,3 +107,7 @@ Required for zero rated invoices `[mig 表 4-9]`.
 ## Donation (`DonateMarkEnum`)
 
 `0` not donated, `1` donated `[mig 表 4-11]`. A seller must accept a donation code that the buyer gives at the time of sale. Cross-border sellers (營業稅法第 6 條第 4 款) are the exception.
+
+## Currency (`CurrencyCodeEnum`)
+
+ISO 4217 codes `[mig 表 4-14]`.

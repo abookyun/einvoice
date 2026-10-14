@@ -21,6 +21,7 @@ Everything in these notes is **documented**. The MIG is the standard itself, so 
 | README.md | This page: sources, changes, the message list, the mapping to the unified API, open questions |
 | [codes.md](codes.md) | Shared types and code lists (MIG 第肆章) |
 | [storage.md](storage.md) | Storage messages F0401, F0501, F0701, G0401, G0501 |
+| [exchange.md](exchange.md) | B2B exchange messages A0101 to A0302, B0101 to B0202 |
 
 ### Recent changes that matter for adapters
 
@@ -39,7 +40,7 @@ The MIG has 21 messages `[mig 表 3-1]`. B2B trades can use exchange (交換) or
 | Group | Messages | Use | Note |
 | --- | --- | --- | --- |
 | Storage | F0401, F0501, F0701, G0401, G0501 | B2C and B2B | [storage.md](storage.md) |
-| Exchange | A0101, A0102, A0201, A0202, A0301, A0302, B0101, B0102, B0201, B0202 | B2B only | not covered yet |
+| Exchange | A0101, A0102, A0201, A0202, A0301, A0302, B0101, B0102, B0201, B0202 | B2B only | [exchange.md](exchange.md) |
 | Number ranges | E0401, E0402, E0501 | all | not covered yet |
 | Platform files | E0502, E0503, E0504 | all | not covered yet |
 
@@ -47,10 +48,10 @@ The MIG has 21 messages `[mig 表 3-1]`. B2B trades can use exchange (交換) or
 
 | Unified | MIG message | Note |
 | --- | --- | --- |
-| `issue` | F0401 | |
-| `void` | F0501 | Needs the invoice date (see below) |
-| `allowance` | G0401 | Needs each original invoice's date (see below) |
-| `void_allowance` | G0501 | Needs the allowance date |
+| `issue` | F0401, or A0101 for B2B exchange | |
+| `void` | F0501, or A0201 | Needs the invoice date (see below) |
+| `allowance` | G0401, or B0101 | Needs each original invoice's date (see below) |
+| `void_allowance` | G0501, or B0201 | Needs the allowance date |
 | `query` | none | Queries are a provider feature. The MIG has no query message |
 
 ### What the MIG tells us about the unified API
@@ -65,6 +66,8 @@ These are the points where the MIG settles a question for us, or where our model
 - **The random code is required for B2C.** F0401 `RandomNumber` is 4 digits. It is required when the buyer is a consumer, and optional for a business buyer `[mig 表 15-3]`.
 - **Foreign currency is a memo only.** `Currency`, `OriginalCurrencyAmount` and `ExchangeRate` are optional notes. The legal amounts stay in TWD integers `[mig 表 15-6]`. This matches the unified `FOREIGN_CURRENCY` design. Cross-border sellers (境外電商) are the exception: they may list amounts in a foreign currency.
 - **Mixed tax is header-level only.** The header `TaxType` can be `9` (mixed), but an item cannot `[mig 表 15-5, 4-12]`.
+- **B2B exchange has states that the unified API does not have.** In exchange, an invoice is agreed only after the buyer confirms it (A0102), and the buyer can reject it (A0301). `InvoiceStatus` has no state for "waiting for the buyer" or "rejected". This matters only for a provider that sends B2B invoices through exchange (see 5, question 4). Details are in [exchange.md](exchange.md).
+- **A B2B invoice through exchange cannot carry a carrier or mixed tax.** A0101 has no carrier fields, and its `TaxType` must not be `9`. F0401 allows both for a business buyer. So the `B2B` and `MIXED_TAX` capabilities can depend on which message a provider uses.
 - **F0701 is not a fix-up tool.** The MIG warns that F0701 must not be used to correct an invoice. Errors in an invoice need a void and a new invoice. Returns and discounts need an allowance `[mig F0701 訊息功能]`. The unified API has no operation for F0701, and should not get one without care.
 
 ## 5. Open questions
@@ -72,4 +75,4 @@ These are the points where the MIG settles a question for us, or where our model
 1. Item `Quantity`, `UnitPrice` and `Amount` allow 7 digits after the point, but the totals must be TWD integers. How do providers round item amounts? Each provider note should say.
 2. The MIG says nothing about upload deadlines or the time a void is still allowed. Those rules live in other MOF documents. Which ones should we track?
 3. The F0401 notes on `CarrierId1` and `CarrierId2` say two things that do not fit together. If `PrintMark` is `Y`, both must be blank. But if the buyer uses a mobile barcode, both are required "printed or not" `[mig 表 15-3]`. Which rule wins when a mobile barcode invoice is printed?
-4. Do B2B invoices from our providers go through the exchange messages, or always through F0401?
+4. Do B2B invoices from our providers go through the exchange messages, or always through F0401? Each provider note should say. The answer decides if the points about exchange in 4 apply.
