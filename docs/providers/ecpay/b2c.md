@@ -1,5 +1,7 @@
 # ECPay 綠界: B2C 電子發票 API
 
+English | [繁體中文](b2c.zh-TW.md)
+
 ## 1. Status and sources
 
 This is ECPay's B2C invoice API, the AES JSON API under `/B2CInvoice/`. The 2.x line has an adapter for it: `Einvoice::ECPay::Provider` (`lib/einvoice/ecpay/`).
