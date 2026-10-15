@@ -1,5 +1,7 @@
 # Tradevan 關貿: DEFAULTAPI
 
+English | [繁體中文](defaultapi.zh-TW.md)
+
 ## 1. Status and sources
 
 This is the API that the 1.x client wraps. All paths start with `/DEFAULTAPI/`. The 2.x line has no adapter for it yet. So sections 4.2 and 6.4 are **proposals**.
