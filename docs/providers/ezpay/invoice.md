@@ -1,5 +1,7 @@
 # ezPay 簡單行動支付: 電子發票 API
 
+English | [繁體中文](invoice.zh-TW.md)
+
 ## 1. Status and sources
 
 ezPay (簡單行動支付股份有限公司) runs the ezPay 電子發票加值服務平台. The 2.x line has no adapter for it yet. Nothing here is verified against the live API. So sections 4.2 and 6.4 are **proposals**: what an adapter should do, based on the manuals.
