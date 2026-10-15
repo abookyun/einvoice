@@ -61,7 +61,7 @@ The MIG has 21 messages `[mig 表 3-1]`. B2B trades can use exchange (交換) or
 
 These are the points where the MIG settles a question for us, or where our model and the MIG differ.
 
-- **Voiding needs the invoice date.** F0501 requires `InvoiceDate` `[mig 表 16-2]`. A provider that does not ask for it must look it up or guess it. This supports adding `invoice_date` to `VoidInvoiceInput` (#36).
+- **Voiding needs the invoice date.** F0501 requires `InvoiceDate` `[mig 表 16-2]`. A provider that does not ask for it must look it up or guess it. `VoidInvoiceInput` and `AllowanceInput` already have a `date` field, but the core does not say what it means: the operation date, or the invoice date. The ECPay adapter uses it as the invoice date. #36 discusses an explicit `invoice_date`.
 - **An allowance needs each original invoice's number and date.** Every G0401 item requires `OriginalInvoiceNumber` and `OriginalInvoiceDate` `[mig 表 18-5]`.
 - **Voiding an allowance needs the allowance date.** G0501 requires `AllowanceDate` `[mig 表 19-2]`. `VoidAllowanceInput` does not have it.
 - **The void reason is required.** F0501 `CancelReason` and G0501 `CancelReason` are 1 to 20 chars `[mig 表 16-2, 19-2]`. `VoidAllowanceInput.reason` is optional, so an adapter must fill a default.

@@ -2,19 +2,23 @@
 
 ## 1. Status and sources
 
-This is ECPay's B2C invoice API, the AES JSON API under `/B2CInvoice/`. The 2.x line has an adapter for it: `Einvoice::ECPay::Provider`.
+This is ECPay's B2C invoice API, the AES JSON API under `/B2CInvoice/`. The 2.x line has an adapter for it: `Einvoice::ECPay::Provider` (`lib/einvoice/ecpay/`).
+
+The docs belong to 綠界科技 ECPay and are published at <https://developers.ecpay.com.tw/7809/>. This note is our summary.
 
 The B2C API also issues invoices to a business buyer: send a 統一編號 in `CustomerIdentifier`. ECPay's home page says a seller does not need the separate B2B API for that `[doc 7809]`. The B2B API is not covered here.
 
 | Tag | Source | Date | What it gives |
 | --- | --- | --- | --- |
 | `[doc]` | ECPay B2C電子發票API技術文件, <https://developers.ecpay.com.tw/7809/>. One page per endpoint. We read all 44 pages on 2026-10-14. | Home page changed 2026-03-12, issue page 2026-05-20 | Everything below that has no other tag. |
-| `[live]` | Our live specs (`spec/einvoice/ecpay/live_spec.rb`) and the VCR cassettes they recorded (`spec/fixtures/vcr_cassettes/ecpay/`) | 2026-08-15, stage | Real responses and error codes. |
+| `[live]` | Our live specs (`spec/einvoice/ecpay/live_spec.rb`) and the VCR cassettes they recorded (`spec/fixtures/vcr_cassettes/ecpay/`) | 2026-08-15, stage | Real requests, responses and error codes. |
 | `[code]` | The 2.x adapter (`lib/einvoice/ecpay/`) | 2026-08 | What the adapter does today. Its comments name some codes as checked live, but no cassette records them. |
 
 `[doc 7896]` means the page `https://developers.ecpay.com.tw/7896/`. Page numbers are listed in section 3.
 
 ECPay keeps its full error code list in the merchant back office, not in the public docs `[doc 7954]`. So the error codes in 6.4 come from single pages and from `[live]`.
+
+**Updates.** ECPay lists its changes on the 更新歷程 page, <https://developers.ecpay.com.tw/36050/>. Each endpoint page also shows the date it last changed.
 
 ## 2. Connection
 
@@ -27,7 +31,7 @@ ECPay keeps its full error code list in the merchant back office, not in the pub
 
 A merchant has a `MerchantID` (特店編號), a `HashKey` and a `HashIV` `[doc 7849]`. In production they are in the back office under 系統設定 → 系統介接設定 → 介接資訊.
 
-ECPay publishes shared test credentials `[doc 7849]`:
+ECPay publishes shared test credentials `[doc 7849]`. The adapter has them as `Einvoice::ECPay::SANDBOX`.
 
 | Account | MerchantID | HashKey | HashIV |
 | --- | --- | --- | --- |
@@ -47,27 +51,38 @@ Every endpoint is `POST`, `Content-Type: application/json`, over TLS 1.2 on port
 ```
 
 - `Timestamp` is a Unix time. ECPay accepts it for 10 minutes. Keep the server clock in sync `[doc 7896]`.
-- `Data` is the business payload: JSON, then URL encode, then AES. It must also carry `MerchantID`.
-- The docs list no `Revision` in `RqHeader`. See 7.
+- `Data` is the business payload, encrypted (2.3). It must also carry `MerchantID`.
+- The docs list no `Revision` in `RqHeader`. The adapter sends `"Revision": "3.0.0"`, and the response echoes it `[live]`. See 7.
+- Leave out empty optional fields instead of sending `null`. The adapter drops `nil` values at the top level `[code]`.
 
 ### 2.3 Encryption
 
 `[doc 7958]`:
 
-- AES-128-CBC with PKCS7 padding, using the merchant's `HashKey` and `HashIV`.
+- AES-128-CBC with PKCS7 padding, using the merchant's `HashKey` and `HashIV`. Both must be 16 bytes.
 - Encrypt: JSON → URL encode → AES → Base64.
 - Decrypt: Base64 → AES → URL decode → JSON.
 - The URL encoding may use upper or lower case hex. The cipher text differs, and both decode to the same JSON. The page gives a test vector for each.
+
+The URL encoding is PHP `urlencode`, and this is where implementations go wrong `[code]`:
+
+- A space becomes `+`, not `%20`.
+- Only `a-z`, `A-Z`, `0-9`, `-`, `_` and `.` stay as they are. Every other byte becomes `%XX`, `~` and `!*'()` too. Ruby's `CGI.escape` leaves `~` alone, so it does not match.
+- Encode the UTF-8 bytes, so Chinese text survives.
+
+The adapter's crypto spec checks this byte for byte against ECPay's published vectors `[live]`.
 
 Only the server callback of the online allowance uses `CheckMacValue` `[doc 38242, 15391]`. It is an MD5 hash of the sorted, URL encoded parameters, with `HashKey` and `HashIV` around them.
 
 ### 2.4 Response
 
 ```json
-{ "MerchantID": "2000132", "RpHeader": { "Timestamp": 1525169058 }, "TransCode": 1, "TransMsg": "", "Data": "<encrypted>" }
+{ "PlatformID": 0, "MerchantID": 2000132,
+  "RpHeader": { "Timestamp": 1786807739, "RqID": "c62778a1-…", "Revision": "3.0.0" },
+  "TransCode": 1, "TransMsg": "Success", "Data": "<encrypted>" }
 ```
 
-There are two result layers:
+There are two result layers, and the adapter checks both:
 
 1. `TransCode` is the transport result. `1` means ECPay read the envelope.
 2. After decrypting `Data`: `RtnCode` is the business result. `1` means success, with a few exceptions (6.4).
@@ -75,122 +90,300 @@ There are two result layers:
 HTTP status codes also matter `[doc 7854]`:
 
 - **403**: too many calls. Wait 30 minutes before you call again.
-- **500**: bad data format, a `MerchantID` that does not match the key and IV, or an encryption error. A wrong key gives `TransCode` 110 with HTTP 500 `[live]`.
+- **500**: bad data format, a `MerchantID` that does not match the key and IV, or an encryption error. A wrong key gives `TransCode` 110 with HTTP 500, and `Data` is empty `[live]`.
 
-### 2.5 Callbacks
+### 2.5 Example
 
-Two endpoints call back to the merchant: delayed issue (`NotifyURL`) and online allowance (`ReturnURL`). The merchant answers `1|OK` `[doc 15369, 15391]`. Stage sends no `NotifyURL` callback. Delayed issue callbacks come from `postgate.ecpay.com.tw` (stage: `postgate-stage.ecpay.com.tw`).
+An issue call on stage, with `Data` shown decrypted `[live]` (`issue.yml`).
+
+Request `Data`:
+
+```json
+{ "MerchantID": "2000132", "RelateNumber": "RBVCR20260815issue",
+  "CustomerID": "", "CustomerIdentifier": "", "CustomerName": "", "CustomerAddr": "",
+  "CustomerPhone": "", "CustomerEmail": "test@example.com",
+  "Print": "0", "Donation": "0", "LoveCode": "", "CarrierType": "1", "CarrierNum": "",
+  "TaxType": "1", "SalesAmount": 100, "InvoiceRemark": "",
+  "Items": [{ "ItemSeq": 1, "ItemName": "整合測試商品", "ItemCount": 2, "ItemWord": "式",
+              "ItemPrice": 50, "ItemTaxType": "1", "ItemAmount": 100 }],
+  "InvType": "07", "vat": "1" }
+```
+
+Response `Data`:
+
+```json
+{ "RtnCode": 1, "RtnMsg": "開立發票成功", "InvoiceNo": "LA25008597",
+  "InvoiceDate": "2026-08-15 23:28:58", "RandomNumber": "6049" }
+```
+
+Section 5 has an example for each of the other operations.
+
+### 2.6 Callbacks
+
+Two endpoints call back to the merchant: delayed issue (`NotifyURL`) and online allowance (`ReturnURL`). The merchant answers `1|OK` `[doc 15369, 15391]`. Stage sends no `NotifyURL` callback. Delayed issue callbacks come from `postgate.ecpay.com.tw` (stage: `postgate-stage.ecpay.com.tw`). The adapter does not handle callbacks.
 
 ## 3. Operations
 
-| Group | Endpoint | Purpose | Page |
-| --- | --- | --- | --- |
-| Issue | `/B2CInvoice/Issue` | Issue an invoice now (一般開立) | 7896 |
-| | `/B2CInvoice/DelayIssue` | Hold an invoice: issue after N days, or when triggered | 15369 |
-| | `/B2CInvoice/EditDelayIssue` | Change a held invoice | 47979 |
-| | `/B2CInvoice/TriggerIssue` | Trigger a held invoice | 15371 |
-| | `/B2CInvoice/CancelDelayIssue` | Cancel a held invoice | 15382 |
-| Allowance | `/B2CInvoice/Allowance` | Issue a paper allowance (紙本開立) | 7901 |
-| | `/B2CInvoice/AllowanceByCollegiate` | Online allowance: the buyer confirms by email (線上開立) | 15391 |
-| Void | `/B2CInvoice/Invalid` | Void an invoice | 7906 |
-| | `/B2CInvoice/AllowanceInvalid` | Void an allowance | 7911 |
-| | `/B2CInvoice/AllowanceInvalidByCollegiate` | Cancel an online allowance before the buyer confirms | 7913 |
-| | `/B2CInvoice/VoidWithReIssue` | Cancel and reissue with the same number (註銷重開) | 7918 |
-| Query | `/B2CInvoice/GetIssue` | One invoice, by order id or by number and date | 7923 |
-| | `/B2CInvoice/GetIssueList` | Invoices in a date range, paged | 17229 |
-| | `/B2CInvoice/GetAllowanceList` | Allowances, by number or by invoice | 7928 |
-| | `/B2CInvoice/GetInvalid` | One voided invoice | 7933 |
-| | `/B2CInvoice/GetAllowanceInvalid` | One voided allowance | 7943 |
-| Checks | `/B2CInvoice/CheckBarcode` | Is a mobile barcode registered | 7886 |
-| | `/B2CInvoice/CheckLoveCode` | Is a donation code registered, and its name | 7891 |
-| | `/B2CInvoice/GetCompanyNameByTaxID` | Check a 統一編號 and get the company name | 32089 |
-| Notice | `/B2CInvoice/InvoiceNotify` | Send an invoice notice by email or SMS | 7938 |
-| Print | `/B2CInvoice/InvoicePrint` | Get a printable invoice page | 7949 |
-| Numbers | `/B2CInvoice/GetGovInvoiceWordSetting` | MOF number ranges for a year | 7859 |
-| | `/B2CInvoice/AddInvoiceWordSetting` | Add a track and range | 7870 |
-| | `/B2CInvoice/UpdateInvoiceWordStatus` | Enable, pause or stop a track | 7875 |
-| | `/B2CInvoice/GetInvoiceWordSetting` | List the merchant's tracks | 7881 |
-| Settings | `/B2CInvoice/GetInvoiceNotifySetting`, `InvoiceNotifySetting` | Notice settings | 63356, 64067 |
-| | `/B2CInvoice/GetRemainNotifySetting`, `RemainNotifySetting` | Low number warning | 64079, 64088 |
-| | `/B2CInvoice/QueryBlankInvoiceList`, `BlankInvAutoUploadSetting`, `DownLoadBlankInvList` | Unused numbers (E0402) | 64106, 64122, 64133 |
+The five unified operations use these endpoints. Section 5 has their fields.
 
-The settings endpoints were added on 2026-06-23 `[doc 36050]`.
+| Endpoint | Purpose | Page |
+| --- | --- | --- |
+| `/B2CInvoice/Issue` | Issue an invoice now (一般開立) | 7896 |
+| `/B2CInvoice/Invalid` | Void an invoice | 7906 |
+| `/B2CInvoice/Allowance` | Issue a paper allowance (紙本開立) | 7901 |
+| `/B2CInvoice/AllowanceInvalid` | Void an allowance | 7911 |
+| `/B2CInvoice/GetIssue` | One invoice, by order id or by number and date | 7923 |
 
-Page 49890 is an older copy of the issue page ("一般開立發票 - MIG 4.0", changed 2025-01-22). It lacks the newer fields. Use 7896.
+The adapter also maps two checks: `/B2CInvoice/CheckBarcode` (is a mobile barcode registered, page 7886) and `/B2CInvoice/CheckLoveCode` (is a donation code registered, and its name, page 7891).
+
+Other endpoints. An adapter can reach them through `Provider#raw`:
+
+| Endpoint | Purpose | Page |
+| --- | --- | --- |
+| `DelayIssue`, `EditDelayIssue`, `TriggerIssue`, `CancelDelayIssue` | Hold an invoice, change it, trigger it, cancel it | 15369, 47979, 15371, 15382 |
+| `AllowanceByCollegiate`, `AllowanceInvalidByCollegiate` | Online allowance: the buyer confirms by email. Cancel it before the confirm | 15391, 7913 |
+| `VoidWithReIssue` | Cancel and reissue with the same number (註銷重開) | 7918 |
+| `GetIssueList`, `GetAllowanceList`, `GetInvalid`, `GetAllowanceInvalid` | List invoices or allowances, read one void | 17229, 7928, 7933, 7943 |
+| `GetCompanyNameByTaxID` | Check a 統一編號 and get the company name | 32089 |
+| `InvoiceNotify`, `InvoicePrint` | Send a notice, get a printable page | 7938, 7949 |
+| `GetGovInvoiceWordSetting`, `AddInvoiceWordSetting`, `UpdateInvoiceWordStatus`, `GetInvoiceWordSetting` | Number ranges and tracks | 7859, 7870, 7875, 7881 |
+| `GetInvoiceNotifySetting`, `InvoiceNotifySetting`, `GetRemainNotifySetting`, `RemainNotifySetting` | Notice and low number settings (added 2026-06-23) | 63356, 64067, 64079, 64088 |
+| `QueryBlankInvoiceList`, `BlankInvAutoUploadSetting`, `DownLoadBlankInvList` | Unused numbers (E0402) | 64106, 64122, 64133 |
+
+All paths start with `/B2CInvoice/`. Page 49890 is an older copy of the issue page ("一般開立發票 - MIG 4.0", changed 2025-01-22). It lacks the newer fields. Use 7896.
 
 ## 4. Mapping to the unified API
 
-| Unified | ECPay | Note |
+### 4.1 Operations
+
+| Unified | Endpoint | `provider_options` | Note |
+| --- | --- | --- | --- |
+| `issue` | `Issue` | `customer_id`, `clearance_mark`, `zero_tax_rate_reason`, `special_tax_type`, `data` | `data` merges any raw `Issue` field |
+| `void` | `Invalid` | `invoice_date` | Needs the invoice date |
+| `allowance` | `Allowance` | `invoice_date`, `allowance_notify`, `notify_mail`, `notify_phone`, `customer_name`, `reason` | Needs the invoice date |
+| `void_allowance` | `AllowanceInvalid` | none | |
+| `query` | `GetIssue` | `invoice_date`, `relate_number` | By number, needs the invoice date |
+
+All `provider_options` keys are strings or symbols `[code]`.
+
+### 4.2 Fields
+
+#### `issue`
+
+| Unified | ECPay | Rule or default `[code]` |
 | --- | --- | --- |
-| `issue` | `Issue` | |
-| `void` | `Invalid` | Needs the invoice date |
-| `allowance` | `Allowance` | Needs the invoice date. Amounts include tax |
-| `void_allowance` | `AllowanceInvalid` | No allowance date needed |
-| `query` by order id | `GetIssue` with `RelateNumber` | |
-| `query` by number | `GetIssue` with `InvoiceNo` and `InvoiceDate` | Needs the invoice date |
+| `order_id` | `RelateNumber` | Max 50. The adapter checks it |
+| `buyer.ubn` | `CustomerIdentifier` | Only for B2B. Empty for B2C |
+| `buyer.name`, `.address`, `.phone`, `.email` | `CustomerName`, `CustomerAddr`, `CustomerPhone`, `CustomerEmail` | Empty string when missing |
+| `category` | (none) | Decides B2B. Without it, a buyer with a 統一編號 is B2B |
+| `carrier.type` | `CarrierType` | `MEMBER` `1`, `CITIZEN_CERTIFICATE` `2`, `MOBILE_BARCODE` `3` |
+| `carrier.code` | `CarrierNum` | Empty for `MEMBER`: ECPay builds the carrier from the email or phone |
+| `donation.npoban` | `LoveCode` | And `Donation` `1` |
+| (derived) | `Print` | `0` with a carrier or a donation, else `1` |
+| `tax_type`, `items[].tax_type` | `TaxType` | `9` when items have different tax types, else the code (6.1) |
+| `tax_type` | `InvType` | `08` for `SPECIAL`, else `07` |
+| `price_mode` | `vat` | `TAX_EXCLUSIVE` `0`, else `1` |
+| `amount.total_amount` | `SalesAmount` | See 4.3 |
+| `remark` | `InvoiceRemark` | |
+| `items[]` | `Items` | See below |
+| `currency` | (none) | Not TWD: `UnsupportedError` |
+| `amount.sales_amount`, `amount.tax_amount`, `tax_rate`, `exchange_rate`, `date` | (none) | Not sent |
 
-### Against the MIG
+Items:
 
-- **B2B goes through storage (F0401), not exchange (inferred).** The B2C API accepts a 統一編號 with a carrier, and allows mixed tax. MIG A0101 allows neither. So ECPay must upload these invoices as F0401. This answers the MIG note's open question 4 for ECPay.
-- **Allowance amounts include tax.** `AllowanceAmount` and `ItemAmount` include tax `[doc 7901]`. MIG G0401 wants amounts without tax and a tax per item. ECPay does the split. Its query returns both: `IA_Total_Amount` (tax excluded) and `IA_Total_Tax_Amount` (tax included), plus `ItemRateAmt` per item `[doc 7928]`.
-- **Voiding an allowance needs no allowance date.** MIG G0501 requires it, so ECPay must fill it from its own records `[doc 7911]`.
-- **Voiding and querying by number need the invoice date.** As MIG F0501 does `[doc 7906, 7923]`. This is why the adapter asks for `provider_options: { invoice_date: }`.
-- **Up to 999 items** `[doc 7896]`. The MIG allows 9999.
-- **Reasons are 1 to 20 chars** for voids and allowance voids `[doc 7906, 7911]`, as in the MIG. The allowance reason (`Reason` in `Allowance`) is up to 50 chars.
+| Unified | ECPay | Rule or default `[code]` |
+| --- | --- | --- |
+| (index) | `ItemSeq` | 1, 2, 3, … |
+| `description` | `ItemName` | |
+| `quantity` | `ItemCount` | |
+| `unit` | `ItemWord` | `式` when missing |
+| `unit_price` | `ItemPrice` | |
+| `tax_type` | `ItemTaxType` | The item's type, else the invoice's, else taxable |
+| `amount` | `ItemAmount` | |
+| `remark` | `ItemRemark` | Only when given |
 
-### Status
+Result:
 
-`GetIssue` reports status in three fields `[doc 7923]`:
-
-| Field | Values |
+| Unified | From |
 | --- | --- |
-| `IIS_Issue_Status` | `1` issued, `0` cancelled (註銷) |
-| `IIS_Invalid_Status` | `1` voided, `0` not voided |
-| `IIS_Remain_Allowance_Amt` | Amount still open for allowance |
+| `invoice_number` | `InvoiceNo` |
+| `invoice_date` | `InvoiceDate`, read as UTC+8 |
+| `random_code` | `RandomNumber` |
+| `order_id`, `total_amount` | The input |
+| `status` | Always `ISSUED` |
 
-`IIS_Upload_Status` (`1` uploaded) and `IIS_Turnkey_Status` (`C` the MOF accepted it, `E` the upload failed) show the upload to the MOF.
+#### `void`
 
-### Timing
+| Unified | ECPay | Rule or default `[code]` |
+| --- | --- | --- |
+| `invoice_number` | `InvoiceNo` | |
+| `provider_options[:invoice_date]`, else `date`, else today | `InvoiceDate` | The **invoice** date, in UTC+8. The adapter reads `date` as the invoice date here |
+| `reason` | `Reason` | Max 20. The adapter checks it |
+
+Result: `invoice_number` from the input, `status` `VOIDED`.
+
+#### `allowance`
+
+| Unified | ECPay | Rule or default `[code]` |
+| --- | --- | --- |
+| `invoice_number` | `InvoiceNo` | |
+| `provider_options[:invoice_date]`, else `date`, else today | `InvoiceDate` | The **original invoice** date, not the allowance date |
+| `provider_options[:allowance_notify]` | `AllowanceNotify` | `N` (no notice) when missing |
+| `provider_options[:customer_name]`, `[:notify_mail]`, `[:notify_phone]`, `[:reason]` | `CustomerName`, `NotifyMail`, `NotifyPhone`, `Reason` | Sent only when given |
+| `amount.total_amount` | `AllowanceAmount` | Tax included. See 4.3 |
+| `items[]` | `Items` | As for `issue` |
+| `allowance_id` | (none) | Not sent. ECPay assigns the allowance number |
+
+Result:
+
+| Unified | From |
+| --- | --- |
+| `allowance_number` | `IA_Allow_No` (16 digits) |
+| `invoice_number` | `IA_Invoice_No`, else the input |
+| `allowance_date` | `IA_Date`, read as UTC+8 |
+| `total_amount` | The input |
+
+#### `void_allowance`
+
+| Unified | ECPay | Rule or default `[code]` |
+| --- | --- | --- |
+| `invoice_number` | `InvoiceNo` | |
+| `allowance_number` | `AllowanceNo` | |
+| `reason` | `Reason` | `作廢折讓` when missing. Max 20 |
+
+Result: `allowance_number` from the input.
+
+#### `query`
+
+| Unified | ECPay | Rule or default `[code]` |
+| --- | --- | --- |
+| `order_id`, else `provider_options[:relate_number]` | `RelateNumber` | Used when present |
+| `invoice_number` | `InvoiceNo` | Only without an order id |
+| `provider_options[:invoice_date]`, else today | `InvoiceDate` | With `InvoiceNo` only |
+
+Result:
+
+| Unified | From |
+| --- | --- |
+| `invoice_number` | `IIS_Number` |
+| `invoice_date` | `IIS_Create_Date`, read as UTC+8 |
+| `random_code` | `IIS_Random_Number` |
+| `order_id` | `IIS_Relate_Number` |
+| `status` | See 4.4 |
+| `amount` | See 4.3 |
+| `buyer` | `IIS_Customer_Name`, `_Addr`, `_Phone`, `_Email`, and `IIS_Identifier` as `ubn`. `0000000000` and empty strings become `nil` |
+| `items` | `Items`: `ItemName`, `ItemCount`, `ItemPrice`, `ItemAmount`, `ItemWord`, `ItemTaxType`, `ItemRemark`. Whole numbers stay integers |
+
+### 4.3 Amounts and tax
+
+The unified `AmountSummary` must satisfy `sales + tax = total` (the `Input` layer checks it). The shared contract issues a taxable B2C invoice as `sales 100, tax 0, total 100`.
+
+**Issue.**
+
+- The adapter sends only `amount.total_amount`, as `SalesAmount`. It is the amount with tax included `[doc 7896]`. `sales_amount` and `tax_amount` are not sent `[code]`.
+- With `vat` `1`, `SalesAmount` must equal the rounded sum of `ItemAmount`, or ECPay returns `5000022` `[live]`. The adapter checks this before the call `[code]`.
+- With `vat` `0`, ECPay computes the total itself, and the adapter does not check it `[code]`.
+- ECPay computes the tax: `round(SalesAmount / 1.05 × 0.05)`. For mixed tax, it uses the sum of the taxable items `[doc 7896]`.
+- Item amounts may have up to 7 digits after the point. Only the sum is rounded `[doc 7896]`.
+
+**Allowance.**
+
+- `AllowanceAmount` is `amount.total_amount`, tax included `[doc 7901]`.
+- Each `ItemAmount` includes tax and may differ from `ItemPrice × ItemCount` by at most 1. The sum of `ItemAmount` must equal `AllowanceAmount`.
+- ECPay splits out the tax for the MOF, because MIG G0401 wants amounts without tax (4.7).
+
+**Query.**
+
+- `IIS_Sales_Amount` is the total with tax. `IIS_Tax_Amount` is only filled for B2B. For B2C it is `0` `[doc 7923]` `[live]`.
+- The adapter builds `total = IIS_Sales_Amount`, `tax = IIS_Tax_Amount`, `sales = total - tax` `[code]`. So a B2C invoice reads back as `tax 0`, the same shape the contract sends.
+
+### 4.4 Status
+
+`GetIssue` reports status in three fields `[doc 7923]`. The adapter reads them in this order `[code]`:
+
+| ECPay | Unified `InvoiceStatus` |
+| --- | --- |
+| `IIS_Invalid_Status` `1` | `VOIDED` |
+| `IIS_Remain_Allowance_Amt` below `IIS_Sales_Amount` (and sales above 0) | `ALLOWANCE` |
+| otherwise | `ISSUED` |
+| `IIS_Issue_Status` `0` (cancelled, 註銷) | not read. A cancelled invoice reads as `ISSUED`. See 7 |
+
+Seen live `[live]`: a voided invoice has `IIS_Invalid_Status` `1` and `IIS_Remain_Allowance_Amt` `0`. After an allowance of 50 on a total of 100, `IIS_Remain_Allowance_Amt` is `50`.
+
+`IIS_Upload_Status` (`1` uploaded) and `IIS_Turnkey_Status` (`C` the MOF accepted it, `E` the upload failed) show the upload to the MOF. The adapter does not read them.
+
+### 4.5 Timing
 
 - Voids, allowances and allowance voids are uploaded to the MOF the next day `[doc 7906, 7901, 7911]`. Issued invoices are uploaded within 48 hours `[doc 7809]`.
+- An invoice can be voided right after it is issued `[live]`. An allowance can be voided right after it is issued `[live]`.
 - After 23:59:59 on the 13th of an odd month, invoices and allowances of the two months before cannot be voided. On 14 March, January and February invoices are closed `[doc 7906, 7911]`.
 - A cancel-and-reissue (註銷重開) must finish before the 13th of the month after the period `[doc 7918]`.
 - A paper allowance (`Allowance`) still needs the buyer's signature on paper. The seller mails it and keeps it. The online allowance (`AllowanceByCollegiate`) replaces the signature with an email link, valid 72 hours `[doc 7901, 15391]`.
+
+### 4.6 Capabilities
+
+| Capability | API | Adapter | Note |
+| --- | --- | --- | --- |
+| `ISSUE`, `VOID`, `ALLOWANCE`, `VOID_ALLOWANCE`, `QUERY` | yes | yes | |
+| `B2B` | yes | yes | Through the B2C API with a 統一編號 |
+| `MIXED_TAX` | yes | yes | `TaxType` `9` needs approval from ECPay `[doc 7896]`. The adapter sends `9` when the items differ |
+| `QUERY_BY_ORDER_ID` | yes | yes | `RelateNumber` |
+| `SCHEDULED_ISSUE` | yes | no | `DelayIssue` exists. The adapter does not map it |
+| `CARRIER_VALIDATION` | yes | yes | `CheckBarcode`, `CheckLoveCode` |
+| `FOREIGN_CURRENCY` | no | no | The B2C API has no currency field |
+
+### 4.7 Against the MIG
+
+- **B2B goes through storage (F0401), not exchange (inferred).** The B2C API accepts a 統一編號 with a carrier, and allows mixed tax. MIG A0101 allows neither. So ECPay must upload these invoices as F0401. This answers the MIG note's open question 4 for ECPay.
+- **Allowance amounts include tax.** `AllowanceAmount` and `ItemAmount` include tax `[doc 7901]`. MIG G0401 wants amounts without tax and a tax per item. ECPay does the split. Its allowance query returns both: `IA_Total_Amount` (tax excluded) and `IA_Total_Tax_Amount` (tax included), plus `ItemRateAmt` per item `[doc 7928]`.
+- **Voiding an allowance needs no allowance date.** MIG G0501 requires it, so ECPay must fill it from its own records `[doc 7911]`.
+- **Voiding and querying by number need the invoice date,** as MIG F0501 does `[doc 7906, 7923]`.
+- **Up to 999 items** `[doc 7896]`. The MIG allows 9999.
+- **Reasons are 1 to 20 chars** for voids and allowance voids `[doc 7906, 7911]`, as in the MIG. The allowance reason (`Reason` in `Allowance`) is up to 50 chars.
+
+### 4.8 Contract and live tests
+
+- **Offline contract.** `spec/einvoice/ecpay/provider_spec.rb` runs the shared contract against `spec/support/fake_ecpay.rb`. The fake speaks the real envelope, encryption and `RtnCode`s.
+- **Unknown numbers.** ECPay checks the format first, so the contract gets `unknown_invoice_number: "ZZ00000000"` and `unknown_allowance_number: "9999999999999999"`.
+- **Query by number.** The contract sends only `invoice_number`. This works because the adapter defaults the invoice date to today, and the contract queries on the day it issues.
+- **Live specs.** `spec/einvoice/ecpay/live_spec.rb` runs against stage with `ECPAY_LIVE=1`. The stage account is shared with every other developer, so each run builds a unique order id (`RB` + time + a random number).
+- **Recorded specs.** `spec/einvoice/ecpay/recorded_spec.rb` replays the cassettes in `spec/fixtures/vcr_cassettes/ecpay/`.
+- **What stage cannot test.** Stage does not upload to the MOF, and sends no email, SMS or `NotifyURL` callback `[doc 7849, 15369]`. So upload status, notices and callbacks cannot be checked there.
 
 ## 5. Field reference
 
 ### 5.1 `Issue`
 
-`Data` fields `[doc 7896]`. "Req" means required.
+`Data` fields `[doc 7896]`:
 
-| Field | Rule |
-| --- | --- |
-| `MerchantID` | Req, max 10 |
-| `RelateNumber` | Req, max 50. Unique. No special symbols. Case does not matter (`abc` = `ABC`) |
-| `ChannelPartner` | `1` Shopee. Other values are ignored |
-| `CustomerID` | max 20. Letters, digits, `_` |
-| `ProductServiceID` | 1 to 10 letters or digits. Only used when the merchant has 「B2C系統多組字軌」 on |
-| `CustomerIdentifier` | 8 digits. The buyer's 統一編號 |
-| `CustomerName` | max 60. Req when `Print` is `1`. Use the company name when there is a 統一編號 |
-| `CustomerAddr` | max 100. Req when `Print` is `1` |
-| `CustomerPhone` | max 20, digits. Req when `CustomerEmail` is empty |
-| `CustomerEmail` | max 80, one address. Req when `CustomerPhone` is empty |
-| `ClearanceMark` | `1` / `2`. Req when `TaxType` is `2` or `9` |
-| `Print` | Req. `0` / `1`. This only marks that the merchant prints the invoice. ECPay does not print or mail it |
-| `Donation` | Req. `0` / `1` |
-| `LoveCode` | 3 to 7 digits, may start with `0`. Req when `Donation` is `1` |
-| `CarrierType` | Empty, `1` ECPay carrier, `2` citizen certificate, `3` mobile barcode, `4` EasyCard, `5` iPASS |
-| `CarrierNum` | max 64. See below |
-| `CarrierNum2` | max 64. Req for `4` and `5`: the card's visible code. Leave empty for `1` to `3` |
-| `TaxType` | Req. `1` taxable, `2` zero rated, `3` tax free, `4` special rate, `9` mixed (needs approval). With `InvType` `07`: `1`, `2`, `3` or `9`. With `08`: `3` or `4` |
-| `ZeroTaxRateReason` | `71` to `79`. From 2026-01-01, req when `TaxType` is `2` or `9`, unless set in the back office |
-| `SpecialTaxType` | `0` for `TaxType` `1`, `2`, `9`. `8` for `3`. `1` to `8` for `4` |
-| `SalesAmount` | Req. Integer, tax included, TWD only, up to 12 digits |
-| `TaxAmount` | Integer, up to 11 digits. Optional: ECPay computes it if missing. If given, it may differ from ECPay's result by at most 1. `0` for special tax |
-| `InvoiceRemark` | max 200. `\r\n`, `\r` or `\n` breaks the line |
-| `Items` | 1 to 999 items |
-| `InvType` | Req. `07` general, `08` special |
-| `vat` | `1` prices include tax (default), `0` prices exclude tax |
+| Field | M/O | Rule |
+| --- | --- | --- |
+| `MerchantID` | M | max 10 |
+| `RelateNumber` | M | max 50. Unique. No special symbols. Case does not matter (`abc` = `ABC`) |
+| `ChannelPartner` | O | `1` Shopee. Other values are ignored |
+| `CustomerID` | O | max 20. Letters, digits, `_` |
+| `ProductServiceID` | O | 1 to 10 letters or digits. Only used when the merchant has 「B2C系統多組字軌」 on |
+| `CustomerIdentifier` | O | 8 digits. The buyer's 統一編號 |
+| `CustomerName` | O | max 60. M when `Print` is `1`. Use the company name when there is a 統一編號 |
+| `CustomerAddr` | O | max 100. M when `Print` is `1` |
+| `CustomerPhone` | O | max 20, digits. M when `CustomerEmail` is empty |
+| `CustomerEmail` | O | max 80, one address. M when `CustomerPhone` is empty |
+| `ClearanceMark` | O | `1` / `2`. M when `TaxType` is `2` or `9` |
+| `Print` | M | `0` / `1`. This only marks that the merchant prints the invoice. ECPay does not print or mail it |
+| `Donation` | M | `0` / `1` |
+| `LoveCode` | O | 3 to 7 digits, may start with `0`. M when `Donation` is `1` |
+| `CarrierType` | O | Empty, `1` ECPay carrier, `2` citizen certificate, `3` mobile barcode, `4` EasyCard, `5` iPASS |
+| `CarrierNum` | O | max 64. See below |
+| `CarrierNum2` | O | max 64. M for `4` and `5`: the card's visible code. Leave empty for `1` to `3` |
+| `TaxType` | M | `1` taxable, `2` zero rated, `3` tax free, `4` special rate, `9` mixed (needs approval). With `InvType` `07`: `1`, `2`, `3` or `9`. With `08`: `3` or `4` |
+| `ZeroTaxRateReason` | O | `71` to `79`. From 2026-01-01, M when `TaxType` is `2` or `9`, unless set in the back office |
+| `SpecialTaxType` | O | `0` for `TaxType` `1`, `2`, `9`. `8` for `3`. `1` to `8` for `4` (6.3) |
+| `SalesAmount` | M | Integer, tax included, TWD only, up to 12 digits |
+| `TaxAmount` | O | Integer, up to 11 digits. ECPay computes it if missing. If given, it may differ from ECPay's result by at most 1. `0` for special tax |
+| `InvoiceRemark` | O | max 200. `\r\n`, `\r` or `\n` breaks the line |
+| `Items` | M | 1 to 999 items |
+| `InvType` | M | `07` general, `08` special |
+| `vat` | O | `1` prices include tax (default), `0` prices exclude tax |
 
 `CarrierNum` by `CarrierType`:
 
@@ -200,53 +393,65 @@ Page 49890 is an older copy of the issue page ("一般開立發票 - MIG 4.0", c
 | `1` | empty. ECPay builds the carrier from the email or phone, email first |
 | `2` | 16 chars: 2 capital letters and 14 digits |
 | `3` | 8 chars: `/` and 7 of `0-9`, `A-Z`, `+`, `-`, `.` |
-| `4`, `5` | Req. The card's hidden code. Not checked |
+| `4`, `5` | M. The card's hidden code. Not checked |
 
 Item fields:
 
-| Field | Rule |
-| --- | --- |
-| `ItemSeq` | 1 to 999 |
-| `ItemName` | Req, max 500 |
-| `ItemCount` | Req. 8 digits, up to 7 after the point |
-| `ItemWord` | Req, max 6. The unit |
-| `ItemPrice` | Req. 10 digits, up to 7 after the point. Tax included or not, as `vat` says |
-| `ItemTaxType` | `1`, `2`, `3`. Req when `TaxType` is `9`, ignored otherwise |
-| `ItemAmount` | Req. Tax included. 12 digits, up to 7 after the point |
-| `ItemRemark` | max 120 |
+| Field | M/O | Rule |
+| --- | --- | --- |
+| `ItemSeq` | O | 1 to 999 |
+| `ItemName` | M | max 500 |
+| `ItemCount` | M | 8 digits, up to 7 after the point |
+| `ItemWord` | M | max 6. The unit |
+| `ItemPrice` | M | 10 digits, up to 7 after the point. Tax included or not, as `vat` says |
+| `ItemTaxType` | O | `1`, `2`, `3`. M when `TaxType` is `9`, ignored otherwise |
+| `ItemAmount` | M | Tax included. 12 digits, up to 7 after the point |
+| `ItemRemark` | O | max 120 |
 
 Rules across fields `[doc 7896]`:
 
 - The sum of `ItemAmount`, rounded, must equal `SalesAmount`. With `vat` `0` and `TaxType` `1`, `ItemPrice × ItemCount × 1.05 = ItemAmount`.
 - Mixed tax (`9`) allows taxable with tax free, or taxable with zero rated. Not tax free with zero rated.
-- ECPay computes tax as `round(SalesAmount / 1.05 × 0.05)`. For mixed tax it uses the sum of the taxable items.
 - Donated (`Donation` `1`): `Print` must be `0`, and `CustomerIdentifier` must be empty. A carrier is allowed: it means the buyer donated the invoice later.
 - With a 統一編號: `Donation` must be `0`. No carrier means `Print` `1`. Carrier `1` or `2` means `Print` `0`. Carrier `3` allows either.
 - With a 統一編號 and `Print` `1`, the only carrier allowed is `3`.
 
-Response `Data`: `RtnCode`, `RtnMsg`, `InvoiceNo`, `InvoiceDate` (`yyyy-MM-dd HH:mm:ss` or `yyyy/MM/dd HH:mm:ss`), `RandomNumber`.
+The docs and the API do not always agree. The adapter's checks follow what stage really did `[live]`:
+
+- A B2C invoice with a carrier must not print (`5000015`).
+- A B2B invoice that does not print needs a carrier (`5000028`).
+- A zero rated invoice needs `ClearanceMark` (`5000007`). The adapter asks for it only when a zero rated item is present, also with `TaxType` `9` (see 7).
+
+Response `Data`: `RtnCode`, `RtnMsg`, `InvoiceNo`, `InvoiceDate` (`yyyy-MM-dd HH:mm:ss` or `yyyy/MM/dd HH:mm:ss`), `RandomNumber`. Example in 2.5.
 
 ### 5.2 `Invalid` (void an invoice)
 
-`InvoiceNo` (10), `InvoiceDate` (`yyyy-MM-dd` or `yyyy/MM/dd`) and `Reason` (max 20) are required. The response has `InvoiceNo` `[doc 7906]`.
+`InvoiceNo` (10), `InvoiceDate` (`yyyy-MM-dd` or `yyyy/MM/dd`) and `Reason` (max 20) are M. The response has `InvoiceNo` `[doc 7906]`.
 
 An invoice with an allowance cannot be voided until every allowance on it is voided.
+
+Example `[live]` (`void.yml`):
+
+```json
+{ "MerchantID": "2000132", "InvoiceNo": "LA25008598", "InvoiceDate": "2026-08-15", "Reason": "整合測試作廢" }
+{ "RtnCode": 1, "RtnMsg": "作廢發票成功", "InvoiceNo": "LA25008598" }
+```
 
 ### 5.3 `Allowance` (paper allowance)
 
 `[doc 7901]`:
 
-| Field | Rule |
-| --- | --- |
-| `InvoiceNo` | Req, 10 |
-| `InvoiceDate` | Req, `yyyy-MM-dd` or `yyyy/MM/dd` |
-| `AllowanceNotify` | Req. `S` SMS, `E` email, `A` both, `N` none |
-| `CustomerName` | max 60 |
-| `NotifyMail` | max 100. Several addresses split by `;`. Req for `E` |
-| `NotifyPhone` | max 20, digits. Req for `S` |
-| `AllowanceAmount` | Req. Integer, tax included, more than 0. At most the invoice total, or what is left after earlier allowances |
-| `Reason` | max 50 |
-| `Items` | `ItemSeq`, `ItemName`, `ItemCount`, `ItemWord`, `ItemPrice` and `ItemAmount` are req. `ItemTaxType` is req for mixed tax |
+| Field | M/O | Rule |
+| --- | --- | --- |
+| `InvoiceNo` | M | 10 |
+| `InvoiceDate` | M | `yyyy-MM-dd` or `yyyy/MM/dd` |
+| `AllowanceNotify` | M | `S` SMS, `E` email, `A` both, `N` none |
+| `CustomerName` | O | max 60 |
+| `NotifyMail` | O | max 100. Several addresses split by `;`. M for `E` |
+| `NotifyPhone` | O | max 20, digits. M for `S` |
+| `AllowanceAmount` | M | Integer, tax included, more than 0. At most the invoice total, or what is left after earlier allowances |
+| `Reason` | O | max 50 |
+| `Items` | M | `ItemSeq`, `ItemName`, `ItemCount`, `ItemWord`, `ItemPrice` and `ItemAmount` are M. `ItemTaxType` is M for mixed tax |
 
 - `ItemAmount` includes tax. It may differ from `ItemPrice × ItemCount` by at most 1.
 - The sum of `ItemAmount` must equal `AllowanceAmount`.
@@ -254,11 +459,29 @@ An invoice with an allowance cannot be voided until every allowance on it is voi
 
 Response: `IA_Allow_No` (16), `IA_Invoice_No`, `IA_Date` (`yyyy-MM-dd HH:mm:ss`), `IA_Remain_Allowance_Amt`.
 
+Example `[live]` (`allowance.yml`):
+
+```json
+{ "MerchantID": "2000132", "InvoiceNo": "LA25008600", "InvoiceDate": "2026-08-15",
+  "AllowanceNotify": "N", "AllowanceAmount": 50,
+  "Items": [{ "ItemSeq": 1, "ItemName": "整合測試商品", "ItemCount": 1, "ItemWord": "式",
+              "ItemPrice": 50, "ItemTaxType": "1", "ItemAmount": 50 }] }
+{ "RtnCode": 1, "RtnMsg": "折讓單資料新增成功", "IA_Allow_No": "2026081523293352",
+  "IA_Invoice_No": "LA25008600", "IA_Date": "2026-08-15 23:29:03", "IA_Remain_Allowance_Amt": 50 }
+```
+
 `AllowanceByCollegiate` takes the same fields, with `AllowanceNotify` fixed to `E`, and a `ReturnURL` for the callback. The allowance exists only after the buyer clicks the link `[doc 15391]`.
 
 ### 5.4 `AllowanceInvalid` (void an allowance)
 
-`InvoiceNo` (10), `AllowanceNo` (16) and `Reason` (max 20) are required. The response has `IA_Invoice_No` `[doc 7911]`.
+`InvoiceNo` (10), `AllowanceNo` (16) and `Reason` (max 20) are M. The response has `IA_Invoice_No` `[doc 7911]`.
+
+Example `[live]` (`allowance.yml`). The success message reads like an error, so match messages only when `RtnCode` is not `1`:
+
+```json
+{ "MerchantID": "2000132", "InvoiceNo": "LA25008600", "AllowanceNo": "2026081523293352", "Reason": "作廢折讓" }
+{ "RtnCode": 1, "RtnMsg": "該折讓單已作廢", "IA_Invoice_No": "LA25008600" }
+```
 
 ### 5.5 `GetIssue` (query)
 
@@ -277,16 +500,33 @@ Response fields that the unified model uses:
 | `IIS_Tax_Type` | `1`, `2`, `3`, `4`, `9` |
 | `IIS_Tax_Rate` | Rate, 2 decimals |
 | `IIS_Tax_Amount` | Tax. **Only for a B2B invoice.** For B2C it is `0`, because the tax is inside the amount |
-| `IIS_Sales_Amount` | Invoice amount |
+| `IIS_Sales_Amount` | Invoice amount, tax included |
 | `IIS_Create_Date` | Issue time, `yyyy-MM-dd HH:mm:ss` |
 | `IIS_Random_Number` | Random code |
+| `IIS_Issue_Status`, `IIS_Invalid_Status`, `IIS_Remain_Allowance_Amt` | Status (4.4) |
+| `IIS_Upload_Status`, `IIS_Turnkey_Status` | Upload to the MOF (4.4) |
 | `IIS_Carrier_Type`, `IIS_Carrier_Num` | Carrier. For cards (`4`, `5`), the visible code only |
 | `IIS_Love_Code` | Donation code |
 | `IIS_Print_Flag` | `1` / `0` |
 | `IIS_Award_Flag`, `IIS_Award_Type` | Lottery result |
 | `Items` | `ItemSeq`, `ItemName`, `ItemCount`, `ItemWord`, `ItemPrice` (tax included), `ItemTaxType`, `ItemAmount` (tax included), `ItemRemark` |
 
-Status fields are in section 4. `IIS_Check_Number` is no longer used.
+`IIS_Check_Number` is no longer used `[doc 7923]`. Stage still returns `"P"` in it `[live]`.
+
+Example `[live]` (`void.yml`, after the void; some fields left out):
+
+```json
+{ "MerchantID": "2000132", "RelateNumber": "RBVCR20260815void" }
+{ "IIS_Number": "LA25008598", "IIS_Relate_Number": "RBVCR20260815void", "IIS_Identifier": "0000000000",
+  "IIS_Customer_Email": "test@example.com", "IIS_Type": "07", "IIS_Category": "B2C",
+  "IIS_Tax_Type": "1", "IIS_Tax_Rate": 0.05, "IIS_Tax_Amount": 0, "IIS_Sales_Amount": 100,
+  "IIS_Carrier_Type": "1", "IIS_Create_Date": "2026-08-15 23:28:59",
+  "IIS_Issue_Status": "1", "IIS_Invalid_Status": "1", "IIS_Upload_Status": "1", "IIS_Turnkey_Status": "C",
+  "IIS_Remain_Allowance_Amt": 0, "IIS_Print_Flag": "0", "IIS_Random_Number": "1457",
+  "RtnCode": 1, "RtnMsg": "查詢成功" }
+```
+
+`RtnCode` and `RtnMsg` come at the end of the query response, after `Items` `[live]`.
 
 ## 6. Codes
 
@@ -298,71 +538,93 @@ Status fields are in section 4. `IIS_Check_Number` is no longer used.
 | `ZERO_RATED` | `2` | `2` |
 | `TAX_FREE` | `3` | `3` |
 | `SPECIAL` | `4` | `4` |
-| mixed | `9` | `9` |
+| (mixed, derived) | `9` | `9` |
 
 The codes are the MIG codes.
 
 ### 6.2 Carrier type
 
-| ECPay | Meaning | MIG `CarrierType` |
-| --- | --- | --- |
-| `1` | ECPay member carrier | ECPay's own code |
-| `2` | Citizen certificate | `CQ0001` |
-| `3` | Mobile barcode | `3J0002` |
-| `4` | EasyCard (悠遊卡), since 2025-04-17 | card carrier code |
-| `5` | iPASS (一卡通), since 2025-04-17 | card carrier code |
-
-The unified `CarrierType` has no value for `4` or `5`.
+| Unified | ECPay | Meaning | MIG `CarrierType` |
+| --- | --- | --- | --- |
+| `MEMBER` | `1` | ECPay member carrier | ECPay's own code |
+| `CITIZEN_CERTIFICATE` | `2` | Citizen certificate | `CQ0001` |
+| `MOBILE_BARCODE` | `3` | Mobile barcode | `3J0002` |
+| (none) | `4` | EasyCard (悠遊卡), since 2025-04-17 | card carrier code |
+| (none) | `5` | iPASS (一卡通), since 2025-04-17 | card carrier code |
 
 ### 6.3 Special tax type (`SpecialTaxType`)
 
-`1` 25% (bars with hostesses), `2` 15% (night clubs), `3` 2% (core income of banks and insurers), `4` 1% (reinsurance), `5` 5% (other income of banks and insurers), `6` and `7` 5% (bank and insurance core income, after and before 2014-07), `8` tax free or not output tax `[doc 7896]`.
+`1` 25%, `2` 15%, `3` 2%, `4` 1%, `5` 5%, `6` and `7` 5%, `8` tax free or not output tax. Page 7896 lists the trade for each `[doc 7896]`. The adapter passes it through `provider_options[:special_tax_type]`.
 
 ### 6.4 Result codes
 
+The adapter first looks up the code in a table, then matches the message `[code]`. The same condition can come back under different codes on different endpoints, so the message match matters. Run it only when the code is not a success.
+
 `TransCode` (transport):
 
-| Code | Meaning | Source |
-| --- | --- | --- |
-| `1` | Envelope accepted | `[doc]` |
-| `104` | Timestamp more than 10 minutes off | `[code]` |
-| `110` | `Data` cannot be decrypted (wrong key or IV). HTTP 500 | `[live]` |
+| Code | Meaning | Unified error | `Reason` | Source |
+| --- | --- | --- | --- | --- |
+| `1` | Envelope accepted | | | `[doc]` |
+| `104` | Timestamp more than 10 minutes off | `ValidationError` | `STALE_TIMESTAMP` | `[code]` |
+| `110` | `Data` cannot be decrypted (wrong key or IV). HTTP 500 | `AuthError` | `CREDENTIALS_INVALID` | `[live]` |
+| other | | `ProviderError` | | `[code]` |
 
 `RtnCode` (business):
 
-| Code | Meaning | Source |
-| --- | --- | --- |
-| `1` | Success | `[doc]` |
-| `4000003` | Held invoice triggered, will issue after `DelayDay` days | `[doc 15371]` |
-| `4000004` | Held invoice triggered and issued | `[doc 15371]` |
-| `1600003` | Invoice not found (無發票號碼資料) | `[live]` |
-| `2000039` | Allowance not found (查無折讓單資料) | `[live]` |
-| `2000042` | Voided invoice cannot get an allowance | `[live]` |
-| `2000063` | Allowance already voided | `[code]` |
-| `5000007` | Clearance mark missing for zero rate | `[code]` |
-| `5000015` | B2C carrier invoice must not print | `[code]` |
-| `5000022` | `SalesAmount` does not match the items | `[live]` |
-| `5000028` | Non-printed B2B invoice needs a carrier | `[code]` |
-| `5070350`, `1500047` | No usable track or number. Check the track is added and enabled, and not used up | `[doc 7954]` |
-| `5070357` | Duplicate `RelateNumber` | `[live]` |
-| `5070450` | Invoice has an allowance, cannot void | `[code]` |
-| `5070453` | Invoice already voided | `[live]` |
-| `9000001` | The MOF API failed (maintenance). Try later | `[doc 7886]` |
-| `1200125` | 統一編號 check digit wrong. Stop issuing | `[doc 32089]` |
-| `2027000` | 統一編號 not 8 digits. Stop issuing | `[doc 32089]` |
-| `7` | 統一編號 not in public data. Issuing may continue | `[doc 32089]` |
+| Code | Meaning | Unified error | `Reason` | Source |
+| --- | --- | --- | --- | --- |
+| `1` | Success | | | `[doc]` |
+| `4000003` | Held invoice triggered, will issue after `DelayDay` days. Success for `TriggerIssue` | | | `[doc 15371]` |
+| `4000004` | Held invoice triggered and issued. Success for `TriggerIssue` | | | `[doc 15371]` |
+| `2` | `GetIssue`: invoice not found (查無發票資料) | `NotFoundError` (by message) | | `[live]` |
+| `1600003` | Invoice not found (無發票號碼資料) | `NotFoundError` | | `[code]` |
+| `2000039` | Allowance not found (查無折讓單資料) | `NotFoundError` | | `[live]` |
+| `2000042` | Voided invoice cannot get an allowance | `ConflictError` | `ALLOWANCE_BLOCKED_BY_VOID` | `[live]` |
+| `2000063` | Allowance already voided | `ConflictError` | `ALREADY_VOIDED` | `[code]` |
+| `5000007` | Clearance mark missing for zero rate | `ValidationError` | | `[code]` |
+| `5000015` | B2C carrier invoice must not print | `ValidationError` | | `[code]` |
+| `5000022` | `SalesAmount` does not match the items | `ValidationError` | | `[live]` |
+| `5000028` | Non-printed B2B invoice needs a carrier | `ValidationError` | | `[code]` |
+| `5070350`, `1500047` | No usable track or number. Check the track is added and enabled, and not used up | `NumberExhaustedError` (by message) | | `[doc 7954]` |
+| `5070357` | Duplicate `RelateNumber` | `ConflictError` | `DUPLICATE_ORDER` | `[live]` |
+| `5070450` | Invoice has an allowance, cannot void | `ConflictError` | `VOID_BLOCKED_BY_ALLOWANCE` | `[live]` |
+| `5070453` | Invoice already voided | `ConflictError` | `ALREADY_VOIDED` | `[live]` |
+| `9000001` | The MOF API failed (maintenance). Try later | `NetworkError` | | `[doc 7886]` |
+| `1200125` | 統一編號 check digit wrong. Stop issuing | | | `[doc 32089]` |
+| `2027000` | 統一編號 not 8 digits. Stop issuing | | | `[doc 32089]` |
+| `7` | 統一編號 not in public data. Issuing may continue | | | `[doc 32089]` |
 
 For `GetCompanyNameByTaxID`, `RtnCode` `1` means a company name was found. If ECPay finds no name, the number may still be right. Some welfare committees, government bodies and hospitals are not in public data `[doc 32089]`.
+
+Message matching, for codes not in the table `[code]`:
+
+| Message contains | Unified error | `Reason` |
+| --- | --- | --- |
+| 財政部 … 失敗 or 維護, 呼叫 … API失敗 | `NetworkError` | |
+| 金鑰, 簽章, 未授權 | `AuthError` | `CREDENTIALS_INVALID` |
+| 特店 … 不存在, 平台商 … 不存在 | `AuthError` | `NOT_ENROLLED` |
+| 字軌 … 用罄 / 用完 / 不足 / 已滿 | `NumberExhaustedError` | |
+| 作廢 … 不能 | `ConflictError` | `ALLOWANCE_BLOCKED_BY_VOID` |
+| 已作廢, 已被作廢 | `ConflictError` | `ALREADY_VOIDED` |
+| 已折讓, 折讓過 | `ConflictError` | `VOID_BLOCKED_BY_ALLOWANCE` |
+| 重複, 重覆 | `ConflictError` | `DUPLICATE_ORDER` |
+| 已開立, 已存在, 同意 | `ConflictError` | |
+| 查無, 查不到, 無 … 資料, 不存在 | `NotFoundError` | |
+| 系統錯誤 / 異常 / 忙碌, 請稍後 | `ProviderError` | `RATE_LIMITED` |
+| anything else | `ValidationError` | |
+
+ECPay writes both 重複 and 重覆, and both 已作廢 and 已被作廢. Match both forms.
 
 ## 7. Open questions
 
 These are places where the docs and the 2.x adapter `[code]` do not agree, or where we have not checked yet.
 
-1. **`RqHeader.Revision`.** The adapter sends `Revision: "3.0.0"`, and its comment says the docs mark it as required. The current docs do not list `Revision` at all `[doc 7896]`. The comment should change, and maybe the field should go.
+1. **`RqHeader.Revision`.** The adapter sends `Revision: "3.0.0"`, and its comment says the docs mark it as required. The current docs do not list `Revision` at all `[doc 7896]`. Stage accepts a request without it `[code]`. The comment should change, and maybe the field should go.
 2. **Cancelled invoices.** `IIS_Issue_Status` `0` means cancelled (註銷). The adapter's status check reads only `IIS_Invalid_Status` and the remaining allowance, so a cancelled invoice reads as issued.
-3. **Tax on B2C queries.** `IIS_Tax_Amount` is `0` for B2C. The adapter builds `AmountSummary` as `sales = total - tax`, so a taxable B2C invoice reports a tax of `0`.
+3. **Tax on B2C queries.** `IIS_Tax_Amount` is `0` for B2C, so a taxable B2C invoice reads back with a tax of `0`. This matches how the contract sends B2C amounts, but not the real tax. Is that what the unified model wants?
 4. **`TaxAmount` on issue.** The adapter does not send `TaxAmount`, so ECPay computes it, and the unified `amount.tax_amount` is not used. Should the adapter send it?
 5. **Clearance mark with mixed tax.** The docs require `ClearanceMark` for any `TaxType` `9`. The adapter requires it only when a zero rated item is in the mix, which it says it checked live (`5000007`). Which is right for taxable plus tax free?
 6. **Zero tax rate reason.** From 2026-01-01 it is required for `TaxType` `2` and `9`. The adapter only passes it through `provider_options` and does not check it.
 7. **Card carriers.** EasyCard and iPASS (`4`, `5`) have no unified `CarrierType`.
-8. **The B2B API.** ECPay also has a B2B invoice API. Is it the MIG exchange flow? Do we need it?
+8. **The `date` field.** On `void` and `allowance`, the adapter uses the unified `date` as the invoice date. The core does not say what `date` means on these inputs. See the MIG note, section 4.
+9. **The B2B API.** ECPay also has a B2B invoice API. Is it the MIG exchange flow? Do we need it?
