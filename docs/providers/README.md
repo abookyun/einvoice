@@ -14,6 +14,8 @@ All providers send their invoices to the Ministry of Finance in the formats of t
 | --- | --- | --- |
 | MIG 電子發票資料交換標準訊息建置指引 | 4.1 | [mof/mig-4.1/](mof/mig-4.1/README.md) |
 
+The MOF also runs an open data API. `Einvoice::MOF::DonationCodes` uses it to check donation codes: [mof/ods-api.md](mof/ods-api.md).
+
 ## Providers
 
 | Provider | API | Adapter in 2.x | Note |
