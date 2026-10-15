@@ -1,5 +1,7 @@
 # Amego 光貿: 電子發票 API
 
+English | [繁體中文](api.zh-TW.md)
+
 ## 1. Status and sources
 
 This is Amego's JSON API at `https://invoice-api.amego.tw`. The 2.x line has no adapter for it yet. Nothing here is verified against the live API. So sections 4.2 and 6.4 are **proposals**: what an adapter should do, based on the docs.
