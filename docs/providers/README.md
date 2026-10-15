@@ -1,5 +1,7 @@
 # Provider references
 
+English | [繁體中文](README.zh-TW.md)
+
 These notes are for people who build or maintain an adapter. They are not user documentation.
 
 Each provider publishes its API in its own way. Some publish full public docs. Some only send a PDF to customers. Some publish nothing. We read what the provider gives us, and then we write down the parts that adapter work needs, in one shape for every provider.

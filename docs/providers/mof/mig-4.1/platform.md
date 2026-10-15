@@ -1,5 +1,7 @@
 # MIG 4.1: platform files and replies
 
+English | [繁體中文](platform.zh-TW.md)
+
 The files that the MOF platform sends back: E0502, E0503 and E0504, and the replies ProcessResult and SummaryResult. Sources and tags are in [README.md](README.md). Types and code lists are in [codes.md](codes.md).
 
 "M" means required, "O" means optional.

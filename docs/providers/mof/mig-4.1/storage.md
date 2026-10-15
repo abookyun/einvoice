@@ -1,5 +1,7 @@
 # MIG 4.1: storage messages
 
+English | [繁體中文](storage.zh-TW.md)
+
 The storage (存證) messages: F0401, F0501, F0701, G0401 and G0501. B2C trades use them, and B2B trades may use them. Sources and tags are in [README.md](README.md). Types and code lists are in [codes.md](codes.md).
 
 "M" means required, "O" means optional.

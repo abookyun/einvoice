@@ -1,5 +1,7 @@
 # MIG 4.1: exchange messages
 
+English | [繁體中文](exchange.zh-TW.md)
+
 The exchange (交換) messages: A0101 to A0302 and B0101 to B0202. Only B2B trades use them. Sources and tags are in [README.md](README.md). Types and code lists are in [codes.md](codes.md). The storage messages are in [storage.md](storage.md).
 
 "M" means required, "O" means optional.

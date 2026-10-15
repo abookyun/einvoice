@@ -1,5 +1,7 @@
 # MIG 4.1: shared types and codes
 
+English | [繁體中文](codes.zh-TW.md)
+
 The types and code lists that all MIG messages use (MIG 第肆章). Sources and tags are in [README.md](README.md).
 
 ## Seller and buyer (`RoleDescriptionType`)

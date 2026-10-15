@@ -1,5 +1,7 @@
 # MOF 財政部: MIG 4.1
 
+English | [繁體中文](README.zh-TW.md)
+
 ## 1. Status and sources
 
 The MIG (電子發票資料交換標準訊息建置指引, Message Implementation Guideline) is the Ministry of Finance's standard for e-invoice data. Every value-added center (加值中心) uploads invoices to the MOF platform in these message formats. So when a provider's docs are unclear, or two providers disagree, the MIG is the reference.
