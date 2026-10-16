@@ -342,6 +342,7 @@ ezPay 不符合 shared contract 的幾個假設：
 - **用號碼查詢。** contract 只送 `invoice_number`，ezPay 還需要隨機碼。除非 contract 送 `provider_options`，或 adapter 記住自己開過的發票的隨機碼，否則 adapter 無法通過這個測試。目前兩者都沒有。
 - **開立後馬上作廢。** contract 會作廢剛開立的發票。在 live 環境，ezPay 要等隔天上傳後才允許作廢（`LIB10009`）。fake 可以允許。live spec 無法在同一次執行中測試作廢。
 - **對已作廢的發票開折讓。** 這個測試要先作廢，所以在 live 環境有同樣的問題。ezPay 沒有「對已作廢發票開折讓」的錯誤代碼，所以不知道能不能對應到預期的 `ConflictError`（見第 7 節）。
+- **不存在的發票。** contract 只用 `invoice_number` 查詢不存在的發票，並預期 `NotFoundError`。沒有隨機碼時，建議的 adapter 會在呼叫前丟出 `ValidationError`（4.2）。所以這個測試也會失敗，原因和用號碼查詢相同。
 - **不存在的折讓。** ezPay 沒有「查無折讓」的錯誤代碼。最接近的是 `IAI10002`（查詢失敗）（見第 7 節）。
 - **折讓需要訂單編號。** contract 不會送這個值。adapter 需要 `provider_options[:order_id]`，或記住自己開過的發票的訂單編號。
 - **訂單編號。** 最多 20 字元。contract 的編號（`ORDER_A`……）符合。live spec 產生的長編號可能不符合。

@@ -206,6 +206,8 @@ Result:
 
 Result: `invoice_number` from the input, `status` `VOIDED`.
 
+The void is asynchronous. `code` `0` means Amego accepted the void into its queue, not that the void is done. A query right after the void can still report `ISSUED` (4.4).
+
 #### `allowance`
 
 `g0401` needs the buyer of the original invoice and its date. `AllowanceInput` has neither. Proposal: call `invoice_query` first, and take `buyer_identifier`, `buyer_name` and `invoice_date` from it. `provider_options` can give them instead, which skips the query. The query only works within 180 days.

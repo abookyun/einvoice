@@ -208,6 +208,8 @@ sign=md5(<the JSON below> + "1729000000" + AppKey)
 
 結果：`invoice_number` 取自輸入值，`status` 為 `VOIDED`。
 
+作廢是非同步的。`code` 為 `0` 表示 Amego 已經把作廢放進佇列，不表示作廢已經完成。作廢後馬上查詢，結果仍然可能是 `ISSUED`（4.4）。
+
 #### `allowance`
 
 `g0401` 需要原發票的買方資料和發票日期，`AllowanceInput` 兩者都沒有。建議：先呼叫 `invoice_query`，從結果取得 `buyer_identifier`、`buyer_name` 和 `invoice_date`。也可以改由 `provider_options` 提供，這樣就不用查詢。查詢只能用在 180 天內的發票。

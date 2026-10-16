@@ -91,7 +91,7 @@ There are two result layers, and the adapter checks both:
 
 HTTP status codes also matter `[doc 7854]`:
 
-- **403**: too many calls. Wait 30 minutes before you call again.
+- **403**: too many calls. Wait 30 minutes before you call again. The adapter does not handle this case on its own. If the body is not JSON, it raises a `ProviderError` without `RATE_LIMITED` `[code]`. See 7.
 - **500**: bad data format, a `MerchantID` that does not match the key and IV, or an encryption error. A wrong key gives `TransCode` 110 with HTTP 500, and `Data` is empty `[live]`.
 
 ### 2.5 Example
@@ -233,7 +233,7 @@ Result: `invoice_number` from the input, `status` `VOIDED`.
 | `provider_options[:allowance_notify]` | `AllowanceNotify` | `N` (no notice) when missing |
 | `provider_options[:customer_name]`, `[:notify_mail]`, `[:notify_phone]`, `[:reason]` | `CustomerName`, `NotifyMail`, `NotifyPhone`, `Reason` | Sent only when given |
 | `amount.total_amount` | `AllowanceAmount` | Tax included. See 4.3 |
-| `items[]` | `Items` | As for `issue` |
+| `items[]` | `Items` | As for `issue`, except the item tax type. `AllowanceInput` has no invoice tax type, so an item without one is taxable (`1`) |
 | `allowance_id` | (none) | Not sent. ECPay assigns the allowance number |
 
 Result:
@@ -630,3 +630,4 @@ These are places where the docs and the 2.x adapter `[code]` do not agree, or wh
 7. **Card carriers.** EasyCard and iPASS (`4`, `5`) have no unified `CarrierType`.
 8. **The `date` field.** On `void` and `allowance`, the adapter uses the unified `date` as the invoice date. The core does not say what `date` means on these inputs. See the MIG note, section 4.
 9. **The B2B API.** ECPay also has a B2B invoice API. Is it the MIG exchange flow? Do we need it?
+10. **HTTP 403.** The adapter does not map a 403 to `RATE_LIMITED`. What does ECPay send in the body of a 403?

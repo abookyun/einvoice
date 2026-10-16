@@ -93,7 +93,7 @@ adapter 的 crypto spec 用 ECPay 公開的測試向量，逐 byte 驗證過這�
 
 HTTP 狀態碼也有意義 `[doc 7854]`：
 
-- **403**：呼叫太頻繁。請等 30 分鐘後再呼叫。
+- **403**：呼叫太頻繁。請等 30 分鐘後再呼叫。adapter 沒有特別處理這個情況。如果 body 不是 JSON，會丟出不帶 `RATE_LIMITED` 的 `ProviderError` `[code]`。見第 7 節。
 - **500**：資料格式錯誤、`MerchantID` 和金鑰不符，或加密錯誤。金鑰錯誤時，回傳 HTTP 500 和 `TransCode` 110，`Data` 是空的 `[live]`。
 
 ### 2.5 範例
@@ -235,7 +235,7 @@ adapter 另外對應了兩個檢查：`/B2CInvoice/CheckBarcode`（手機條碼�
 | `provider_options[:allowance_notify]` | `AllowanceNotify` | 沒有值時為 `N`（不通知） |
 | `provider_options[:customer_name]`、`[:notify_mail]`、`[:notify_phone]`、`[:reason]` | `CustomerName`、`NotifyMail`、`NotifyPhone`、`Reason` | 有值才送 |
 | `amount.total_amount` | `AllowanceAmount` | 含稅。見 4.3 |
-| `items[]` | `Items` | 和 `issue` 相同 |
+| `items[]` | `Items` | 和 `issue` 相同，但品項課稅別不同。`AllowanceInput` 沒有發票的課稅別，所以沒有指定課稅別的品項為應稅（`1`） |
 | `allowance_id` | （無） | 不送。折讓單號由 ECPay 指定 |
 
 結果：
@@ -632,3 +632,4 @@ ECPay 會寫「重複」也會寫「重覆」，會寫「已作廢」也會寫�
 7. **卡片載具。** 悠遊卡和一卡通（`4`、`5`）沒有對應的 unified `CarrierType`。
 8. **`date` 欄位。** 在 `void` 和 `allowance` 中，adapter 把 unified 的 `date` 當成發票日期。core 沒有定義 `date` 在這些輸入中的意思。見 MIG 筆記第 4 節。
 9. **B2B API。** ECPay 另外有 B2B 電子發票 API。它是 MIG 的交換流程嗎？我們需要它嗎？
+10. **HTTP 403。** adapter 沒有把 403 對應到 `RATE_LIMITED`。ECPay 在 403 的 body 裡送什麼？

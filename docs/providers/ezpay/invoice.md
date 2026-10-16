@@ -340,6 +340,7 @@ ezPay breaks several assumptions of the shared contract:
 - **Query by number.** The contract sends only `invoice_number`. ezPay also needs the random code. The adapter cannot pass this test unless the contract sends `provider_options`, or the adapter keeps the random codes of the invoices it issued. Neither exists today.
 - **Void right after issue.** The contract voids an invoice it has just issued. Live, ezPay refuses until the next day's upload (`LIB10009`). A fake can allow it. A live spec cannot test voids in one run.
 - **Credit a voided invoice.** This test voids first, so it has the same problem live. ezPay has no documented code for "allowance on a voided invoice", so the expected `ConflictError` is unknown (see 7).
+- **Unknown invoice.** The contract queries an unknown invoice with only `invoice_number`, and expects `NotFoundError`. Without a random code, the proposed adapter raises `ValidationError` before the call (4.2). So this test fails as well, for the same reason as the query by number.
 - **Unknown allowance.** ezPay has no documented code for "allowance not found". `IAI10002` (query failed) is the closest (see 7).
 - **Allowance needs the order id.** The contract does not send it. The adapter needs `provider_options[:order_id]`, or must remember the order ids of the invoices it issued.
 - **Order ids.** Max 20 chars. The contract's ids (`ORDER_A`, …) fit. A live spec with long generated ids may not.
