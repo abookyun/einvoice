@@ -4,6 +4,8 @@ English | [繁體中文](api.zh-TW.md)
 
 ## 1. Status and sources
 
+> **Trust:** docs only. There is no adapter and no live run. Sections 4.2 and 6.4 are proposals.
+
 This is Amego's JSON API at `https://invoice-api.amego.tw`. The 2.x line has no adapter for it yet. Nothing here is verified against the live API. So sections 4.2 and 6.4 are **proposals**: what an adapter should do, based on the docs.
 
 The docs belong to 光貿科技 Amego and are published at <https://invoice.amego.tw/api_doc/>. This note is our summary.

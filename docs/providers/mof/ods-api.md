@@ -4,6 +4,8 @@ English | [繁體中文](ods-api.zh-TW.md)
 
 ## 1. Status and sources
 
+> **Trust:** `Einvoice::MOF::DonationCodes` uses this API. The calls it makes were run live and recorded (2026-08-17).
+
 This is the MOF's open data API for e-invoice datasets. It is not an invoice provider, but the 2.x line uses one of its endpoints: `Einvoice::MOF::DonationCodes` (`lib/einvoice/mof/donation_codes.rb`) reads the donation code list from it.
 
 The API and its data belong to 財政部財政資訊中心. The API is described in a public OpenAPI file. This note is our summary.

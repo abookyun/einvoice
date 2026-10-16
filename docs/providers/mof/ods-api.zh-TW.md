@@ -6,6 +6,8 @@
 
 ## 1. 狀態與來源
 
+> **可信度：** `Einvoice::MOF::DonationCodes` 使用這個 API。它發出的請求都實際執行並錄製過（2026-08-17）。
+
 這是財政部提供電子發票資料集的開放資料 API。它不是加值中心，但 2.x 用到其中一個 endpoint：`Einvoice::MOF::DonationCodes`（`lib/einvoice/mof/donation_codes.rb`）從這裡讀取捐贈碼清單。
 
 這個 API 和其資料屬於財政部財政資訊中心。API 的規格公開在一份 OpenAPI 文件中。本筆記是我們的整理。

@@ -6,6 +6,8 @@
 
 ## 1. 狀態與來源
 
+> **可信度：** 只依手冊。沒有 adapter，也沒有 live 執行過。4.2 和 6.4 是建議。
+
 ezPay（簡單行動支付股份有限公司）經營 ezPay 電子發票加值服務平台。2.x 還沒有對應的 adapter。這裡的內容都沒有對 live API 驗證過。所以 4.2 和 6.4 是**建議**：依手冊判斷 adapter 應該怎麼做。
 
 手冊屬於簡單行動支付 ezPay，PDF 中也註明版權屬於 ezPay。手冊公開在下載專區：<https://inv.ezpay.com.tw/Invoice_index/download>。本筆記是我們的整理。

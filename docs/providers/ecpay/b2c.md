@@ -4,6 +4,8 @@ English | [繁體中文](b2c.zh-TW.md)
 
 ## 1. Status and sources
 
+> **Trust:** the 2.x line has an adapter for this API. The five operations were run against the stage API and recorded (2026-08-15). Facts with only a `[doc]` tag were not run.
+
 This is ECPay's B2C invoice API, the AES JSON API under `/B2CInvoice/`. The 2.x line has an adapter for it: `Einvoice::ECPay::Provider` (`lib/einvoice/ecpay/`).
 
 The docs belong to 綠界科技 ECPay and are published at <https://developers.ecpay.com.tw/7809/>. This note is our summary.

@@ -27,6 +27,7 @@ The MOF also runs an open data API. `Einvoice::MOF::DonationCodes` uses it to ch
 | ezPay 簡單行動支付 | 電子發票 API (EZP_INVI 1.2.2) | none yet | [ezpay/invoice.md](ezpay/invoice.md) |
 | Tradevan 關貿 | DEFAULTAPI | none yet | [tradevan/defaultapi.md](tradevan/defaultapi.md) |
 
+
 ## Sources and trust
 
 Every fact in a note has a source tag. The tag tells you how much to trust the fact. Each note lists its tags at the top.
@@ -36,13 +37,16 @@ Every fact in a note has a source tag. The tag tells you how much to trust the f
 | Provider docs | `[doc]`, or one short tag per document, for example `[inv]` | documented: the provider says it, nobody checked it live |
 | Our live runs and recorded responses | `[live]` | verified: we saw it. The note says when |
 | Code that runs in production, or a production report | `[prod]` | verified in production |
-| Our adapter code | `[code]` | what our adapter does. Not proof of what the API does |
+| Our 2.x adapter code | `[code]` | what our adapter does. Not proof of what the API does |
+| The 1.x client code | `[1x-code]` | what the old client does. It ran in production for years |
 | The MOF standard | `[mig 表 x-y]` | the standard. See the MIG note |
 
 Two more marks have no tag:
 
-- **(inferred)**: we worked it out from other facts. The text says from which ones.
+- **(inferred)**: we worked it out from other facts. The text says from which ones. It is a claim about the provider.
 - **unknown**: we do not know. It goes into the open questions.
+
+Some notes also mark sections as a **proposal**. A proposal is not a fact about the provider. It is our plan for an adapter that does not exist yet: which field to send, which error class to raise. Change it freely when the adapter is built.
 
 `[doc]` always means the provider's own docs. Our own old summaries get a different tag.
 
@@ -55,6 +59,7 @@ Each provider note uses these sections, in this order. A section can be short, b
 ### 1. Status and sources
 
 - Which API, which version, and if the 2.x line has an adapter for it.
+- One line on how far to trust the note: is there an adapter, and was anything verified live.
 - Who owns the docs, with a link, and a line that says the note is our summary.
 - The source table: tag, source, date, what it gives.
 - How to check for updates: a change log page, a version number, or a file date.

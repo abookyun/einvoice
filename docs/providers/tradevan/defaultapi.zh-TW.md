@@ -6,6 +6,8 @@
 
 ## 1. 狀態與來源
 
+> **可信度：** 沒有公開文件，也沒有帳號。這個 API 透過 1.x client 在正式環境使用中（`[prod]`），但這裡的內容在 2026 年都沒有對它實際執行過。4.2 和 6.4 是建議。
+
 這是 1.x client 包裝的 API。所有路徑都以 `/DEFAULTAPI/` 開頭。2.x 還沒有對應的 adapter。所以 4.2 和 6.4 是**建議**。
 
 API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒絕提供較新的版本給我們。所以沒有公開的連結。本筆記依據 1.x 現有的資料，以及一份正式環境使用者的回報整理而成。本專案目前沒有人有關貿帳號，所以這裡的內容在 2026 年都沒有對 live API 驗證過。
@@ -17,7 +19,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | `[summary]` | 我們對關貿 API 文件的摘要，當初為 1.x 撰寫。這份摘要已經不在 repository 中，請見 [v1.5.0](https://github.com/abookyun/einvoice/blob/v1.5.0/docs/Tradevan%20E-Invoice%20APIs.md) 的 `docs/Tradevan E-Invoice APIs.md`。 | 最後修改 2016-05-03 | 加密方式、封包、endpoint 清單、GET 參數。沒有 `issueData` 或 `voidData` 的欄位，也沒有回應格式。 |
 | `[readme]` | 1.x README 中的範例（[v1.5.0](https://github.com/abookyun/einvoice/blob/v1.5.0/README.md)） | 2016-04-26 | 開立、作廢、兩種查詢和字軌查詢的請求與回應。看起來是真實的回應，但其中的個人資料是假的。沒有人保存原始回應。 |
 | `[rules]` | 1.x 的 validator：`IssueData`、`IssueItem`、`VoidData` 和 `issue_data_validator.rb`（[v1.5.0](https://github.com/abookyun/einvoice/tree/v1.5.0/lib/einvoice/tradevan)） | 2016 | `issueData` 和 `voidData` 欄位及其規則的唯一來源。 |
-| `[code]` | 1.x 的 provider、connection 和回應解碼器 | 2016，仍在正式環境使用 | client 實際怎麼組請求、怎麼讀回應。`[code]` 和 `[summary]` 不一致時，`[code]` 是在正式環境執行過的。 |
+| `[1x-code]` | 1.x 的 provider、connection 和回應解碼器 | 2016，仍在正式環境使用 | client 實際怎麼組請求、怎麼讀回應。`[1x-code]` 和 `[summary]` 不一致時，`[1x-code]` 是在正式環境執行過的。 |
 | `[prod]` | PR [#38](https://github.com/abookyun/einvoice/pull/38)，來自正式環境的使用者 | 2026-09 | 這個 API 在 2026 年仍然可以用。開立、作廢、折讓和作廢折讓都在使用中。API 會拒絕不認得的欄位（見 2.4）。 |
 | `[readme-2026]` | 1.x README 中的折讓範例，2026 年加入（[199b803](https://github.com/abookyun/einvoice/commit/199b803)） | 2026-08 | 只有請求。依 `[rules]` 寫成，不是來自真實流量。 |
 
@@ -37,7 +39,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | --- | --- |
 | `acnt` | 帳號名稱。放在外層加密的 JSON 裡 |
 | `acntp` | 帳號密碼。放在外層加密的 JSON 裡 |
-| `key1` | 用來加密每個參數值的 AES 金鑰，也用來解密回應 `[code]` |
+| `key1` | 用來加密每個參數值的 AES 金鑰，也用來解密回應 `[1x-code]` |
 | `key2` | 用來加密外層 JSON 的 AES 金鑰 |
 
 特店另外有 `companyUn`（統一編號，8 字元）和 `orgId`（5 字元）。大部分請求都會帶這兩個值。
@@ -46,7 +48,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 
 ### 2.2 加密
 
-兩把金鑰使用相同的加密方式 `[summary]` `[code]`：
+兩把金鑰使用相同的加密方式 `[summary]` `[1x-code]`：
 
 - AES-128-CBC。IV 就是金鑰本身。
 - 不用 PKCS padding。明文用 `\0` 補齊到 16 bytes 的倍數。明文是空字串時，補到 16 bytes。長度已經是 16 的倍數時，不補。
@@ -54,9 +56,9 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 
 ### 2.3 請求
 
-所有 endpoint 都只收一個參數 `v`。它放在 URL query string，POST 的 endpoint 也一樣 `[code]`。1.x client 會送 `Accept: application/json; charset=utf-8`。
+所有 endpoint 都只收一個參數 `v`。它放在 URL query string，POST 的 endpoint 也一樣 `[1x-code]`。1.x client 會送 `Accept: application/json; charset=utf-8`。
 
-`v` 的組法 `[summary]` `[code]`：
+`v` 的組法 `[summary]` `[1x-code]`：
 
 1. 每個 API 參數：值是 Hash 時轉成 JSON，否則用 `to_s`。再用 `key1` 加密。
 2. 組成一個 JSON 物件：`{ "acnt": ..., "acntp": ..., <名稱>: <加密後的值>, ... }`。這裡的 `acnt` 和 `acntp` 是明文，不用 `key1` 加密。
@@ -78,7 +80,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 
 讀取加密的 `Message`：Base64 解碼、解密、去掉結尾的 `\0`、解析 JSON。
 
-`[summary]` 說要用 `key2` 解密。`[code]` 用的是 `key1`，而這段程式碼在正式環境執行過。請以 `[code]` 為準。1.x 的 spec 兩把金鑰用同一個值，所以分辨不出差別。
+`[summary]` 說要用 `key2` 解密。`[1x-code]` 用的是 `key1`，而這段程式碼在正式環境執行過。請以 `[1x-code]` 為準。1.x 的 spec 兩把金鑰用同一個值，所以分辨不出差別。
 
 `Success` 只是外層的結果。內層的 JSON 有自己的狀態欄位，例如 `issueStatus` 或 `voidStatus` `[readme]`。完整的檢查要兩層都讀。
 
@@ -124,7 +126,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | `post/issue` | POST | 開立發票或折讓。一個 endpoint，五種類型（見 5.1） | `[summary]` `[rules]` `[readme]` `[prod]` |
 | `post/cancel` | POST | 作廢發票或折讓 | `[summary]` `[rules]` `[readme]` `[prod]` |
 | `get/searchInvoiceDetail` | GET | 用號碼查詢一張發票，含品項 | `[summary]` `[readme]` |
-| `get/searchInvoiceInfoByTransactionnumber` | GET | 用特店的交易編號查詢一張發票 | 只有 `[code]`。`[summary]` 沒有 |
+| `get/searchInvoiceInfoByTransactionnumber` | GET | 用特店的交易編號查詢一張發票 | 只有 `[1x-code]`。`[summary]` 沒有 |
 
 其他 endpoint。adapter 可以透過 `raw` 方法提供：
 
@@ -302,7 +304,7 @@ unified 的 `AmountSummary` 必須符合 `sales + tax = total`。
 | `QUERY` | 部分支援 | 狀態代碼的意思未知 |
 | `B2B` | 支援 | `buyerUn` |
 | `MIXED_TAX` | 未知 | 品項有各自的 `taxType`，所以或許可以（推論） |
-| `QUERY_BY_ORDER_ID` | 部分支援 | 只出現在 `[code]`。回應格式未知 |
+| `QUERY_BY_ORDER_ID` | 部分支援 | 只出現在 `[1x-code]`。回應格式未知 |
 | `SCHEDULED_ISSUE` | 不支援 | |
 | `CARRIER_VALIDATION` | 不支援 | 沒有手機條碼檢查。捐贈碼可以用 `Einvoice::MOF::DonationCodes` |
 | `FOREIGN_CURRENCY` | 不支援 | 沒有幣別欄位 |
@@ -467,7 +469,7 @@ type `I` 的回應 `[readme]`：
 | Endpoint | 參數 |
 | --- | --- |
 | `searchInvoiceDetail` | `invoiceNumber`（M） |
-| `searchInvoiceInfoByTransactionnumber` | `companyUn`、`orgId`、`transactionNumber` `[code]` |
+| `searchInvoiceInfoByTransactionnumber` | `companyUn`、`orgId`、`transactionNumber` `[1x-code]` |
 | `searchInvoiceByMemberId` | `companyUn`（M）；`memberId`、`carrierId`、`sellTargetCode` 擇一；O `invoiceStartDate`、`invoiceEndDate`（`yyyyMMdd`） |
 | `getInvoiceContent` | `invoiceNumber` 或 `sellTargetCode`；O `invoiceStartDate`、`invoiceEndDate`（`yyyyMMdd`） |
 | `sendCardInfotoCust` | `companyUn`、`sellTargetCode`（M）；`receiverEmail` 或 `receiverMobile`；O `invoiceStartYM`、`invoiceEndYM`（`yyyyMM`） |
@@ -542,7 +544,7 @@ type `I` 的回應 `[readme]`：
 3. 關貿會送出哪些失敗訊息？沒有這些訊息，錯誤就無法對應到 `NotFoundError` 或 `ConflictError`。
 4. `qty` 有放大嗎？`[readme]` 中的品項 `qty` 為 4000、`price` 為 5、`itemTotal` 為 20000，所以 `qty × price = itemTotal`。`[readme-2026]` 中的品項 `qty` 為 1000、`price` 為 100、`itemTotal` 為 100，看起來 `qty` 是數量乘以 1000。兩者對不上。
 5. 測試和正式環境的主機是什麼？
-6. 回應要用哪一把金鑰解密，`key1`（`[code]`）還是 `key2`（`[summary]`）？
+6. 回應要用哪一把金鑰解密，`key1`（`[1x-code]`）還是 `key2`（`[summary]`）？
 7. 作廢類型 `C` 和 `I` 有什麼差別？開立類型 `R` 和 `G` 呢？
 8. `paperPrintMode` 和 `invoiceAlarmMode` 的各個值是什麼意思？`sellTargetCode` 是什麼？
 9. `[summary]` 整理的是關貿文件的哪一個版本？當時沒有記錄。

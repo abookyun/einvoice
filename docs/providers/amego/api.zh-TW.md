@@ -6,6 +6,8 @@
 
 ## 1. 狀態與來源
 
+> **可信度：** 只依文件。沒有 adapter，也沒有 live 執行過。4.2 和 6.4 是建議。
+
 這是 Amego 在 `https://invoice-api.amego.tw` 的 JSON API。2.x 還沒有對應的 adapter。這裡的內容都沒有對 live API 驗證過。所以 4.2 和 6.4 是**建議**：依文件判斷 adapter 應該怎麼做。
 
 文件屬於光貿科技 Amego，公開在 <https://invoice.amego.tw/api_doc/>。本筆記是我們的整理。

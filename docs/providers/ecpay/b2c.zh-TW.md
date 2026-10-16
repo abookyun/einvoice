@@ -6,6 +6,8 @@
 
 ## 1. 狀態與來源
 
+> **可信度：** 2.x 已有這個 API 的 adapter。五個操作都對 stage API 實際執行並錄製過（2026-08-15）。只標 `[doc]` 的內容沒有實際執行過。
+
 這是 ECPay 的 B2C 電子發票 API，也就是 `/B2CInvoice/` 底下的 AES JSON API。2.x 有對應的 adapter：`Einvoice::ECPay::Provider`（`lib/einvoice/ecpay/`）。
 
 文件屬於綠界科技 ECPay，公開在 <https://developers.ecpay.com.tw/7809/>。本筆記是我們的整理。

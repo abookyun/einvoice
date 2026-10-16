@@ -4,6 +4,8 @@ English | [繁體中文](defaultapi.zh-TW.md)
 
 ## 1. Status and sources
 
+> **Trust:** no public docs and no account. The API runs in production through the 1.x client (`[prod]`), but nothing here was run against it in 2026. Sections 4.2 and 6.4 are proposals.
+
 This is the API that the 1.x client wraps. All paths start with `/DEFAULTAPI/`. The 2.x line has no adapter for it yet. So sections 4.2 and 6.4 are **proposals**.
 
 The API document belongs to 關貿網路 Tradevan. Tradevan does not publish it, and it declined to send us a newer version. So there is no public link. We built this note from what the 1.x line has, and from one production report. Nobody in this project has a Tradevan account today, so nothing here is verified against the live API in 2026.
@@ -15,7 +17,7 @@ Tradevan has newer API versions. This note covers only DEFAULTAPI.
 | `[summary]` | Our summary of Tradevan's API document. We wrote it for 1.x. It is no longer in the repository, so see `docs/Tradevan E-Invoice APIs.md` at [v1.5.0](https://github.com/abookyun/einvoice/blob/v1.5.0/docs/Tradevan%20E-Invoice%20APIs.md). | last changed 2016-05-03 | Encryption, envelopes, the list of endpoints, GET parameters. No `issueData` or `voidData` fields. No responses. |
 | `[readme]` | Examples in the 1.x README ([v1.5.0](https://github.com/abookyun/einvoice/blob/v1.5.0/README.md)) | 2016-04-26 | Requests and responses for issue, cancel, two searches and mark info. They look like real responses, but the personal data in them is fake. Nobody saved the raw responses. |
 | `[rules]` | The 1.x validators: `IssueData`, `IssueItem`, `VoidData` and `issue_data_validator.rb` ([v1.5.0](https://github.com/abookyun/einvoice/tree/v1.5.0/lib/einvoice/tradevan)) | 2016 | The only source for `issueData` and `voidData` fields and their rules. |
-| `[code]` | The 1.x provider, connection and response decoder | 2016, still in production use | How the client really builds requests and reads responses. Where `[code]` and `[summary]` disagree, `[code]` has run in production. |
+| `[1x-code]` | The 1.x provider, connection and response decoder | 2016, still in production use | How the client really builds requests and reads responses. Where `[1x-code]` and `[summary]` disagree, `[1x-code]` has run in production. |
 | `[prod]` | PR [#38](https://github.com/abookyun/einvoice/pull/38), from a production user | 2026-09 | The API still works in 2026. Issue, void, allowance and void allowance are in use. The API rejects unknown fields (see 2.4). |
 | `[readme-2026]` | Allowance examples in the 1.x README, from 2026 ([199b803](https://github.com/abookyun/einvoice/commit/199b803)) | 2026-08 | Requests only. They were written from `[rules]`, not from real traffic. |
 
@@ -35,7 +37,7 @@ Tradevan gives each merchant four values `[summary]`:
 | --- | --- |
 | `acnt` | Account name. Sent inside the outer encrypted JSON. |
 | `acntp` | Account password. Sent inside the outer encrypted JSON. |
-| `key1` | AES key for each parameter value, and for responses `[code]`. |
+| `key1` | AES key for each parameter value, and for responses `[1x-code]`. |
 | `key2` | AES key for the outer JSON. |
 
 The merchant also has a `companyUn` (統一編號, 8 chars) and an `orgId` (5 chars). Most requests carry them.
@@ -44,7 +46,7 @@ Hosts: unknown. The 1.x client takes the endpoint from its configuration and doe
 
 ### 2.2 Encryption
 
-Both keys use the same cipher `[summary]` `[code]`:
+Both keys use the same cipher `[summary]` `[1x-code]`:
 
 - AES-128-CBC. The IV is the key itself.
 - No PKCS padding. Pad the plain text with `\0` bytes to a multiple of 16 bytes. If the text is empty, pad it to 16 bytes. If the length is already a multiple of 16, add nothing.
@@ -52,9 +54,9 @@ Both keys use the same cipher `[summary]` `[code]`:
 
 ### 2.3 Request
 
-All endpoints take one parameter, `v`. It goes in the URL query string, also for the POST endpoints `[code]`. The 1.x client sends `Accept: application/json; charset=utf-8`.
+All endpoints take one parameter, `v`. It goes in the URL query string, also for the POST endpoints `[1x-code]`. The 1.x client sends `Accept: application/json; charset=utf-8`.
 
-Build `v` like this `[summary]` `[code]`:
+Build `v` like this `[summary]` `[1x-code]`:
 
 1. For each API parameter: if the value is a Hash, turn it into JSON. Otherwise use `to_s`. Encrypt it with `key1`.
 2. Build a JSON object: `{ "acnt": ..., "acntp": ..., <name>: <encrypted value>, ... }`. `acnt` and `acntp` are plain here. They are not encrypted with `key1`.
@@ -76,7 +78,7 @@ The body is JSON `[summary]`:
 
 To read an encrypted `Message`: Base64 decode, decrypt, strip the trailing `\0` bytes, parse JSON.
 
-`[summary]` says to decrypt with `key2`. `[code]` decrypts with `key1`, and that code runs in production. Follow `[code]`. The 1.x specs use the same value for both keys, so they cannot tell the two apart.
+`[summary]` says to decrypt with `key2`. `[1x-code]` decrypts with `key1`, and that code runs in production. Follow `[1x-code]`. The 1.x specs use the same value for both keys, so they cannot tell the two apart.
 
 `Success` is only the outer result. The inner JSON has its own status field, for example `issueStatus` or `voidStatus` `[readme]`. A full check reads both.
 
@@ -122,7 +124,7 @@ The five unified operations use these endpoints. Section 5 has their fields.
 | `post/issue` | POST | Issue an invoice or an allowance. One endpoint, five types (see 5.1). | `[summary]` `[rules]` `[readme]` `[prod]` |
 | `post/cancel` | POST | Void an invoice or an allowance. | `[summary]` `[rules]` `[readme]` `[prod]` |
 | `get/searchInvoiceDetail` | GET | One invoice by number, with its items. | `[summary]` `[readme]` |
-| `get/searchInvoiceInfoByTransactionnumber` | GET | One invoice by the merchant's transaction number. | `[code]` only. Not in `[summary]`. |
+| `get/searchInvoiceInfoByTransactionnumber` | GET | One invoice by the merchant's transaction number. | `[1x-code]` only. Not in `[summary]`. |
 
 Other endpoints. An adapter can offer them through a `raw` method:
 
@@ -300,7 +302,7 @@ Unknown. The sources say nothing about upload times or void deadlines. The MOF r
 | `QUERY` | partly | The status codes are unknown |
 | `B2B` | yes | `buyerUn` |
 | `MIXED_TAX` | unknown | Items have their own `taxType`, so it may work (inferred) |
-| `QUERY_BY_ORDER_ID` | partly | Only in `[code]`. The response is unknown |
+| `QUERY_BY_ORDER_ID` | partly | Only in `[1x-code]`. The response is unknown |
 | `SCHEDULED_ISSUE` | no | |
 | `CARRIER_VALIDATION` | no | No barcode check. `Einvoice::MOF::DonationCodes` covers donation codes |
 | `FOREIGN_CURRENCY` | no | No currency field |
@@ -465,7 +467,7 @@ Parameters `[summary]`, except where marked:
 | Endpoint | Parameters |
 | --- | --- |
 | `searchInvoiceDetail` | `invoiceNumber` (M) |
-| `searchInvoiceInfoByTransactionnumber` | `companyUn`, `orgId`, `transactionNumber` `[code]` |
+| `searchInvoiceInfoByTransactionnumber` | `companyUn`, `orgId`, `transactionNumber` `[1x-code]` |
 | `searchInvoiceByMemberId` | `companyUn` (M); one of `memberId`, `carrierId`, `sellTargetCode`; O `invoiceStartDate`, `invoiceEndDate` (`yyyyMMdd`) |
 | `getInvoiceContent` | `invoiceNumber` or `sellTargetCode`; O `invoiceStartDate`, `invoiceEndDate` (`yyyyMMdd`) |
 | `sendCardInfotoCust` | `companyUn`, `sellTargetCode` (M); `receiverEmail` or `receiverMobile`; O `invoiceStartYM`, `invoiceEndYM` (`yyyyMM`) |
@@ -540,7 +542,7 @@ The fallback is `ProviderError`, not `ValidationError`. With so few samples, an 
 3. What failure texts does Tradevan send? Without them, errors cannot map to `NotFoundError` or `ConflictError`.
 4. Is `qty` scaled? In `[readme]` an item has `qty` 4000, `price` 5 and `itemTotal` 20000, so `qty × price = itemTotal`. In `[readme-2026]` an item has `qty` 1000, `price` 100 and `itemTotal` 100, so `qty` looks like units × 1000. The two do not agree.
 5. What are the test and production hosts?
-6. Which key decrypts the response, `key1` (`[code]`) or `key2` (`[summary]`)?
+6. Which key decrypts the response, `key1` (`[1x-code]`) or `key2` (`[summary]`)?
 7. What is the difference between cancel types `C` and `I`? Between issue types `R` and `G`?
 8. What do the values of `paperPrintMode` and `invoiceAlarmMode` mean? What is `sellTargetCode`?
 9. Which version of Tradevan's document did `[summary]` summarize? It was not recorded.
