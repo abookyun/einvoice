@@ -29,6 +29,20 @@
 | ezPay 簡單行動支付 | 電子發票 API (EZP_INVI 1.2.2) | 尚未實作 | [ezpay/invoice.zh-TW.md](ezpay/invoice.zh-TW.md) |
 | Tradevan 關貿 | DEFAULTAPI | 尚未實作 | [tradevan/defaultapi.zh-TW.md](tradevan/defaultapi.zh-TW.md) |
 
+### 四家比較
+
+細節和來源見各份筆記。
+
+| | ECPay | Amego | ezPay | 關貿 DEFAULTAPI |
+| --- | --- | --- | --- | --- |
+| 驗證程度 | 已有 adapter。已錄製 stage 的實際執行（2026-08） | 只有文件 | 只有文件 | 1.x 程式碼在正式環境使用中。目前沒有帳號 |
+| 請求格式 | JSON，`Data` 用 AES-128-CBC 加密 | 表單，`data` 放 JSON，MD5 `sign` | 表單，query string 用 AES-256-CBC 加密（十六進位） | query 參數 `v`，AES-128-CBC 補零，兩把金鑰 |
+| 測試帳號 | 公開、共用 | 公開、共用 | 自己開測試商店 | 沒有。主機未知 |
+| 作廢需要 | 號碼、發票日期、原因（最多 20） | 號碼。原因選填 | 號碼、原因（最多 6 個中文字） | 號碼、訂單編號（`saleIdentifier`） |
+| 作廢時機 | 可以立即作廢 | 進入佇列，可能還沒完成 | 隔天上傳之後才能作廢 | 未知 |
+| 折讓金額 | 含稅 | 未稅，每個品項另有稅額 | 都可以 | 表頭三個都有：未稅、稅額、含稅 |
+| 折讓單號 | ECPay 指定 | 賣方指定 | ezPay 指定 | 未知 |
+| 用號碼查詢還需要 | 發票日期 | 不需要（限 180 天內） | 隨機碼 | 不需要 |
 
 ## 來源與可信度
 

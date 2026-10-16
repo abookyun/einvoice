@@ -27,6 +27,20 @@ The MOF also runs an open data API. `Einvoice::MOF::DonationCodes` uses it to ch
 | ezPay 簡單行動支付 | 電子發票 API (EZP_INVI 1.2.2) | none yet | [ezpay/invoice.md](ezpay/invoice.md) |
 | Tradevan 關貿 | DEFAULTAPI | none yet | [tradevan/defaultapi.md](tradevan/defaultapi.md) |
 
+### Providers at a glance
+
+Details and sources are in each note.
+
+| | ECPay | Amego | ezPay | Tradevan DEFAULTAPI |
+| --- | --- | --- | --- | --- |
+| Verified | Adapter built. Stage runs recorded (2026-08) | Docs only | Docs only | 1.x code in production. No account today |
+| Request | JSON, `Data` in AES-128-CBC | Form, JSON in `data`, MD5 `sign` | Form, query string in AES-256-CBC (hex) | Query param `v`, AES-128-CBC with zero padding, two keys |
+| Test account | Public, shared | Public, shared | Own test shop | None. Hosts unknown |
+| Void needs | Number, invoice date, reason (max 20) | Number. Reason optional | Number, reason (max 6 Chinese chars) | Number, order id (`saleIdentifier`) |
+| Void timing | Right away | Queued. May not be done yet | Only after the next day's upload | Unknown |
+| Allowance amounts | Tax included | Tax excluded, tax per item | Either | The header has all three: without tax, tax, with tax |
+| Allowance number | ECPay assigns | Seller assigns | ezPay assigns | Unknown |
+| Query by number needs | Invoice date | Nothing more (180 days) | Random code | Nothing more |
 
 ## Sources and trust
 
