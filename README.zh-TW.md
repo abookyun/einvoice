@@ -147,6 +147,8 @@ bundle exec rake   # default task: rspec
 
 `"an invoice provider"` shared examples（`spec/support/shared_examples/`）是每個 adapter 都要執行的 contract。新的 adapter 只要加一行引用它，就能證明自己遵守 unified model。
 
+要寫新的 adapter，請從 [`docs/providers/`](docs/providers/README.zh-TW.md) 的加值中心筆記開始。閱讀順序：先讀財政部 MIG 筆記（所有加值中心都遵循的規格），再讀 ECPay 筆記（唯一已經有 adapter 的加值中心，可以看筆記怎麼對應到程式碼），接著讀你要做的那一家的筆記，最後讀上面提到的 shared examples。
+
 ECPay adapter 的測試分成三層，其中兩層在 CI 中離線執行：
 
 1. **用模擬傳輸格式的 fake 跑 contract。** shared examples 透過一個在同一個 process 中執行的 fake 來跑。這個 fake 實作真正的協定：AES 封包、PHP URL encoding，以及 ECPay 自己的 RtnCode。所以只有加密和欄位對應都正確時，請求才會通過。fake 會保留狀態，所以 contract 可以依序執行開立、折讓、作廢。

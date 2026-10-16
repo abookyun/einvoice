@@ -139,6 +139,8 @@ bundle exec rake   # default task: rspec
 
 The `"an invoice provider"` shared examples (`spec/support/shared_examples/`) are the executable contract every adapter runs, so a new adapter proves it honours the unified model by including one line.
 
+To write a new adapter, start with the provider notes in [`docs/providers/`](docs/providers/README.md). Read them in this order: the MOF MIG note (the standard every provider follows), then the ECPay note (the one provider with an adapter, to see how a note maps to code), then the note for your provider, and then the shared examples above.
+
 The ECPay adapter is tested in three layers, two of which run offline in CI:
 
 1. **The contract, against a wire-format fake.** The shared examples run through an in-process fake that speaks the real protocol — AES envelope, PHP url-encoding, ECPay's own RtnCodes — so a request only passes if the encryption and field mapping are genuinely correct. It is stateful, which is what lets the contract drive issue → allowance → void as a sequence.
