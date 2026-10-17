@@ -4,6 +4,8 @@ require "einvoice/tradevan/default_api/crypto"
 require "einvoice/tradevan/default_api/errors"
 require "einvoice/tradevan/default_api/client"
 require "einvoice/tradevan/default_api/rules"
+require "einvoice/tradevan/default_api/payload"
+require "einvoice/tradevan/default_api/provider"
 
 module Einvoice
   # Adapters for Tradevan 關貿網路. Each Tradevan API version has its own
