@@ -20,6 +20,8 @@ A second adapter, **Amego 光貿**, covers the five operations and is checked ag
 
 An **ezPay 簡單行動支付** adapter is experimental: it is built from ezPay's public manuals, and has not run against ezPay.
 
+A **Tradevan 關貿 DEFAULTAPI** adapter is experimental: it is ported from the 1.x client and has not been run against the live API.
+
 Other centers follow. Coverage and completeness for those will vary: their docs are less complete and they have no public sandbox, so an adapter built from docs alone carries some uncertainty until real production use confirms it.
 
 ## Installation
@@ -190,6 +192,27 @@ provider = Einvoice::EzPay::Provider.new(
 - **Not supported**: query by order id, special tax rates, foreign currency, mixed tax on a B2B invoice, and the carrier check APIs. `tax_rate` must be 0 or 0.05.
 - **Anything else**: `provider.raw(path, version, fields)`, for example `provider.raw("/Api/invoice_touch_issue", "1.0", { ... })`.
 - The details and the open questions are in [`docs/providers/ezpay/invoice.md`](docs/providers/ezpay/invoice.md).
+
+### Tradevan 關貿 (DEFAULTAPI, experimental)
+
+```ruby
+provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
+  acnt: "...", acntp: "...",
+  key1: "...", key2: "...",          # 16 bytes each, server-side only
+  endpoint: "https://...",           # your Tradevan host; there is no default
+  company_un: "12345678", org_id: "ABCDE",
+  paper_print_mode: "0", invoice_alarm_mode: "4",
+  invoice_paper_returned: "N", allowance_paper_returned: "N",
+  member_carrier_type: "1K0001"      # only needed for MEMBER carriers
+)
+```
+
+- **Experimental.** This adapter is ported from the 1.x client, its validators and its README examples. Tradevan does not publish its API docs, and nobody has run this adapter against the live API. Test it against your own account before you rely on it. The 1.x client stays on `1-x-stable`.
+- **Void and allowance need the original order id.** DEFAULTAPI identifies an invoice by its `saleIdentifier`, which the adapter builds from the order id. Pass `provider_options: { order_id: "ORDER_1" }`. An allowance also needs the original invoice date: `provider_options: { order_id:, invoice_date: }`.
+- **Query status is often `nil`.** The meaning of DEFAULTAPI's status codes is unknown, so the adapter does not guess. `status` is `:allowance` when the invoice has an allowance, and `nil` otherwise. The raw code is in `result.raw["status"]`.
+- **Not supported**: query by order id, the special tax rate, tax-excluded prices, and foreign currency.
+- **Anything else**: reach the other DEFAULTAPI endpoints through `provider.raw(path, params)`, for example `provider.raw("get/getInvoiceMarkInfo", { ... })`.
+- The details and the open questions are in [`docs/providers/tradevan/defaultapi.md`](docs/providers/tradevan/defaultapi.md).
 
 ## 財政部 lookups
 

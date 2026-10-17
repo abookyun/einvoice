@@ -24,13 +24,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - ECPay follows its note in `docs/providers/ecpay/b2c.md`: a cancelled (註銷) invoice queries as status `nil`, HTTP 403 is a `NetworkError` with `RATE_LIMITED`, `TransCode` 104 and 115 are `AuthError`, three more business codes from the shared fixtures are mapped, a taxable rate other than 0.05 raises `UnsupportedError` (on an allowance too), and an allowance sends tax-included unit prices and amounts from the core's breakdown, with its total and the gap of at most 1 between `ItemPrice × ItemCount` and `ItemAmount` checked before the call. A query goes by number when the reference has the number and the issue date. A query by order id for a reference with a number raises `ProviderError` when ECPay finds another number.
 - **Amego (光貿) provider**: `Einvoice::Amego::Provider`, covering the five operations, B2B, mixed tax, query by order id and mobile barcode checks. Its live spec runs against Amego's public test account (`AMEGO_LIVE=1`).
 - **ezPay (簡單行動支付) provider, experimental**: `Einvoice::EzPay::Provider`, built from ezPay's public manuals. Its encryption and CheckCode are checked against the manual's samples. Nobody has run it against ezPay, so test it against your own test shop first.
+- **Tradevan (關貿) DEFAULTAPI provider, experimental**: `Einvoice::Tradevan::DefaultAPI::Provider`, ported from the 1.x client. It covers the five operations. Nobody has run it against the live API, so test it against your own account first.
 - A live client for 財政部's 愛心碼 (donation code) dataset (`Einvoice::MOF::DonationCodes`), replacing the previously bundled static snapshot with a real-time lookup.
 
 ### Fixed
 - Core input claimed to validate a donation's 愛心碼 but only checked that `npoban` was present, so `"abc"`, `"1"`, and a 14-digit code all reached the provider unrejected. It now enforces the MIG shape (3–7 digits) up front, via a single pattern (`Donation::CODE_FORMAT`) shared with the ECPay payload check and the 財政部 client, instead of three copies that could silently drift apart.
 
 ### Removed
-- The legacy Tradevan direct-API layer (`Client`, `Configuration`, `Connection`, `Result`, and the Tradevan-specific models) — superseded by the unified core and the provider adapter model.
+- The legacy Tradevan direct-API layer (`Client`, `Configuration`, `Connection`, `Result`, and the Tradevan-specific models) — superseded by the unified core and the provider adapter model. Tradevan DEFAULTAPI is back as an adapter (see Added).
 - `lib/einvoice/donation_unit_list.json` and the scheduled workflow that refreshed it, now that donation codes are looked up live against 財政部 instead of shipped as a static snapshot.
 
 ### Changed
