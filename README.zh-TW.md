@@ -18,6 +18,8 @@
 
 正在朝 2.0 積極開發。不綁定加值中心的**核心**已經完成，包括：value 型別、`Provider` contract、capabilities、統一的錯誤類別階層、輸入檢查，以及在記憶體中執行的 `MockProvider`。第一個真正的 adapter **ECPay（綠界）** 也一起提供：五個操作加上載具驗證，都已經對 ECPay 公開的 stage API 驗證過。
 
+第二個 adapter **Amego 光貿** 提供五個操作，已經對 Amego 公開的測試帳號驗證過。
+
 其他加值中心會陸續加入。它們的涵蓋範圍和完整度會不一樣：這些加值中心的文件比較不完整，也沒有公開的測試環境。所以只依文件寫出來的 adapter，在真正上線使用並確認之前，會有一些不確定性。
 
 ## 安裝
@@ -154,6 +156,26 @@ provider = Einvoice::ECPay::Provider.new(**Einvoice::ECPay::SANDBOX)
 - **應稅發票固定是 5%。** ECPay 依課稅別決定稅率，所以其他的 `tax_rate` 會丟出 `UnsupportedError`。
 - **載具驗證**：`validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })`（`CARRIER_VALIDATION` 對應的 `Provider` 方法；ECPay 只能檢查手機條碼）、`validate_love_code("168001")`、`love_code_organ_name("168001")`。這些方法會詢問 ECPay，所以需要這個 adapter 和它的帳號。捐贈碼（愛心碼）另外可以用下面的 `Einvoice::MOF::DonationCodes`，它直接詢問財政部，不需要 adapter，也不需要帳號。
 - **其他功能**：ECPay 另外有大約 25 個 B2C endpoint（延遲開立、字軌設定、列印、通知……）。請用 `provider.raw(path, payload)` 呼叫。它會處理封包、加密和錯誤對應。
+
+### Amego 光貿
+
+```ruby
+provider = Einvoice::Amego::Provider.new(
+  ban: "12345678",          # the seller's 統一編號
+  app_key: "..."            # from Amego support, server-side only
+)
+```
+
+沒有帳號也可以試用。請用 Amego 公開的測試帳號。這組帳號由所有開發者共用，不要用在任何正式的資料上：`Einvoice::Amego::Provider.new(**Einvoice::Amego::SANDBOX)`。Amego 的測試和正式環境用同一個主機，由帳號決定是哪一個環境。
+
+- **發票號碼由 Amego 配發**（自動配號）。
+- **作廢會進入佇列。** Amego 會馬上接受作廢，但作廢後馬上查詢，結果仍可能是已開立。
+- **折讓需要原發票的買方資料和日期。** adapter 會先查詢原發票取得這些資料。如果要省略查詢（例如超過 180 天的發票），請傳 `provider_options: { buyer_identifier:, buyer_name:, invoice_date: }`。`allowance_date:` 設定折讓日期，預設是今天（Asia/Taipei）。
+- **折讓單號由你指定。** `allowance_id` 會當成 Amego 的 `AllowanceNumber` 送出（最多 16 字元，同一帳號內不能重複）。
+- **混合稅率由品項判斷**，和 ECPay 相同。
+- **不支援**：特種稅率和外幣。`tax_rate` 必須不填，或填 5%。
+- **其他功能**：其他 endpoint 請用 `provider.raw(path, payload)` 呼叫，例如 `provider.raw("/json/barcode", { barCode: "/ABC1234" })`。
+- 細節和待解問題見 [`docs/providers/amego/api.zh-TW.md`](docs/providers/amego/api.zh-TW.md)。
 
 ## 財政部查詢
 

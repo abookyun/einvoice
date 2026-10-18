@@ -16,6 +16,8 @@ Every Taiwan value-added center wraps the same MOF MIG spec; only the wire forma
 
 Under active development toward 2.0. The provider-agnostic **core** — value types, the `Provider` contract, capabilities, the normalized error hierarchy, input validation, and an in-memory `MockProvider` — is in place, and the first real adapter, **ECPay (綠界)**, ships with it: the five operations plus carrier validation, verified against ECPay's public stage API.
 
+A second adapter, **Amego 光貿**, covers the five operations and is checked against Amego's public test account.
+
 Other centers follow. Coverage and completeness for those will vary: their docs are less complete and they have no public sandbox, so an adapter built from docs alone carries some uncertainty until real production use confirms it.
 
 ## Installation
@@ -145,6 +147,26 @@ A few things worth knowing:
 - **A taxable invoice is 5%.** ECPay fixes the rate by tax type, so another `tax_rate` raises `UnsupportedError`.
 - **Carrier validation**: `validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })` (the `Provider` method behind `CARRIER_VALIDATION`; ECPay can check a mobile barcode only), `validate_love_code("168001")`, `love_code_organ_name("168001")` — these ask ECPay, so they need this adapter and its credentials. For 愛心碼 there is also `Einvoice::MOF::DonationCodes` (below), which asks 財政部 directly and needs neither.
 - **Anything else**: ECPay has ~25 further B2C endpoints (延遲開立, 字軌設定, 列印, 通知 …). Reach them through `provider.raw(path, payload)`, which applies the envelope, encryption and error mapping for you.
+
+### Amego 光貿
+
+```ruby
+provider = Einvoice::Amego::Provider.new(
+  ban: "12345678",          # the seller's 統一編號
+  app_key: "..."            # from Amego support, server-side only
+)
+```
+
+To try it without an account, use Amego's published test account (shared with every other developer, never for anything real): `Einvoice::Amego::Provider.new(**Einvoice::Amego::SANDBOX)`. Amego has one host for test and production. The account decides which one you use.
+
+- **Amego picks the invoice number** (自動配號).
+- **A void is queued.** Amego accepts it at once, but a query right after it can still report the invoice as issued.
+- **An allowance needs the original invoice's buyer and date.** The adapter queries the invoice for them. Pass `provider_options: { buyer_identifier:, buyer_name:, invoice_date: }` to skip the query, for example for an invoice older than 180 days. `allowance_date:` sets the allowance date. It defaults to today (Asia/Taipei).
+- **The allowance number is yours.** `allowance_id` is sent as Amego's `AllowanceNumber` (max 16, unique in the account).
+- **Mixed tax rates are derived** from the items, as with ECPay.
+- **Not supported**: special tax rates and foreign currency. `tax_rate` must be empty or 5%.
+- **Anything else**: reach the other endpoints through `provider.raw(path, payload)`, for example `provider.raw("/json/barcode", { barCode: "/ABC1234" })`.
+- The details and the open questions are in [`docs/providers/amego/api.md`](docs/providers/amego/api.md).
 
 ## 財政部 lookups
 

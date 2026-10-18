@@ -24,7 +24,7 @@
 
 | 加值中心 | API | 2.x 的 adapter | 筆記 |
 | --- | --- | --- | --- |
-| Amego 光貿 | 電子發票 API | 進行中 | [amego/api.zh-TW.md](amego/api.zh-TW.md) |
+| Amego 光貿 | 電子發票 API | `Einvoice::Amego::Provider` | [amego/api.zh-TW.md](amego/api.zh-TW.md) |
 | ECPay 綠界 | B2C 電子發票 API | `Einvoice::ECPay::Provider` | [ecpay/b2c.zh-TW.md](ecpay/b2c.zh-TW.md) |
 | ezPay 簡單行動支付 | 電子發票 API (EZP_INVI 1.2.2) | 進行中 | [ezpay/invoice.zh-TW.md](ezpay/invoice.zh-TW.md) |
 | Tradevan 關貿 | DEFAULTAPI | 進行中 | [tradevan/defaultapi.zh-TW.md](tradevan/defaultapi.zh-TW.md) |
@@ -35,7 +35,7 @@
 
 | | ECPay | Amego | ezPay | 關貿 DEFAULTAPI |
 | --- | --- | --- | --- | --- |
-| 驗證程度 | 已有 adapter。已錄製 stage 的實際執行（2026-08） | 公開測試帳號實際執行過（2026-10） | 只有文件。我們的加密和手冊範例吻合。沒有 live 執行過 | 1.x 程式碼在正式環境使用中。目前沒有帳號 |
+| 驗證程度 | 已有 adapter。已錄製 stage 的實際執行（2026-08） | 已有 adapter。live spec 在測試帳號上通過（2026-10） | 只有文件。我們的加密和手冊範例吻合。沒有 live 執行過 | 1.x 程式碼在正式環境使用中。目前沒有帳號 |
 | 請求格式 | JSON，`Data` 用 AES-128-CBC 加密 | 表單，`data` 放 JSON，MD5 `sign` | 表單，query string 用 AES-256-CBC 加密（十六進位） | query 參數 `v`，AES-128-CBC 補零，兩把金鑰 |
 | 測試帳號 | 公開、共用 | 公開、共用 | 自己開測試商店 | 沒有。主機未知 |
 | 作廢需要 | 號碼、發票日期、原因（最多 20） | 號碼。原因選填 | 號碼、原因（最多 6 個中文字） | 號碼、訂單編號（`saleIdentifier`） |
