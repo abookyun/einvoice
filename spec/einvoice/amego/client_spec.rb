@@ -78,6 +78,29 @@ RSpec.describe Einvoice::Amego::Client do
     end
   end
 
+  # The Python sample on https://invoice.amego.tw/api_doc/example says: "此範例
+  # md5 結果為 f53a336934b2af0589b845638d1495cc". Its data is the JSON from
+  # Python's json.dumps(indent=0), and its time is in a comment (1628136135).
+  # Amego signs the string as sent, so the JSON layout is part of the input.
+  describe "#sign, against Amego's published sample" do
+    it "gives the md5 that the sample prints" do
+      items = [{ "Description" => "測試商品1", "Quantity" => "1", "UnitPrice" => "170", "Amount" => "170",
+                 "Remark" => "", "TaxType" => "1" },
+               { "Description" => "會員折抵", "Quantity" => "1", "UnitPrice" => "-2", "Amount" => "-2",
+                 "Remark" => "", "TaxType" => "1" }]
+      invoice = { "OrderId" => "A20200817105934", "BuyerIdentifier" => "28080623", "BuyerName" => "光貿科技有限公司",
+                  "NPOBAN" => "", "ProductItem" => items, "SalesAmount" => "160", "FreeTaxSalesAmount" => "0",
+                  "ZeroTaxSalesAmount" => "0", "TaxType" => "1", "TaxRate" => "0.05", "TaxAmount" => "8",
+                  "TotalAmount" => "168" }
+      # Python's json.dumps(indent=0): a newline after each { , [ and item, and
+      # \uXXXX for every non-ASCII character.
+      data = JSON.pretty_generate(invoice, indent: "", ascii_only: true)
+      sample = described_class.new(ban: "12345678", app_key: Einvoice::Amego::SANDBOX[:app_key])
+
+      expect(sample.sign(data, "1628136135")).to eq("f53a336934b2af0589b845638d1495cc")
+    end
+  end
+
   describe ".encode_form" do
     it "writes a space as %20, which both of PHP's decoders read as a space" do
       expect(described_class.encode_form("data" => "a b+c")).to eq("data=a%20b%2Bc")
