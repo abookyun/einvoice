@@ -18,6 +18,8 @@ Under active development toward 2.0. The provider-agnostic **core** — value ty
 
 A second adapter, **Amego 光貿**, covers the five operations and is checked against Amego's public test account.
 
+An **ezPay 簡單行動支付** adapter is experimental: it is built from ezPay's public manuals, and has not run against ezPay.
+
 Other centers follow. Coverage and completeness for those will vary: their docs are less complete and they have no public sandbox, so an adapter built from docs alone carries some uncertainty until real production use confirms it.
 
 ## Installation
@@ -168,6 +170,25 @@ To try it without an account, use Amego's published test account (shared with ev
 - **Carrier validation**: `validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })` asks Amego whether a mobile barcode is registered. Amego can check a mobile barcode only. For 愛心碼, use `Einvoice::MOF::DonationCodes` (below).
 - **Anything else**: reach the other endpoints through `provider.raw(path, payload)`. Section 3 of the note lists them.
 - The details and the open questions are in [`docs/providers/amego/api.md`](docs/providers/amego/api.md).
+
+### ezPay 簡單行動支付 (experimental)
+
+```ruby
+provider = Einvoice::EzPay::Provider.new(
+  merchant_id: "...",               # 商店代號
+  hash_key: "...", hash_iv: "...",  # 32 and 16 bytes, server-side only
+  mode: :test                       # or :production
+)
+```
+
+- **Experimental.** ezPay has no shared test account, and nobody has run this adapter against ezPay. Its encryption and `CheckCode` match the samples in ezPay's manual byte for byte. Test it against your own test shop before you rely on it.
+- **A query needs a second key.** Pass `provider_options: { random_code: }` with an invoice number, or `{ total_amount: }` with an order id. Both are in the `IssueInvoiceResult`.
+- **An allowance needs the invoice's order id**: `provider_options: { order_id: }`. ezPay assigns the allowance number, so `allowance_id` is not sent.
+- **A void waits for the upload.** ezPay uploads the day's invoices the next morning, and refuses a void before that.
+- **Prices follow the category.** B2C prices include tax and B2B prices exclude it. A different `price_mode` is a `ValidationError`. Item counts and prices must be whole numbers.
+- **Not supported**: query by order id without the total, special tax rates, foreign currency, and the carrier check APIs. `tax_rate` must be empty or 5%.
+- **Anything else**: `provider.raw(path, version, fields)`, for example `provider.raw("/Api/invoice_touch_issue", "1.0", { ... })`.
+- The details and the open questions are in [`docs/providers/ezpay/invoice.md`](docs/providers/ezpay/invoice.md).
 
 ## 財政部 lookups
 
