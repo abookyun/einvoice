@@ -165,7 +165,7 @@ module Einvoice
 
       # The totals from Amego's formula (docs, section 4.3).
       def issue_totals(items, types, b2b:, exclusive:)
-        sum = ->(type) { items.zip(types).sum(Rational(0)) { |item, t| t == type ? item.amount.to_r : 0 } }
+        sum = ->(type) { items.zip(types).sum(Rational(0)) { |item, t| t == type ? decimal!(item.amount, "item amount") : 0 } }
         sales = sum.call(TaxType::TAXABLE).round
         free = sum.call(TaxType::TAX_FREE).round
         zero = sum.call(TaxType::ZERO_RATED).round
@@ -224,10 +224,10 @@ module Einvoice
         max!(item.unit.to_s, MAX_UNIT, "item unit")
         {
           "Description" => description,
-          "Quantity" => number(item.quantity),
+          "Quantity" => number(item.quantity, "item quantity"),
           "Unit" => item.unit.to_s,
-          "UnitPrice" => number(item.unit_price),
-          "Amount" => number(item.amount),
+          "UnitPrice" => number(item.unit_price, "item unit_price"),
+          "Amount" => number(item.amount, "item amount"),
           "Remark" => item.remark.to_s,
           "TaxType" => TAX_TYPE.fetch(type)
         }
@@ -252,7 +252,7 @@ module Einvoice
         taxes = items.map do |item|
           next 0 unless taxable?(item)
 
-          value = item.amount.to_r
+          value = decimal!(item.amount, "item amount")
           split ? (value - (value / (1 + TAX_RATE))).round : (value * TAX_RATE).round
         end
 
@@ -266,15 +266,16 @@ module Einvoice
       end
 
       def split_tax(items)
-        total = items.select { |item| taxable?(item) }.sum(Rational(0)) { |item| item.amount.to_r }
+        total = items.select { |item| taxable?(item) }.sum(Rational(0)) { |item| decimal!(item.amount, "item amount") }
         (total - (total / (1 + TAX_RATE)).round).round
       end
 
       def allowance_item(item, tax, split)
         description = item.description.to_s
         max!(description, MAX_DESCRIPTION, "item description")
-        amount = split ? item.amount.to_r - tax : item.amount.to_r
-        quantity = item.quantity.to_r
+        amount = decimal!(item.amount, "item amount")
+        amount -= tax if split
+        quantity = decimal!(item.quantity, "item quantity")
         unit_price = quantity.zero? ? amount : amount / quantity
         {
           "OriginalDescription" => description,
@@ -293,8 +294,8 @@ module Einvoice
       # --- helpers -----------------------------------------------------------
 
       # Amego takes up to 7 decimals. Whole numbers go out without a point.
-      def number(value)
-        rational = value.to_r
+      def number(value, field = "amount")
+        rational = decimal!(value, field)
         return rational.to_i.to_s if rational.denominator == 1
 
         format("%.7f", rational.round(7)).sub(/0+\z/, "")
@@ -310,6 +311,18 @@ module Einvoice
           invalid!("invoice date must be a Date, a Time or YYYYMMDD, got #{value.inspect}") unless
             string.match?(/\A\d{8}\z/)
           string
+        end
+      end
+
+      # A number as an exact Rational. The core does not check item numbers, so
+      # a String like "lots" can get here, and String#to_r would read it as 0.
+      def decimal!(value, field)
+        case value
+        when Integer, Rational then value.to_r
+        when Float then value.finite? ? Rational(value.to_s) : invalid!("#{field} must be a number, got #{value.inspect}")
+        when Numeric then value.to_r
+        when /\A-?\d+(\.\d+)?\z/ then Rational(value)
+        else invalid!("#{field} must be a number, got #{value.inspect}")
         end
       end
 

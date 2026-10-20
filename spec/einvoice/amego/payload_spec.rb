@@ -131,6 +131,22 @@ RSpec.describe Einvoice::Amego::Payload do
       end.to raise_error(Einvoice::ValidationError, /unit/)
     end
 
+    it "refuses an item number it cannot read, instead of reading it as 0" do
+      expect { issue(items: [{ description: "a", quantity: "lots", unit_price: 100, amount: 100 }]) }
+        .to raise_error(Einvoice::ValidationError, /item quantity must be a number, got "lots"/)
+      expect { issue(items: [{ description: "a", quantity: 1, unit_price: 100, amount: Float::INFINITY }]) }
+        .to raise_error(Einvoice::ValidationError, /item amount/)
+    end
+
+    it "reads numbers given as a String, a Float or a BigDecimal exactly" do
+      require "bigdecimal"
+      data = issue(items: [{ description: "a", quantity: "1.5", unit_price: BigDecimal("66.7"), amount: 100.05 },
+                           { description: "b", quantity: 1, unit_price: 0.1, amount: -0.05 }])
+      expect(data["ProductItem"].map { |item| item.values_at("Quantity", "UnitPrice", "Amount") })
+        .to eq([%w[1.5 66.7 100.05], %w[1 0.1 -0.05]])
+      expect(data["TotalAmount"]).to eq(100)
+    end
+
     it "writes decimals with up to 7 places" do
       data = issue(items: [{ description: "a", quantity: 3, unit_price: Rational(100, 3), amount: 100 }])
       expect(data["ProductItem"].first["UnitPrice"]).to eq("33.3333333")
