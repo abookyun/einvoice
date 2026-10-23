@@ -4,9 +4,9 @@ English | [繁體中文](defaultapi.zh-TW.md)
 
 ## 1. Status and sources
 
-> **Trust:** no public docs and no account. The API runs in production through the 1.x client (`[prod]`), but nothing here was run against it in 2026. Sections 4.2 and 6.4 are proposals.
+> **Trust:** no public docs and no account. The API runs in production through the 1.x client (`[prod]`). The 2.x adapter is experimental: it passes the shared contract against our fake, but nothing here was run against the live API in 2026.
 
-This is the API that the 1.x client wraps. All paths start with `/DEFAULTAPI/`. The 2.x line has no adapter for it yet. So sections 4.2 and 6.4 are **proposals**.
+This is the API that the 1.x client wraps. All paths start with `/DEFAULTAPI/`. The 2.x line has an **experimental** adapter for it: `Einvoice::Tradevan::DefaultAPI::Provider` (`lib/einvoice/tradevan/`). Sections 4.2 and 6.4 describe what that adapter does `[code]`.
 
 The API document belongs to 關貿網路 Tradevan. Tradevan does not publish it, and it declined to send us a newer version. So there is no public link. We built this note from what the 1.x line has, and from one production report. Nobody in this project has a Tradevan account today, so nothing here is verified against the live API in 2026.
 
@@ -19,6 +19,7 @@ Tradevan has newer API versions. This note covers only DEFAULTAPI.
 | `[rules]` | The 1.x validators: `IssueData`, `IssueItem`, `VoidData` and `issue_data_validator.rb` ([v1.5.0](https://github.com/abookyun/einvoice/tree/v1.5.0/lib/einvoice/tradevan)) | 2016 | The only source for `issueData` and `voidData` fields and their rules. |
 | `[1x-code]` | The 1.x provider, connection and response decoder | 2016, still in production use | How the client really builds requests and reads responses. Where `[1x-code]` and `[summary]` disagree, `[1x-code]` has run in production. |
 | `[prod]` | PR [#38](https://github.com/abookyun/einvoice/pull/38), from a production user | 2026-09 | The API still works in 2026. Issue, void, allowance and void allowance are in use. The API rejects unknown fields (see 2.4). |
+| `[code]` | The 2.x adapter (`lib/einvoice/tradevan/`) and its fake (`spec/support/fake_tradevan.rb`) | 2026-10 | What the adapter does. Not proof of what the API does. |
 | `[readme-2026]` | Allowance examples in the 1.x README, from 2026 ([199b803](https://github.com/abookyun/einvoice/commit/199b803)) | 2026-08 | Requests only. They were written from `[rules]`, not from real traffic. |
 
 The 1.x specs are not a source. Their responses are hand-written stubs from 2026.
@@ -142,20 +143,20 @@ Other endpoints. An adapter can offer them through a `raw` method:
 
 ### 4.1 Operations
 
-| Unified | Endpoint | `provider_options` (proposed) | Note |
+| Unified | Endpoint | `provider_options` | Note |
 | --- | --- | --- | --- |
 | `issue` | `post/issue`, type `I` | none | Merchant settings go in the constructor (below) |
 | `void` | `post/cancel`, type `I` | `order_id` or `sale_identifier` (M) | `VoidInvoiceInput` has no order id |
 | `allowance` | `post/issue`, type `A` | `order_id`, `invoice_date` | The response is unknown |
 | `void_allowance` | `post/cancel`, type `A` | none | |
 | `query` by number | `get/searchInvoiceDetail` | none | `status` is unknown |
-| `query` by order id | `get/searchInvoiceInfoByTransactionnumber` | none | The response is unknown |
+| `query` by order id | `get/searchInvoiceInfoByTransactionnumber` | none | Not supported: the response is unknown, so the adapter raises `UnsupportedError`. Reach it through `raw` |
 
-Proposed constructor settings: `acnt`, `acntp`, `key1`, `key2`, `endpoint` (no default, see 2.1), `company_un`, `org_id`, `paper_print_mode`, `invoice_alarm_mode`, `invoice_paper_returned`, `allowance_paper_returned`, and `member_carrier_type` (the merchant's own carrier code).
+Constructor settings: `acnt`, `acntp`, `key1`, `key2`, `endpoint` (no default, see 2.1), `company_un`, `org_id`, `paper_print_mode`, `invoice_alarm_mode`, `invoice_paper_returned`, `allowance_paper_returned`, and `member_carrier_type` (the merchant's own carrier code).
 
 ### 4.2 Fields
 
-All rows are proposals.
+This is what the adapter does `[code]`. Where it differs from the first proposal, the row says so.
 
 #### `issue`
 
@@ -173,13 +174,13 @@ All rows are proposals.
 | `buyer.address` | `receiverAddrRoad` | |
 | `buyer.email` | `receiverEmail` | |
 | `buyer.phone` | `receiverMobile` | Max 15 |
-| `donation.npoban` | `donate` `Y`, `donationUnit` | Else `donate` `N` |
+| `donation.npoban` | `donate` `Y`, `donationUnit` | Else `donate` `N`. A B2B invoice without a carrier leaves `donate` out, because `donate` `N` makes a carrier required (changed) |
 | `carrier.type` | `carrierType` | `MOBILE_BARCODE` `3J0002`, `CITIZEN_CERTIFICATE` `CQ0001`, `MEMBER` the constructor's `member_carrier_type` |
-| `carrier.code` | `carrierId`, `carrierIdHidden` | Both the same |
+| `carrier.code` | `carrierId`, `carrierIdHidden` | Both the same. A `MEMBER` carrier without a code uses the buyer's email, then phone (added) |
 | `items[]` | `itemList` | See below |
 | `remark` | (none) | `mainRemark` exists only for type `G`. Dropped |
 | `tax_type` `SPECIAL` | (none) | No code (6.1). `UnsupportedError` |
-| `price_mode` `TAX_EXCLUSIVE` | (none) | `itemTotal` includes tax. `ValidationError`, or convert. Not decided |
+| `price_mode` `TAX_EXCLUSIVE` | (none) | `itemTotal` includes tax, so this is a `ValidationError` |
 | `currency` | (none) | Not TWD: `UnsupportedError` |
 
 Items:
@@ -231,7 +232,7 @@ Result: `invoice_number` from the input, `status` `VOIDED`, after `voidStatus` `
 | `provider_options[:invoice_date]`, else `date` | `itemList[].invoiceDate` | M. No default. `date` as the invoice date follows the ECPay adapter |
 | `items[]` | `itemList[]` | As for issue, plus `itemExclude` (tax excluded) |
 
-Result: unknown. The proposal is to read `allowanceNumber` from the response, as the issue response has that field. If it is empty, raise `ProviderError` with the raw response.
+Result: no source shows the type `A` response. The adapter reads `allowanceNumber`, as the type `I` response has that field, and `allowanceDate` for the date. If `allowanceNumber` is empty, it raises `ProviderError` with the raw response.
 
 #### `void_allowance`
 
@@ -247,7 +248,7 @@ Result: unknown. The proposal is to read `allowanceNumber` from the response, as
 | Unified | Tradevan | Rule or default |
 | --- | --- | --- |
 | `invoice_number` | `searchInvoiceDetail`: `invoiceNumber` | |
-| `order_id` | `searchInvoiceInfoByTransactionnumber`: `companyUn`, `orgId`, `transactionNumber` | |
+| `order_id` | `searchInvoiceInfoByTransactionnumber`: `companyUn`, `orgId`, `transactionNumber` | Not supported (`UnsupportedError`) |
 
 Result, from `searchInvoiceDetail` `[readme]`:
 
@@ -271,12 +272,14 @@ The unified `AmountSummary` must satisfy `sales + tax = total`.
 - Amounts sit on each item: `itemTotal` (tax included) and an optional `tax` `[rules]`.
 - The header `total` must equal the sum of `itemTotal` `[rules]`.
 - In `[readme]`, `itemTotal` 20000 and `tax` 952. The response gives `texclusiveAmount` 19048, `tax` 952, `inclusiveAmount` 20000. So Tradevan splits the tax: `20000 / 1.05 = 19047.6`, rounded to 19048.
-- Proposal: send `itemTotal` with tax, and leave the item `tax` out unless the caller needs it. Tradevan computes the split.
+- The adapter sends `itemTotal` with tax, and leaves the item `tax` out. Tradevan computes the split.
 
 **Allowance.**
 
 - The header has `allowanceExclusiveAmount`, `allowanceTax` and `allowanceInclusiveAmount` `[rules]`. Each item has `itemExclude` (tax excluded) and `itemTotal`.
-- Proposal: map `sales_amount`, `tax_amount` and `total_amount` to the three header fields. For a B2C allowance with `tax 0` (the contract's shape), split the tax as `tax = total - round(total / 1.05)`. This is the same core question as for Amego and ezPay.
+- The adapter maps `sales_amount`, `tax_amount` and `total_amount` to the three header fields.
+- When every item is taxable and `tax_amount` is `0` (the contract's B2C shape), the tax is inside the total. The adapter splits it: `exclusive = round(total / 1.05)`, `tax = total - exclusive`. This is the same core question as for Amego and ezPay.
+- Each item's `itemExclude` is its share of the exclusive total, by amount. The last item takes the rounding difference, so the items add up.
 
 **Query.** `exclusiveAmount`, `tax` and `total` map directly.
 
@@ -284,10 +287,10 @@ The unified `AmountSummary` must satisfy `sales + tax = total`.
 
 | Tradevan | Unified `InvoiceStatus` |
 | --- | --- |
-| `hasAllowance` `Y` | `ALLOWANCE` (proposed) |
-| `status` `I` / `V` | unknown (6.3) |
+| `hasAllowance` `Y` | `ALLOWANCE` |
+| `status` `I` / `V` | `nil`. The meaning is unknown (6.3) |
 
-`status` decides between `ISSUED` and `VOIDED`, but we do not know which code means what. A wrong guess reports a voided invoice as issued. Until a real response is known, an adapter should not declare `QUERY`, or should return `raw` and leave `status` empty. `status` is required in `QueryInvoiceResult`, so this needs a decision.
+`status` decides between `ISSUED` and `VOIDED`, but we do not know which code means what. A wrong guess reports a voided invoice as issued. So the adapter declares `QUERY` but does not guess: `status` is `nil` unless `hasAllowance` is `Y`. The raw code stays in `raw["status"]`.
 
 ### 4.5 Timing
 
@@ -295,17 +298,17 @@ Unknown. The sources say nothing about upload times or void deadlines. The MOF r
 
 ### 4.6 Capabilities
 
-| Capability | API | Note |
-| --- | --- | --- |
-| `ISSUE`, `VOID`, `VOID_ALLOWANCE` | yes | In production use `[prod]` |
-| `ALLOWANCE` | yes | In production use `[prod]`, but the response is unknown |
-| `QUERY` | partly | The status codes are unknown |
-| `B2B` | yes | `buyerUn` |
-| `MIXED_TAX` | unknown | Items have their own `taxType`, so it may work (inferred) |
-| `QUERY_BY_ORDER_ID` | partly | Only in `[1x-code]`. The response is unknown |
-| `SCHEDULED_ISSUE` | no | |
-| `CARRIER_VALIDATION` | no | No barcode check. `Einvoice::MOF::DonationCodes` covers donation codes |
-| `FOREIGN_CURRENCY` | no | No currency field |
+| Capability | API | Adapter | Note |
+| --- | --- | --- | --- |
+| `ISSUE`, `VOID`, `VOID_ALLOWANCE` | yes | yes | In production use `[prod]` |
+| `ALLOWANCE` | yes | yes | In production use `[prod]`, but the response is unknown |
+| `QUERY` | partly | yes | The status codes are unknown, so `status` is often `nil` |
+| `B2B` | yes | yes | `buyerUn` |
+| `MIXED_TAX` | unknown | no | Items have their own `taxType`, so it may work (inferred) |
+| `QUERY_BY_ORDER_ID` | partly | no | Only in `[1x-code]`. The response is unknown |
+| `SCHEDULED_ISSUE` | no | no | |
+| `CARRIER_VALIDATION` | no | no | No barcode check. `Einvoice::MOF::DonationCodes` covers donation codes |
+| `FOREIGN_CURRENCY` | no | no | No currency field |
 
 ### 4.7 Against the MIG
 
@@ -320,9 +323,10 @@ Unknown. The sources say nothing about upload times or void deadlines. The MOF r
 ### 4.8 Contract and live tests
 
 - **No live tests.** We have no account and no host.
-- **A fake only.** An offline fake can follow the 1.x specs and the `[readme]` examples. Its failure texts would be our guesses (6.4), so a passing contract proves only that the guesses are classified the same way.
-- **Void needs the order id.** The contract voids with only `invoice_number`. With the proposed prefix rule, the adapter cannot rebuild `saleIdentifier` without the order id. The adapter could remember the order ids of the invoices it issued, or the contract could pass `provider_options`.
-- **Allowance needs the invoice date and order id.** The same problem.
+- **A fake only.** `spec/support/fake_tradevan.rb` follows the 1.x code and the `[readme]` examples. It uses two different keys, so a mix-up of `key1` and `key2` shows. It rejects keys outside the schema, as `[prod]` reports. Its failure texts are our guesses (6.4), so a passing contract proves only that the guesses are classified the same way.
+- **Void and allowance need the order id and the invoice date.** The contract passes them with its `follow_up` option: `->(issued) { { order_id: issued.order_id, invoice_date: issued.invoice_date } }`.
+- **Unknown allowance number.** The adapter checks that an allowance number has 16 characters before the call. So the contract gets a 16-character `unknown_allowance_number` (`ABCDE20260101999`).
+- **Encryption.** `crypto_spec.rb` compares the cipher text byte for byte with output from the 1.x code.
 - **Query status.** The contract checks `found.amount.total_amount` but not the status, so it can pass while the status codes stay unknown.
 
 ## 5. Field reference
@@ -521,7 +525,7 @@ The MOF's own status list (E0502 `CurrentStatus`) uses the digits `1` to `7` `[m
 
 There is no error code list. A failure has `Success` `N` or `E`, and a free-text `failReason` or `Message`. The only failure text on record is `duplicated`, from a 1.x spec stub, not from a real response.
 
-Proposed classification. Everything in it is a guess until real failure texts are known:
+The adapter's classification `[code]`. Everything in it is a guess until real failure texts are known:
 
 | Case | Unified error | `Reason` |
 | --- | --- | --- |
@@ -547,4 +551,4 @@ The fallback is `ProviderError`, not `ValidationError`. With so few samples, an 
 8. What do the values of `paperPrintMode` and `invoiceAlarmMode` mean? What is `sellTargetCode`?
 9. Which version of Tradevan's document did `[summary]` summarize? It was not recorded.
 10. How does Tradevan fill the MIG zero rated fields and the void reason, which DEFAULTAPI does not send?
-11. **Contract:** void and allowance need the order id, which the unified inputs do not carry. The same question as for ezPay.
+11. **Core:** void and allowance need the order id, which the unified inputs do not carry. The contract now passes it with `follow_up`, but callers still have to pass it in `provider_options`. The same question as for ezPay.

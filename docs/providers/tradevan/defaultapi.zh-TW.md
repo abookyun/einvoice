@@ -6,9 +6,9 @@
 
 ## 1. 狀態與來源
 
-> **可信度：** 沒有公開文件，也沒有帳號。這個 API 透過 1.x client 在正式環境使用中（`[prod]`），但這裡的內容在 2026 年都沒有對它實際執行過。4.2 和 6.4 是建議。
+> **可信度：** 沒有公開文件，也沒有帳號。這個 API 透過 1.x client 在正式環境使用中（`[prod]`）。2.x 的 adapter 是實驗性質：它對我們的 fake 通過了 shared contract，但這裡的內容在 2026 年都沒有對 live API 實際執行過。
 
-這是 1.x client 包裝的 API。所有路徑都以 `/DEFAULTAPI/` 開頭。2.x 還沒有對應的 adapter。所以 4.2 和 6.4 是**建議**。
+這是 1.x client 包裝的 API。所有路徑都以 `/DEFAULTAPI/` 開頭。2.x 有一個**實驗性質**的 adapter：`Einvoice::Tradevan::DefaultAPI::Provider`（`lib/einvoice/tradevan/`）。4.2 和 6.4 說明這個 adapter 的做法 `[code]`。
 
 API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒絕提供較新的版本給我們。所以沒有公開的連結。本筆記依據 1.x 現有的資料，以及一份正式環境使用者的回報整理而成。本專案目前沒有人有關貿帳號，所以這裡的內容在 2026 年都沒有對 live API 驗證過。
 
@@ -21,6 +21,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | `[rules]` | 1.x 的 validator：`IssueData`、`IssueItem`、`VoidData` 和 `issue_data_validator.rb`（[v1.5.0](https://github.com/abookyun/einvoice/tree/v1.5.0/lib/einvoice/tradevan)） | 2016 | `issueData` 和 `voidData` 欄位及其規則的唯一來源。 |
 | `[1x-code]` | 1.x 的 provider、connection 和回應解碼器 | 2016，仍在正式環境使用 | client 實際怎麼組請求、怎麼讀回應。`[1x-code]` 和 `[summary]` 不一致時，`[1x-code]` 是在正式環境執行過的。 |
 | `[prod]` | PR [#38](https://github.com/abookyun/einvoice/pull/38)，來自正式環境的使用者 | 2026-09 | 這個 API 在 2026 年仍然可以用。開立、作廢、折讓和作廢折讓都在使用中。API 會拒絕不認得的欄位（見 2.4）。 |
+| `[code]` | 2.x adapter（`lib/einvoice/tradevan/`）和它的 fake（`spec/support/fake_tradevan.rb`） | 2026-10 | adapter 怎麼做。不能證明 API 實際的行為。 |
 | `[readme-2026]` | 1.x README 中的折讓範例，2026 年加入（[199b803](https://github.com/abookyun/einvoice/commit/199b803)） | 2026-08 | 只有請求。依 `[rules]` 寫成，不是來自真實流量。 |
 
 1.x 的 spec 不算是來源。它們的回應是 2026 年手寫的 stub。
@@ -144,20 +145,20 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 
 ### 4.1 操作
 
-| Unified | Endpoint | `provider_options`（建議） | 說明 |
+| Unified | Endpoint | `provider_options` | 說明 |
 | --- | --- | --- | --- |
 | `issue` | `post/issue`，type `I` | 無 | 特店設定放在 constructor（見下方） |
 | `void` | `post/cancel`，type `I` | `order_id` 或 `sale_identifier`（M） | `VoidInvoiceInput` 沒有訂單編號 |
 | `allowance` | `post/issue`，type `A` | `order_id`、`invoice_date` | 回應格式未知 |
 | `void_allowance` | `post/cancel`，type `A` | 無 | |
 | 用號碼 `query` | `get/searchInvoiceDetail` | 無 | `status` 的意思未知 |
-| 用訂單編號 `query` | `get/searchInvoiceInfoByTransactionnumber` | 無 | 回應格式未知 |
+| 用訂單編號 `query` | `get/searchInvoiceInfoByTransactionnumber` | 無 | 不支援：回應格式未知，所以 adapter 丟出 `UnsupportedError`。可以透過 `raw` 呼叫 |
 
-建議的 constructor 設定：`acnt`、`acntp`、`key1`、`key2`、`endpoint`（沒有預設值，見 2.1）、`company_un`、`org_id`、`paper_print_mode`、`invoice_alarm_mode`、`invoice_paper_returned`、`allowance_paper_returned`，以及 `member_carrier_type`（特店自己的載具代碼）。
+constructor 設定：`acnt`、`acntp`、`key1`、`key2`、`endpoint`（沒有預設值，見 2.1）、`company_un`、`org_id`、`paper_print_mode`、`invoice_alarm_mode`、`invoice_paper_returned`、`allowance_paper_returned`，以及 `member_carrier_type`（特店自己的載具代碼）。
 
 ### 4.2 欄位
 
-下面每一列都是建議。
+下表是 adapter 的實際做法 `[code]`。和最初的建議不同的地方，會在該列註明。
 
 #### `issue`
 
@@ -175,13 +176,13 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | `buyer.address` | `receiverAddrRoad` | |
 | `buyer.email` | `receiverEmail` | |
 | `buyer.phone` | `receiverMobile` | 最多 15 |
-| `donation.npoban` | `donate` `Y`、`donationUnit` | 否則 `donate` 為 `N` |
+| `donation.npoban` | `donate` `Y`、`donationUnit` | 否則 `donate` 為 `N`。沒有載具的 B2B 發票不送 `donate`，因為 `donate` 為 `N` 時一定要有載具（已改） |
 | `carrier.type` | `carrierType` | `MOBILE_BARCODE` `3J0002`、`CITIZEN_CERTIFICATE` `CQ0001`、`MEMBER` 用 constructor 的 `member_carrier_type` |
-| `carrier.code` | `carrierId`、`carrierIdHidden` | 兩者相同 |
+| `carrier.code` | `carrierId`、`carrierIdHidden` | 兩者相同。沒有 code 的 `MEMBER` 載具，依序用買方的 email、電話（新增） |
 | `items[]` | `itemList` | 見下方 |
 | `remark` | （無） | `mainRemark` 只用在 type `G`。捨棄 |
 | `tax_type` `SPECIAL` | （無） | 沒有代碼（6.1）。丟出 `UnsupportedError` |
-| `price_mode` `TAX_EXCLUSIVE` | （無） | `itemTotal` 含稅。丟出 `ValidationError` 或自行換算，尚未決定 |
+| `price_mode` `TAX_EXCLUSIVE` | （無） | `itemTotal` 含稅，所以丟出 `ValidationError` |
 | `currency` | （無） | 不是 TWD 時丟出 `UnsupportedError` |
 
 品項：
@@ -233,7 +234,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | `provider_options[:invoice_date]`，沒有就用 `date` | `itemList[].invoiceDate` | M。沒有預設值。把 `date` 當成發票日期，是沿用 ECPay adapter 的做法 |
 | `items[]` | `itemList[]` | 和開立相同，另外加上 `itemExclude`（未稅） |
 
-結果：未知。建議從回應讀取 `allowanceNumber`，因為開立的回應有這個欄位。如果是空的，就丟出 `ProviderError`，並附上原始回應。
+結果：沒有任何來源顯示 type `A` 的回應。adapter 讀取 `allowanceNumber`（type `I` 的回應有這個欄位），日期讀取 `allowanceDate`。如果 `allowanceNumber` 是空的，就丟出 `ProviderError`，並附上原始回應。
 
 #### `void_allowance`
 
@@ -249,7 +250,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | Unified | 關貿 | 規則或預設值 |
 | --- | --- | --- |
 | `invoice_number` | `searchInvoiceDetail`：`invoiceNumber` | |
-| `order_id` | `searchInvoiceInfoByTransactionnumber`：`companyUn`、`orgId`、`transactionNumber` | |
+| `order_id` | `searchInvoiceInfoByTransactionnumber`：`companyUn`、`orgId`、`transactionNumber` | 不支援（`UnsupportedError`） |
 
 結果，取自 `searchInvoiceDetail` `[readme]`：
 
@@ -273,12 +274,14 @@ unified 的 `AmountSummary` 必須符合 `sales + tax = total`。
 - 金額放在每個品項上：`itemTotal`（含稅）和選填的 `tax` `[rules]`。
 - 表頭的 `total` 必須等於 `itemTotal` 的加總 `[rules]`。
 - `[readme]` 中，`itemTotal` 為 20000、`tax` 為 952。回應的 `texclusiveAmount` 為 19048、`tax` 為 952、`inclusiveAmount` 為 20000。所以關貿會自己拆出稅額：`20000 / 1.05 = 19047.6`，四捨五入為 19048。
-- 建議：送含稅的 `itemTotal`。除非呼叫端需要，否則不送品項的 `tax`，由關貿計算拆分。
+- adapter 送含稅的 `itemTotal`，不送品項的 `tax`，由關貿計算拆分。
 
 **折讓。**
 
 - 表頭有 `allowanceExclusiveAmount`、`allowanceTax` 和 `allowanceInclusiveAmount` `[rules]`。每個品項有 `itemExclude`（未稅）和 `itemTotal`。
-- 建議：把 `sales_amount`、`tax_amount` 和 `total_amount` 對應到這三個表頭欄位。如果是 `tax 0` 的 B2C 折讓（contract 的形式），用 `tax = total - round(total / 1.05)` 拆出稅額。這和 Amego、ezPay 遇到的是同一個 core 問題。
+- adapter 把 `sales_amount`、`tax_amount` 和 `total_amount` 對應到這三個表頭欄位。
+- 所有品項都是應稅，而且 `tax_amount` 為 `0` 時（contract 的 B2C 形式），稅額包含在總額裡。adapter 會拆出稅額：`exclusive = round(total / 1.05)`、`tax = total - exclusive`。這和 Amego、ezPay 遇到的是同一個 core 問題。
+- 每個品項的 `itemExclude` 依金額比例分攤未稅總額。最後一個品項承擔四捨五入的差額，讓品項加總一致。
 
 **查詢。** `exclusiveAmount`、`tax` 和 `total` 直接對應。
 
@@ -286,10 +289,10 @@ unified 的 `AmountSummary` 必須符合 `sales + tax = total`。
 
 | 關貿 | Unified `InvoiceStatus` |
 | --- | --- |
-| `hasAllowance` `Y` | `ALLOWANCE`（建議） |
-| `status` `I` / `V` | 未知（6.3） |
+| `hasAllowance` `Y` | `ALLOWANCE` |
+| `status` `I` / `V` | `nil`。意思未知（6.3） |
 
-`status` 決定是 `ISSUED` 還是 `VOIDED`，但我們不知道哪個代碼代表哪一個。猜錯的話，會把已作廢的發票回報成已開立。在知道真實回應之前，adapter 不應該宣告 `QUERY`，或是只回傳 `raw` 並讓 `status` 留空。但 `QueryInvoiceResult` 的 `status` 是必填，所以這點需要決定。
+`status` 決定是 `ISSUED` 還是 `VOIDED`，但我們不知道哪個代碼代表哪一個。猜錯的話，會把已作廢的發票回報成已開立。所以 adapter 宣告 `QUERY`，但不猜：除非 `hasAllowance` 為 `Y`，否則 `status` 是 `nil`。原始代碼保留在 `raw["status"]`。
 
 ### 4.5 時限
 
@@ -297,17 +300,17 @@ unified 的 `AmountSummary` 必須符合 `sales + tax = total`。
 
 ### 4.6 Capabilities
 
-| Capability | API | 說明 |
-| --- | --- | --- |
-| `ISSUE`、`VOID`、`VOID_ALLOWANCE` | 支援 | 正式環境使用中 `[prod]` |
-| `ALLOWANCE` | 支援 | 正式環境使用中 `[prod]`，但回應格式未知 |
-| `QUERY` | 部分支援 | 狀態代碼的意思未知 |
-| `B2B` | 支援 | `buyerUn` |
-| `MIXED_TAX` | 未知 | 品項有各自的 `taxType`，所以或許可以（推論） |
-| `QUERY_BY_ORDER_ID` | 部分支援 | 只出現在 `[1x-code]`。回應格式未知 |
-| `SCHEDULED_ISSUE` | 不支援 | |
-| `CARRIER_VALIDATION` | 不支援 | 沒有手機條碼檢查。捐贈碼可以用 `Einvoice::MOF::DonationCodes` |
-| `FOREIGN_CURRENCY` | 不支援 | 沒有幣別欄位 |
+| Capability | API | Adapter | 說明 |
+| --- | --- | --- | --- |
+| `ISSUE`、`VOID`、`VOID_ALLOWANCE` | 支援 | 宣告 | 正式環境使用中 `[prod]` |
+| `ALLOWANCE` | 支援 | 宣告 | 正式環境使用中 `[prod]`，但回應格式未知 |
+| `QUERY` | 部分支援 | 宣告 | 狀態代碼的意思未知，所以 `status` 常常是 `nil` |
+| `B2B` | 支援 | 宣告 | `buyerUn` |
+| `MIXED_TAX` | 未知 | 不宣告 | 品項有各自的 `taxType`，所以或許可以（推論） |
+| `QUERY_BY_ORDER_ID` | 部分支援 | 不宣告 | 只出現在 `[1x-code]`。回應格式未知 |
+| `SCHEDULED_ISSUE` | 不支援 | 不宣告 | |
+| `CARRIER_VALIDATION` | 不支援 | 不宣告 | 沒有手機條碼檢查。捐贈碼可以用 `Einvoice::MOF::DonationCodes` |
+| `FOREIGN_CURRENCY` | 不支援 | 不宣告 | 沒有幣別欄位 |
 
 ### 4.7 與 MIG 的差異
 
@@ -322,9 +325,10 @@ unified 的 `AmountSummary` 必須符合 `sales + tax = total`。
 ### 4.8 Contract 與 live 測試
 
 - **沒有 live 測試。** 我們沒有帳號，也沒有主機。
-- **只能用 fake。** 離線的 fake 可以依照 1.x 的 spec 和 `[readme]` 的範例。但它的失敗訊息是我們猜的（6.4），所以 contract 通過只能證明「猜的訊息被一致地分類了」。
-- **作廢需要訂單編號。** contract 作廢時只送 `invoice_number`。依照建議的前綴規則，adapter 沒有訂單編號就組不出 `saleIdentifier`。adapter 可以記住自己開過的發票的訂單編號，或者 contract 改成傳 `provider_options`。
-- **折讓需要發票日期和訂單編號。** 同樣的問題。
+- **只能用 fake。** `spec/support/fake_tradevan.rb` 依照 1.x 的程式碼和 `[readme]` 的範例寫成。它的兩把金鑰用不同的值，所以 `key1` 和 `key2` 用反了會被發現。它會拒絕 schema 以外的欄位，和 `[prod]` 的回報一致。但它的失敗訊息是我們猜的（6.4），所以 contract 通過只能證明「猜的訊息被一致地分類了」。
+- **作廢和折讓需要訂單編號和發票日期。** contract 用 `follow_up` 選項傳入：`->(issued) { { order_id: issued.order_id, invoice_date: issued.invoice_date } }`。
+- **不存在的折讓單號。** adapter 會在呼叫前檢查折讓單號是否為 16 字元。所以 contract 傳入 16 字元的 `unknown_allowance_number`（`ABCDE20260101999`）。
+- **加密。** `crypto_spec.rb` 把密文和 1.x 程式碼的輸出逐 byte 比對。
 - **查詢的狀態。** contract 檢查 `found.amount.total_amount`，但不檢查狀態。所以即使狀態代碼的意思還不清楚，也能通過。
 
 ## 5. 欄位參考
@@ -523,7 +527,7 @@ type `I` 的回應 `[readme]`：
 
 沒有錯誤代碼表。失敗時 `Success` 為 `N` 或 `E`，並附上自由文字的 `failReason` 或 `Message`。目前唯一有記錄的失敗訊息是 `duplicated`，而且來自 1.x 的 spec stub，不是真實的回應。
 
-建議的分類。在知道真實的失敗訊息之前，下表全部都是猜測：
+adapter 使用的分類 `[code]`。在知道真實的失敗訊息之前，下表全部都是猜測：
 
 | 情況 | Unified 錯誤 | `Reason` |
 | --- | --- | --- |
@@ -549,4 +553,4 @@ type `I` 的回應 `[readme]`：
 8. `paperPrintMode` 和 `invoiceAlarmMode` 的各個值是什麼意思？`sellTargetCode` 是什麼？
 9. `[summary]` 整理的是關貿文件的哪一個版本？當時沒有記錄。
 10. DEFAULTAPI 沒有送零稅率欄位和作廢原因，關貿怎麼補上 MIG 要求的這些欄位？
-11. **Contract：** 作廢和折讓需要訂單編號，但 unified 輸入沒有這個欄位。和 ezPay 是同一個問題。
+11. **Core：** 作廢和折讓需要訂單編號，但 unified 輸入沒有這個欄位。contract 現在用 `follow_up` 傳入，但呼叫端仍然要自己放在 `provider_options`。和 ezPay 是同一個問題。

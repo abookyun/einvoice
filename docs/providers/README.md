@@ -22,10 +22,10 @@ The MOF also runs an open data API. `Einvoice::MOF::DonationCodes` uses it to ch
 
 | Provider | API | Adapter in 2.x | Note |
 | --- | --- | --- | --- |
-| Amego 光貿 | 電子發票 API | none yet | [amego/api.md](amego/api.md) |
+| Amego 光貿 | 電子發票 API | in progress | [amego/api.md](amego/api.md) |
 | ECPay 綠界 | B2C 電子發票 API | `Einvoice::ECPay::Provider` | [ecpay/b2c.md](ecpay/b2c.md) |
-| ezPay 簡單行動支付 | 電子發票 API (EZP_INVI 1.2.2) | none yet | [ezpay/invoice.md](ezpay/invoice.md) |
-| Tradevan 關貿 | DEFAULTAPI | none yet | [tradevan/defaultapi.md](tradevan/defaultapi.md) |
+| ezPay 簡單行動支付 | 電子發票 API (EZP_INVI 1.2.2) | in progress | [ezpay/invoice.md](ezpay/invoice.md) |
+| Tradevan 關貿 | DEFAULTAPI | in progress | [tradevan/defaultapi.md](tradevan/defaultapi.md) |
 
 ### Providers at a glance
 
@@ -33,7 +33,7 @@ Details and sources are in each note.
 
 | | ECPay | Amego | ezPay | Tradevan DEFAULTAPI |
 | --- | --- | --- | --- | --- |
-| Verified | Adapter built. Stage runs recorded (2026-08) | Docs only | Docs only | 1.x code in production. No account today |
+| Verified | Adapter built. Stage runs recorded (2026-08) | Public test account runs (2026-10) | Docs only. Our crypto matches the manual's samples. No live run | 1.x code in production. No account today |
 | Request | JSON, `Data` in AES-128-CBC | Form, JSON in `data`, MD5 `sign` | Form, query string in AES-256-CBC (hex) | Query param `v`, AES-128-CBC with zero padding, two keys |
 | Test account | Public, shared | Public, shared | Own test shop | None. Hosts unknown |
 | Void needs | Number, invoice date, reason (max 20) | Number. Reason optional | Number, reason (max 6 Chinese chars) | Number, order id (`saleIdentifier`) |
@@ -81,6 +81,8 @@ Each provider note uses these sections, in this order. A section can be short, b
 ### 2. Connection
 
 Hosts, credentials, test accounts, signing or encryption, and the request and response envelopes. Give one real or documented example of a full request and a full response, with the payload shown both before and after encryption if that helps.
+
+**Official test vectors.** List every sample in the docs that gives both the inputs and the output of a signature, an encryption or a check code: the key, the input, and the expected result. Say which spec uses it. If the docs have none, say so. A test vector checks the wire format without a test account, so look through the appendices for one before you write the adapter.
 
 ### 3. Operations
 

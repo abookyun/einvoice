@@ -24,10 +24,10 @@
 
 | 加值中心 | API | 2.x 的 adapter | 筆記 |
 | --- | --- | --- | --- |
-| Amego 光貿 | 電子發票 API | 尚未實作 | [amego/api.zh-TW.md](amego/api.zh-TW.md) |
+| Amego 光貿 | 電子發票 API | 進行中 | [amego/api.zh-TW.md](amego/api.zh-TW.md) |
 | ECPay 綠界 | B2C 電子發票 API | `Einvoice::ECPay::Provider` | [ecpay/b2c.zh-TW.md](ecpay/b2c.zh-TW.md) |
-| ezPay 簡單行動支付 | 電子發票 API (EZP_INVI 1.2.2) | 尚未實作 | [ezpay/invoice.zh-TW.md](ezpay/invoice.zh-TW.md) |
-| Tradevan 關貿 | DEFAULTAPI | 尚未實作 | [tradevan/defaultapi.zh-TW.md](tradevan/defaultapi.zh-TW.md) |
+| ezPay 簡單行動支付 | 電子發票 API (EZP_INVI 1.2.2) | 進行中 | [ezpay/invoice.zh-TW.md](ezpay/invoice.zh-TW.md) |
+| Tradevan 關貿 | DEFAULTAPI | 進行中 | [tradevan/defaultapi.zh-TW.md](tradevan/defaultapi.zh-TW.md) |
 
 ### 四家比較
 
@@ -35,7 +35,7 @@
 
 | | ECPay | Amego | ezPay | 關貿 DEFAULTAPI |
 | --- | --- | --- | --- | --- |
-| 驗證程度 | 已有 adapter。已錄製 stage 的實際執行（2026-08） | 只有文件 | 只有文件 | 1.x 程式碼在正式環境使用中。目前沒有帳號 |
+| 驗證程度 | 已有 adapter。已錄製 stage 的實際執行（2026-08） | 公開測試帳號實際執行過（2026-10） | 只有文件。我們的加密和手冊範例吻合。沒有 live 執行過 | 1.x 程式碼在正式環境使用中。目前沒有帳號 |
 | 請求格式 | JSON，`Data` 用 AES-128-CBC 加密 | 表單，`data` 放 JSON，MD5 `sign` | 表單，query string 用 AES-256-CBC 加密（十六進位） | query 參數 `v`，AES-128-CBC 補零，兩把金鑰 |
 | 測試帳號 | 公開、共用 | 公開、共用 | 自己開測試商店 | 沒有。主機未知 |
 | 作廢需要 | 號碼、發票日期、原因（最多 20） | 號碼。原因選填 | 號碼、原因（最多 6 個中文字） | 號碼、訂單編號（`saleIdentifier`） |
@@ -83,6 +83,8 @@
 ### 2. 連線
 
 主機、帳號、測試帳號、簽章或加密，以及請求和回應的封包結構。附上一組真實或文件上的完整請求與完整回應範例。如果有幫助，同時列出加密前和加密後的內容。
+
+**官方測試向量。** 列出文件裡每一個同時給出輸入和輸出的範例，包括簽章、加密或檢查碼：金鑰、輸入，以及預期的結果。註明哪個 spec 用了它。如果文件沒有，也要寫明。測試向量不需要測試帳號就能驗證傳輸格式，所以寫 adapter 之前，先到附錄裡找。
 
 ### 3. 操作
 

@@ -4,9 +4,11 @@ English | [繁體中文](invoice.zh-TW.md)
 
 ## 1. Status and sources
 
-> **Trust:** manuals only. There is no adapter and no live run. Sections 4.2 and 6.4 are proposals.
+> **Trust:** experimental adapter (`Einvoice::EzPay::Provider`), built from this note alone. Its encryption and `CheckCode` match the manual's samples byte for byte (2.6). Nothing has run against ezPay: there is no shared test account.
 
-ezPay (簡單行動支付股份有限公司) runs the ezPay 電子發票加值服務平台. The 2.x line has no adapter for it yet. Nothing here is verified against the live API. So sections 4.2 and 6.4 are **proposals**: what an adapter should do, based on the manuals.
+ezPay (簡單行動支付股份有限公司) runs the ezPay 電子發票加值服務平台. The 2.x adapter is `Einvoice::EzPay::Provider` `[code]`. We first wrote sections 4.2 and 6.4 as proposals from the manuals. They now describe the adapter.
+
+We built the adapter from this note without the PDFs, to test the note. Then we checked every gap against the PDFs. Nothing in the note was wrong, but it missed some facts. This version adds them, and marks the places where the manual itself says nothing ("the manual does not say").
 
 The manuals belong to 簡單行動支付 ezPay, and the PDFs say ezPay holds the copyright. They are published on a public download page: <https://inv.ezpay.com.tw/Invoice_index/download>. This note is our summary.
 
@@ -16,8 +18,9 @@ The manuals belong to 簡單行動支付 ezPay, and the PDFs say ezPay holds the
 | `[ces]` | 電子發票技術串接手冊 境外電商版, <https://inv.ezpay.com.tw/dw_files/info_api/EZP_CES_1_0_0.pdf>, 65 pages | EZP_CES_1.0.0, 2021-01-26 | Cross-border sellers |
 | `[track]` | 電子發票字軌管理 技術串接手冊, <https://inv.ezpay.com.tw/dw_files/info_api/EZP__Track__1_0_0.pdf>, 38 pages | EZP_Track_1.0.0, 2018-10 | Track (字軌) management |
 | `[bdv]` | 手機條碼與捐贈碼驗證 技術串接手冊, <https://inv.ezpay.com.tw/dw_files/info_api/BDV_1_0_0.pdf>, 24 pages | EZP_BDV_1.0.0, 2021-03-03 | Mobile barcode and donation code checks |
+| `[code]` | The 2.x adapter, `lib/einvoice/ezpay/` | | What the adapter does |
 
-All four were downloaded on 2026-10-14. The `[inv]` manual has had no change since April 2024, and its last real field changes are from 2021.
+All four were downloaded on 2026-10-14. We checked `[inv]` and `[bdv]` again on 2026-10-22. The `[inv]` manual has had no change since April 2024, and its last real field changes are from 2021.
 
 **Updates.** The download page lists each manual with its version and date. A new version also gets a new file name, for example `EZP_INVI_1_2_2.pdf`.
 
@@ -57,7 +60,9 @@ Every payload carries:
 | `Version` | Fixed per API: `1.5` for issue, `1.3` for allowance and query, `1.0` for the others |
 | `TimeStamp` | Unix time |
 
-In `CarrierNum`, encode the value with `rawurlencode()` first, so no data is lost `[inv 四]`.
+In `CarrierNum`, encode the value with `rawurlencode()` first, so no data is lost `[inv 四]`. The query string then encodes it again, so `/` goes out as `%252F`. The manual's PHP sample does the same: `'CarrierNum' => rawurlencode('')` inside the array that goes to `http_build_query` `[inv 附件一]`.
+
+The padding is always added. The manual's `addpadding()` adds a full block of 32 when the length is already a multiple of 32. Its sample string is 631 bytes and gets 9 bytes of `0x09` `[inv 附件一]`.
 
 ### 2.3 Response
 
@@ -82,9 +87,11 @@ Issue and query results carry a `CheckCode`, so the caller can check that ezPay 
 3. Put `HashIV=...&` before it and `&HashKey=...` after it.
 4. SHA-256, upper case hex.
 
+The manual's PHP sample joins the fields with `http_build_query`, so the values are URL encoded `[inv 附件二]`. The five fields only hold letters, digits and `_`, so this changes nothing in practice. The manual does not say how a number such as `TotalAmt` is written. It is `348` in one sample and `"500"` in another.
+
 Void and allowance results also carry a `CheckCode`, but they do not have these five fields. The manual gives no other rule, so these cannot be checked (see 7).
 
-The check APIs use `CheckValue` instead: SHA-256 of `HashKey=...&<Result>&HashIV=...`, upper case `[bdv 附件三]`.
+The check APIs work differently (5.7). The request carries `CheckValue`: SHA-256 of `HashKey=...&<PostData_>&HashIV=...`, upper case. The response `Result` is encrypted too, and its `CheckCode` uses the same rule over the encrypted `Result` `[bdv 附件三]`. The manual's 附件四 says otherwise: it repeats the invoice rule from `[inv 附件二]`. But its own response sample matches 附件三, so trust 附件三.
 
 ### 2.5 Example
 
@@ -110,6 +117,18 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 ```
 
 This request is ours, built from the field rules. It is not from the manual.
+
+### 2.6 Official test vectors
+
+The manuals have two samples with all inputs and outputs. They are the best way to check the wire format without a test shop. The specs use both (`spec/einvoice/ezpay/crypto_spec.rb`).
+
+| Sample | Inputs | Output |
+| --- | --- | --- |
+| Encryption `[inv 附件一]` | The fields of a B2B issue (`MerchantOrderNo` `201409170000001`, …), `HashKey` `abcdefghijklmnopqrstuvwxyzabcdef`, `HashIV` `1234567891234567` | The 631-byte query string, and the 1280-character `PostData_` (`70a61189d7dc…305b71e1fa57c4`) |
+| `CheckCode` `[inv 附件二]` | `InvoiceTransNo` `14061313541640927`, `MerchantID` `3622183`, `MerchantOrderNo` `201409170000001`, `RandomNum` `0142`, `TotalAmt` `500`, and the same key and IV | `303AB800650B724733B5D91CBCE075D9EA09E4CDE9CD33461D45F07D5EC7EECB` |
+| `CheckValue` `[bdv 附件三]` | An encrypted `Result`, `HashKey` `rsBjnIvMG3VMMWsEynTK3PWiGccHuYiV`, `HashIV` `SdsatSdXm1vH7N3T` | `052E06C3720642DE306C1C33F921713EA4BA6DB9970C78F6C98952D4E69E85F7` |
+
+In the encryption sample the PDF shows spaces in `BuyerAddress` (`二段 97 號 8 樓`). The encoded string has none, so the spaces only come from the PDF layout.
 
 ## 3. Operations
 
@@ -137,7 +156,7 @@ Other endpoints. An adapter can reach them through a `raw` method:
 
 ### 4.1 Operations
 
-| Unified | Endpoint | `provider_options` (proposed) | Note |
+| Unified | Endpoint | `provider_options` | Note |
 | --- | --- | --- | --- |
 | `issue` | `invoice_issue`, `Status` `1` | `customs_clearance` | |
 | `void` | `invoice_invalid` | none | Not before the upload, the next day |
@@ -147,7 +166,7 @@ Other endpoints. An adapter can reach them through a `raw` method:
 
 ### 4.2 Fields
 
-All rows are proposals.
+The adapter does this `[code]`.
 
 #### `issue`
 
@@ -273,7 +292,7 @@ The unified `AmountSummary` must satisfy `sales + tax = total`. The shared contr
 - Item prices exclude tax for B2B, and include tax for B2C. So for B2C, the item total and `TotalAmt` include tax, but `Amt` does not.
 - ezPay only checks `ItemAmt = ItemCount × ItemPrice` and `TotalAmt = Amt + TaxAmt`. The rest is up to the caller `[inv 三]`.
 
-Proposal: when the unified amount has `tax 0` for a taxable invoice (the contract's B2C shape), compute `TaxAmt = total - round(total / 1.05)` and `Amt = total - TaxAmt`. Otherwise send `sales_amount`, `tax_amount` and `total_amount` as they are.
+The adapter: when the unified amount has `tax 0` for a taxable invoice (the contract's B2C shape), compute `TaxAmt = total - round(total / 1.05)` and `Amt = total - TaxAmt`. Otherwise send `sales_amount`, `tax_amount` and `total_amount` as they are.
 
 The query shows the same split for B2C: `Amt 1333`, `TaxAmt 67`, `TotalAmt 1400` `[inv 八(二)]`.
 
@@ -281,9 +300,14 @@ The query shows the same split for B2C: `Amt 1333`, `TaxAmt 67`, `TotalAmt 1400`
 
 - Item prices may include tax or not `[inv 六]`. If they include tax, `ItemTaxAmt` must be `0`, and the buyer cannot deduct that tax.
 - If they exclude tax, `ItemTaxAmt = ItemAmt × rate`.
-- `TotalAmt` is the sum of the items plus the item tax.
+- `ItemTaxAmt` is one value per item, separated by `|` like the other item fields `[inv 六]`.
+- `TotalAmt` is "the allowance total" `[inv 六]`. We read it as the sum of the items plus the item tax (inferred).
+- The manual does not say how to round `ItemAmt × rate`.
 
-Proposal: for B2C, send prices with tax and `ItemTaxAmt` `0`. The buyer of a B2C invoice does not deduct tax. For B2B, send prices without tax and the item tax.
+Which prices to use is the seller's choice: the manual says to ask the accountant (請自行與會計人員確認採何種金額) `[inv 六]`. `AllowanceInput` has no buyer, so the adapter cannot tell B2C from B2B. It reads the amount instead `[code]`:
+
+- `tax_amount` `0` (the contract's B2C shape): prices with tax, and every `ItemTaxAmt` is `0`.
+- `tax_amount` above `0`: prices without tax. Each item tax is `ItemAmt × 5%`, rounded, and the last item takes the rest, so the item taxes add up to `tax_amount`.
 
 **Integers.** Item counts and prices are integers. The unified model allows decimals, so check before the call.
 
@@ -319,7 +343,7 @@ The query has no allowance data and no cancelled status. So an adapter cannot re
 | `MIXED_TAX` | partly | B2C only |
 | `QUERY_BY_ORDER_ID` | partly | Needs the total with the order id |
 | `SCHEDULED_ISSUE` | yes | `Status` `3` with `CreateStatusTime` |
-| `CARRIER_VALIDATION` | yes | `checkBarCode`, `checkLoveCode` |
+| `CARRIER_VALIDATION` | yes | `checkBarCode`, `checkLoveCode` (5.7). The adapter does not have them yet |
 | `FOREIGN_CURRENCY` | no | Only in the separate cross-border API |
 
 A capability is yes or no. For "partly", the adapter must decide: declare it and document the extra key, or leave it out.
@@ -337,14 +361,20 @@ A capability is yes or no. For "partly", the adapter must decide: declare it and
 
 ### 4.8 Contract and live tests
 
-ezPay breaks several assumptions of the shared contract:
+ezPay breaks several assumptions of the shared contract. The provider spec handles them like this `[code]`:
 
-- **Query by number.** The contract sends only `invoice_number`. ezPay also needs the random code. The adapter cannot pass this test unless the contract sends `provider_options`, or the adapter keeps the random codes of the invoices it issued. Neither exists today.
+- `follow_up` passes `random_code` and `order_id` from the issue result.
+- `unknown_query_options` passes a random code with the unknown invoice number, so the query reaches the fake and comes back as `INV20006` (`NotFoundError`).
+- The fake voids at once.
+
+The assumptions:
+
+- **Query by number.** The contract sends only `invoice_number`. ezPay also needs the random code. The contract's `follow_up` option now sends it.
 - **Void right after issue.** The contract voids an invoice it has just issued. Live, ezPay refuses until the next day's upload (`LIB10009`). A fake can allow it. A live spec cannot test voids in one run.
 - **Credit a voided invoice.** This test voids first, so it has the same problem live. ezPay has no documented code for "allowance on a voided invoice", so the expected `ConflictError` is unknown (see 7).
-- **Unknown invoice.** The contract queries an unknown invoice with only `invoice_number`, and expects `NotFoundError`. Without a random code, the proposed adapter raises `ValidationError` before the call (4.2). So this test fails as well, for the same reason as the query by number.
+- **Unknown invoice.** The contract queries an unknown invoice with only `invoice_number`, and expects `NotFoundError`. Without a random code, the adapter raises `ValidationError` before the call (4.2). The contract's `unknown_query_options` option sends one.
 - **Unknown allowance.** ezPay has no documented code for "allowance not found". `IAI10002` (query failed) is the closest (see 7).
-- **Allowance needs the order id.** The contract does not send it. The adapter needs `provider_options[:order_id]`, or must remember the order ids of the invoices it issued.
+- **Allowance needs the order id.** The contract does not send it. The adapter needs `provider_options[:order_id]`. The contract sends it with `follow_up`.
 - **Order ids.** Max 20 chars. The contract's ids (`ORDER_A`, …) fit. A live spec with long generated ids may not.
 - **Test shop.** There is no shared account. Each developer opens a test shop on `cinv.ezpay.com.tw` and adds test tracks.
 
@@ -412,7 +442,7 @@ Example result from the manual, `Result` parsed:
 | `MerchantOrderNo` | M | The invoice's order id |
 | `ItemName`, `ItemCount`, `ItemUnit`, `ItemPrice`, `ItemAmt` | M | As in issue, separated by `\|`. `ItemPrice` may be with or without tax |
 | `TaxTypeForMixed` | O | M for a mixed invoice: the tax type of this allowance, `1`, `2` or `3` |
-| `ItemTaxAmt` | M | `ItemAmt × rate` when prices exclude tax. `0` when they include tax |
+| `ItemTaxAmt` | M | One per item, separated by `\|`. `ItemAmt × rate` when prices exclude tax. `0` when they include tax |
 | `TotalAmt` | M | Allowance total |
 | `BuyerEmail` | O | ezPay sends the allowance notice here |
 | `Status` | M | `1` confirm now, `0` wait for a confirm |
@@ -461,6 +491,20 @@ Example from the manual (some fields left out, `Result` and `ItemDetail` parsed)
 
 For cross-border sellers (營業稅法第 6 條第 4 款). The same flow, with `Currency` required, and `OriginalCurrencyAmount` (2 decimals) and `ExchangeRate` (5 decimals) as memo fields. Amounts may be in the foreign currency. `Comment` is max 71 `[ces 四]`.
 
+### 5.7 Check APIs (`checkBarCode`, `checkLoveCode`)
+
+`[bdv 四, 五]`. Same hosts, under `/Api_inv_application/`. The form is different from the invoice APIs:
+
+| Form field | Rule |
+| --- | --- |
+| `MerchantID_` | The shop id |
+| `Version` | `1.0`. Outside `PostData_` |
+| `RespondType` | `JSON` or `String`. Outside `PostData_` |
+| `PostData_` | Encrypted as in 2.2. It holds `TimeStamp`, and `CellphoneBarcode` (8 chars) or `LoveCode` (3 to 7 digits) |
+| `CheckValue` | 2.4 |
+
+The response has `Status`, `Message`, `APIID` (`barCodeCheck` or `LoveCodeCheck`), `Version`, `MerchantID`, `Result` and `CheckCode`. **`Result` is encrypted** (hex), unlike the invoice APIs. Decrypted, it holds the code and `IsExist`: `Y` registered, `N` not.
+
 ## 6. Codes
 
 ### 6.1 Tax type
@@ -491,7 +535,9 @@ ezPay's codes are its own. They are not the MIG codes, and not ECPay's.
 
 ### 6.4 Error codes
 
-`[inv 九]`. The unified error and `Reason` columns are proposals. A `CheckCode` that does not match is a `ProviderError`.
+`[inv 九]`. The unified error and `Reason` columns are what the adapter maps `[code]`. A `CheckCode` that does not match is a `ProviderError`. The table matches the manual line by line. The manual gives each `IAI` code only one short line.
+
+For two cases without a code, the adapter guesses by operation (`Errors::CONTEXT`): `LIB10005` on an allowance is `ALLOWANCE_BLOCKED_BY_VOID`, and `IAI10002` on an allowance void is `NotFoundError`.
 
 | Code | Meaning | Unified error | `Reason` |
 | --- | --- | --- | --- |
@@ -534,6 +580,14 @@ The list has no code for these cases: an allowance on a voided invoice, an allow
 3. Is special tax really `TaxType` `1` with a special `TaxRate`?
 4. How is the `CheckCode` of a void or allowance result built? It lacks the five fields of the documented rule.
 5. Which codes come back for an allowance on a voided invoice, and for voiding an allowance that does not exist? The contract needs `ConflictError` and `NotFoundError` there.
-6. **Contract:** query by number needs the random code, and an allowance needs the order id. Should the shared contract pass `provider_options`, or should adapters remember what they issued?
+6. **Core:** query by number needs the random code, and an allowance needs the order id. The contract passes them with `follow_up` for now (4.8). Should the unified inputs carry them instead?
 7. **Core:** what does a B2C `AmountSummary` with `tax 0` mean for a provider that always splits the tax (4.3)?
 8. None of this is verified live. It needs a test shop on `cinv.ezpay.com.tw`.
+
+The manual does not say these either. The adapter's choice is in brackets:
+
+9. What `Result` looks like on a failure (empty string, empty object or missing: the adapter accepts all three).
+10. How to count a length such as "2 Chinese or 6 English characters" for mixed text (any non-ASCII character gets the Chinese limit).
+11. What happens when an item name contains `|` (the adapter refuses it).
+12. Which `TaxRate` a mixed tax invoice sends (`5`).
+13. How to round an allowance item tax (round, and the last item takes the rest).

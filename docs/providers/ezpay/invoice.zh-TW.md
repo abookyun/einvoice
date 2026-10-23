@@ -6,9 +6,11 @@
 
 ## 1. 狀態與來源
 
-> **可信度：** 只依手冊。沒有 adapter，也沒有 live 執行過。4.2 和 6.4 是建議。
+> **可信度：** 實驗性質的 adapter（`Einvoice::EzPay::Provider`），只依本筆記寫成。它的加密和 `CheckCode` 和手冊範例逐 byte 吻合（2.6）。沒有對 ezPay 執行過：ezPay 沒有共用的測試帳號。
 
-ezPay（簡單行動支付股份有限公司）經營 ezPay 電子發票加值服務平台。2.x 還沒有對應的 adapter。這裡的內容都沒有對 live API 驗證過。所以 4.2 和 6.4 是**建議**：依手冊判斷 adapter 應該怎麼做。
+ezPay（簡單行動支付股份有限公司）經營 ezPay 電子發票加值服務平台。2.x 的 adapter 是 `Einvoice::EzPay::Provider` `[code]`。4.2 和 6.4 一開始是依手冊寫的建議，現在改成描述 adapter 的做法。
+
+為了驗證本筆記，我們不看 PDF、只依本筆記寫出 adapter，再拿 PDF 逐條核對缺口。筆記裡沒有寫錯的內容，但漏了一些事實。這一版把它們補上，並標出手冊本身也沒寫的地方（「手冊沒有寫」）。
 
 手冊屬於簡單行動支付 ezPay，PDF 中也註明版權屬於 ezPay。手冊公開在下載專區：<https://inv.ezpay.com.tw/Invoice_index/download>。本筆記是我們的整理。
 
@@ -18,8 +20,9 @@ ezPay（簡單行動支付股份有限公司）經營 ezPay 電子發票加值�
 | `[ces]` | 電子發票技術串接手冊 境外電商版，<https://inv.ezpay.com.tw/dw_files/info_api/EZP_CES_1_0_0.pdf>，65 頁 | EZP_CES_1.0.0，2021-01-26 | 境外電商 |
 | `[track]` | 電子發票字軌管理 技術串接手冊，<https://inv.ezpay.com.tw/dw_files/info_api/EZP__Track__1_0_0.pdf>，38 頁 | EZP_Track_1.0.0，2018-10 | 字軌管理 |
 | `[bdv]` | 手機條碼與捐贈碼驗證 技術串接手冊，<https://inv.ezpay.com.tw/dw_files/info_api/BDV_1_0_0.pdf>，24 頁 | EZP_BDV_1.0.0，2021-03-03 | 手機條碼與捐贈碼檢查 |
+| `[code]` | 2.x adapter，`lib/einvoice/ezpay/` | | adapter 實際的做法 |
 
-四份都在 2026-10-14 下載。`[inv]` 手冊從 2024 年 4 月以後就沒有更新，最後一次實質的欄位變更是在 2021 年。
+四份都在 2026-10-14 下載。2026-10-22 重新核對過 `[inv]` 和 `[bdv]`。`[inv]` 手冊從 2024 年 4 月以後就沒有更新，最後一次實質的欄位變更是在 2021 年。
 
 **更新檢查。** 下載專區會列出每份手冊的版本和日期。新版本的檔名也會改變，例如 `EZP_INVI_1_2_2.pdf`。
 
@@ -59,7 +62,9 @@ ezPay（簡單行動支付股份有限公司）經營 ezPay 電子發票加值�
 | `Version` | 每個 API 固定：開立用 `1.5`，折讓和查詢用 `1.3`，其他用 `1.0` |
 | `TimeStamp` | Unix 時間 |
 
-`CarrierNum` 的值要先用 `rawurlencode()` 編碼，資料才不會遺失 `[inv 四]`。
+`CarrierNum` 的值要先用 `rawurlencode()` 編碼，資料才不會遺失 `[inv 四]`。接著 query string 會再編碼一次，所以 `/` 送出時是 `%252F`。手冊的 PHP 範例也是這樣：在交給 `http_build_query` 的陣列裡寫 `'CarrierNum' => rawurlencode('')` `[inv 附件一]`。
+
+一定會補位。手冊的 `addpadding()` 在長度剛好是 32 的倍數時，會補一整塊 32 bytes。它的範例字串是 631 bytes，補了 9 個 `0x09` `[inv 附件一]`。
 
 ### 2.3 回應
 
@@ -84,9 +89,11 @@ ezPay（簡單行動支付股份有限公司）經營 ezPay 電子發票加值�
 3. 在前面加上 `HashIV=...&`，在後面加上 `&HashKey=...`。
 4. 做 SHA-256，轉成大寫十六進位。
 
+手冊的 PHP 範例用 `http_build_query` 串接欄位，所以值會經過 URL 編碼 `[inv 附件二]`。這五個欄位只有英數字和 `_`，所以實際上沒有影響。手冊沒有寫 `TotalAmt` 這類數字要怎麼表示。一個範例是 `348`，另一個是 `"500"`。
+
 作廢和折讓的結果也有 `CheckCode`，但它們沒有上面這五個欄位。手冊沒有提供其他算法，所以這些結果沒辦法驗證（見第 7 節）。
 
-檢查 API 改用 `CheckValue`：`HashKey=...&<Result>&HashIV=...` 的 SHA-256，轉成大寫 `[bdv 附件三]`。
+檢查 API 的做法不同（5.7）。請求要帶 `CheckValue`：`HashKey=...&<PostData_>&HashIV=...` 的 SHA-256，轉成大寫。回應的 `Result` 也是加密的，它的 `CheckCode` 用同樣的算法，對加密後的 `Result` 計算 `[bdv 附件三]`。手冊的附件四寫法不同：它照抄了 `[inv 附件二]` 的發票算法。但附件四自己的回應範例符合附件三，所以以附件三為準。
 
 ### 2.5 範例
 
@@ -112,6 +119,18 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 ```
 
 這個請求是我們依欄位規則寫的，不是手冊裡的範例。
+
+### 2.6 官方測試向量
+
+手冊有兩組範例，輸入和輸出都完整。沒有測試商店時，這是驗證傳輸格式最好的方法。spec 兩組都用了（`spec/einvoice/ezpay/crypto_spec.rb`）。
+
+| 範例 | 輸入 | 輸出 |
+| --- | --- | --- |
+| 加密 `[inv 附件一]` | 一張 B2B 發票的欄位（`MerchantOrderNo` `201409170000001`……）、`HashKey` `abcdefghijklmnopqrstuvwxyzabcdef`、`HashIV` `1234567891234567` | 631 bytes 的 query string，以及 1280 個字元的 `PostData_`（`70a61189d7dc…305b71e1fa57c4`） |
+| `CheckCode` `[inv 附件二]` | `InvoiceTransNo` `14061313541640927`、`MerchantID` `3622183`、`MerchantOrderNo` `201409170000001`、`RandomNum` `0142`、`TotalAmt` `500`，以及同一組 key 和 IV | `303AB800650B724733B5D91CBCE075D9EA09E4CDE9CD33461D45F07D5EC7EECB` |
+| `CheckValue` `[bdv 附件三]` | 一段加密後的 `Result`、`HashKey` `rsBjnIvMG3VMMWsEynTK3PWiGccHuYiV`、`HashIV` `SdsatSdXm1vH7N3T` | `052E06C3720642DE306C1C33F921713EA4BA6DB9970C78F6C98952D4E69E85F7` |
+
+加密範例的 PDF 在 `BuyerAddress` 裡顯示了空白（`二段 97 號 8 樓`）。但編碼後的字串沒有空白，所以那些空白只是 PDF 排版造成的。
 
 ## 3. 操作
 
@@ -139,7 +158,7 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 
 ### 4.1 操作
 
-| Unified | Endpoint | `provider_options`（建議） | 說明 |
+| Unified | Endpoint | `provider_options` | 說明 |
 | --- | --- | --- | --- |
 | `issue` | `invoice_issue`，`Status` `1` | `customs_clearance` | |
 | `void` | `invoice_invalid` | 無 | 隔天上傳之前不能作廢 |
@@ -149,7 +168,7 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 
 ### 4.2 欄位
 
-下面每一列都是建議。
+adapter 的做法如下 `[code]`。
 
 #### `issue`
 
@@ -275,7 +294,7 @@ unified 的 `AmountSummary` 必須符合 `sales + tax = total`。shared contract
 - B2B 的品項價格未稅，B2C 的品項價格含稅。所以 B2C 的品項合計和 `TotalAmt` 都含稅，但 `Amt` 不含稅。
 - ezPay 只檢查 `ItemAmt = ItemCount × ItemPrice` 和 `TotalAmt = Amt + TaxAmt`。其他都由呼叫端負責 `[inv 三]`。
 
-建議：如果 unified 金額是應稅發票但 `tax 0`（contract 的 B2C 形式），計算 `TaxAmt = total - round(total / 1.05)`、`Amt = total - TaxAmt`。其他情況直接送 `sales_amount`、`tax_amount` 和 `total_amount`。
+adapter 的做法：如果 unified 金額是應稅發票但 `tax 0`（contract 的 B2C 形式），計算 `TaxAmt = total - round(total / 1.05)`、`Amt = total - TaxAmt`。其他情況直接送 `sales_amount`、`tax_amount` 和 `total_amount`。
 
 查詢回傳的 B2C 發票也是拆分後的形式：`Amt 1333`、`TaxAmt 67`、`TotalAmt 1400` `[inv 八(二)]`。
 
@@ -283,9 +302,14 @@ unified 的 `AmountSummary` 必須符合 `sales + tax = total`。shared contract
 
 - 品項價格可以含稅，也可以未稅 `[inv 六]`。含稅時，`ItemTaxAmt` 必須是 `0`，買方不能扣抵這筆稅額。
 - 未稅時，`ItemTaxAmt = ItemAmt × 稅率`。
-- `TotalAmt` 是品項合計加上品項稅額。
+- `ItemTaxAmt` 是每個品項一個值，和其他品項欄位一樣用 `|` 分隔 `[inv 六]`。
+- `TotalAmt` 是「此次開立折讓加總金額」`[inv 六]`。我們把它解讀成品項合計加上品項稅額（推論）。
+- 手冊沒有寫 `ItemAmt × 稅率` 要怎麼四捨五入。
 
-建議：B2C 送含稅價格，`ItemTaxAmt` 為 `0`。B2C 發票的買方不會扣抵稅額。B2B 送未稅價格和品項稅額。
+用含稅或未稅價格由賣方決定：手冊寫「請自行與會計人員確認採何種金額」`[inv 六]`。`AllowanceInput` 沒有買方資料，所以 adapter 分不出 B2C 或 B2B，改看金額 `[code]`：
+
+- `tax_amount` 為 `0`（contract 的 B2C 形式）：用含稅價格，每個 `ItemTaxAmt` 都是 `0`。
+- `tax_amount` 大於 `0`：用未稅價格。每個品項的稅額是 `ItemAmt × 5%` 四捨五入，最後一個品項補足差額，讓品項稅額加總等於 `tax_amount`。
 
 **整數。** 品項數量和價格都是整數。unified model 允許小數，所以要在呼叫前檢查。
 
@@ -321,7 +345,7 @@ unified 的 `AmountSummary` 必須符合 `sales + tax = total`。shared contract
 | `MIXED_TAX` | 部分支援 | 只限 B2C |
 | `QUERY_BY_ORDER_ID` | 部分支援 | 用訂單編號查詢時需要總額 |
 | `SCHEDULED_ISSUE` | 支援 | `Status` `3` 加 `CreateStatusTime` |
-| `CARRIER_VALIDATION` | 支援 | `checkBarCode`、`checkLoveCode` |
+| `CARRIER_VALIDATION` | 支援 | `checkBarCode`、`checkLoveCode`（5.7）。adapter 還沒有實作 |
 | `FOREIGN_CURRENCY` | 不支援 | 只有獨立的境外電商 API 支援 |
 
 capability 只有「支援」和「不支援」兩種。遇到「部分支援」時，adapter 要自己決定：宣告支援並在文件寫明需要的額外條件，或是不宣告。
@@ -339,14 +363,20 @@ capability 只有「支援」和「不支援」兩種。遇到「部分支援」
 
 ### 4.8 Contract 與 live 測試
 
-ezPay 不符合 shared contract 的幾個假設：
+ezPay 不符合 shared contract 的幾個假設。provider spec 的處理方式如下 `[code]`：
 
-- **用號碼查詢。** contract 只送 `invoice_number`，ezPay 還需要隨機碼。除非 contract 送 `provider_options`，或 adapter 記住自己開過的發票的隨機碼，否則 adapter 無法通過這個測試。目前兩者都沒有。
+- `follow_up` 從開立結果帶入 `random_code` 和 `order_id`。
+- `unknown_query_options` 在查詢不存在的發票時帶入隨機碼，讓查詢送到 fake，得到 `INV20006`（`NotFoundError`）。
+- fake 會立即作廢。
+
+這些假設是：
+
+- **用號碼查詢。** contract 只送 `invoice_number`，ezPay 還需要隨機碼。現在由 contract 的 `follow_up` 選項送出隨機碼。
 - **開立後馬上作廢。** contract 會作廢剛開立的發票。在 live 環境，ezPay 要等隔天上傳後才允許作廢（`LIB10009`）。fake 可以允許。live spec 無法在同一次執行中測試作廢。
 - **對已作廢的發票開折讓。** 這個測試要先作廢，所以在 live 環境有同樣的問題。ezPay 沒有「對已作廢發票開折讓」的錯誤代碼，所以不知道能不能對應到預期的 `ConflictError`（見第 7 節）。
-- **不存在的發票。** contract 只用 `invoice_number` 查詢不存在的發票，並預期 `NotFoundError`。沒有隨機碼時，建議的 adapter 會在呼叫前丟出 `ValidationError`（4.2）。所以這個測試也會失敗，原因和用號碼查詢相同。
+- **不存在的發票。** contract 只用 `invoice_number` 查詢不存在的發票，並預期 `NotFoundError`。沒有隨機碼時，adapter 會在呼叫前丟出 `ValidationError`（4.2）。contract 的 `unknown_query_options` 選項會送出隨機碼。
 - **不存在的折讓。** ezPay 沒有「查無折讓」的錯誤代碼。最接近的是 `IAI10002`（查詢失敗）（見第 7 節）。
-- **折讓需要訂單編號。** contract 不會送這個值。adapter 需要 `provider_options[:order_id]`，或記住自己開過的發票的訂單編號。
+- **折讓需要訂單編號。** contract 不會送這個值。adapter 需要 `provider_options[:order_id]`。contract 用 `follow_up` 送出這個值。
 - **訂單編號。** 最多 20 字元。contract 的編號（`ORDER_A`……）符合。live spec 產生的長編號可能不符合。
 - **測試商店。** 沒有共用的帳號。每位開發者都要在 `cinv.ezpay.com.tw` 開測試商店，並新增測試字軌。
 
@@ -414,7 +444,7 @@ ezPay 不符合 shared contract 的幾個假設：
 | `MerchantOrderNo` | M | 該發票的訂單編號 |
 | `ItemName`、`ItemCount`、`ItemUnit`、`ItemPrice`、`ItemAmt` | M | 和開立相同，品項之間用 `\|` 分隔。`ItemPrice` 可以含稅或未稅 |
 | `TaxTypeForMixed` | O | 混合稅率發票時 M：這張折讓的課稅別，`1`、`2` 或 `3` |
-| `ItemTaxAmt` | M | 價格未稅時為 `ItemAmt × 稅率`。價格含稅時為 `0` |
+| `ItemTaxAmt` | M | 每個品項一個值，用 `\|` 分隔。價格未稅時為 `ItemAmt × 稅率`。價格含稅時為 `0` |
 | `TotalAmt` | M | 折讓總額 |
 | `BuyerEmail` | O | ezPay 把折讓通知寄到這裡 |
 | `Status` | M | `1` 立即確認、`0` 等待確認 |
@@ -463,6 +493,20 @@ ezPay 不符合 shared contract 的幾個假設：
 
 給境外電商使用（營業稅法第 6 條第 4 款）。流程相同，但 `Currency` 必填，另外有備註用的 `OriginalCurrencyAmount`（2 位小數）和 `ExchangeRate`（5 位小數）。金額可以用外幣。`Comment` 最多 71 `[ces 四]`。
 
+### 5.7 驗證 API（`checkBarCode`、`checkLoveCode`）
+
+`[bdv 四, 五]`。主機相同，路徑在 `/Api_inv_application/` 底下。表單和發票 API 不同：
+
+| 表單欄位 | 規則 |
+| --- | --- |
+| `MerchantID_` | 商店代號 |
+| `Version` | `1.0`。放在 `PostData_` 外面 |
+| `RespondType` | `JSON` 或 `String`。放在 `PostData_` 外面 |
+| `PostData_` | 加密方式同 2.2。內容是 `TimeStamp`，加上 `CellphoneBarcode`（8 碼）或 `LoveCode`（3 到 7 位數字） |
+| `CheckValue` | 見 2.4 |
+
+回應有 `Status`、`Message`、`APIID`（`barCodeCheck` 或 `LoveCodeCheck`）、`Version`、`MerchantID`、`Result` 和 `CheckCode`。**`Result` 是加密的**（十六進位），和發票 API 不同。解密後是查詢的號碼和 `IsExist`：`Y` 已登記，`N` 未登記。
+
 ## 6. 代碼
 
 ### 6.1 課稅別
@@ -493,7 +537,9 @@ ezPay 的代碼是它自己定義的，不是 MIG 的代碼，也和 ECPay 的�
 
 ### 6.4 錯誤代碼
 
-`[inv 九]`。Unified 錯誤和 `Reason` 兩欄是建議。`CheckCode` 不符時是 `ProviderError`。
+`[inv 九]`。Unified 錯誤和 `Reason` 兩欄是 adapter 的對應 `[code]`。`CheckCode` 不符時是 `ProviderError`。這張表和手冊逐行一致。手冊對每個 `IAI` 代碼都只有一行簡短說明。
+
+有兩種情況沒有代碼，adapter 依操作猜測（`Errors::CONTEXT`）：折讓時的 `LIB10005` 對應 `ALLOWANCE_BLOCKED_BY_VOID`，作廢折讓時的 `IAI10002` 對應 `NotFoundError`。
 
 | 代碼 | 意思 | Unified 錯誤 | `Reason` |
 | --- | --- | --- | --- |
@@ -536,6 +582,14 @@ ezPay 的代碼是它自己定義的，不是 MIG 的代碼，也和 ECPay 的�
 3. 特種稅額真的是 `TaxType` `1` 加上特種的 `TaxRate` 嗎？
 4. 作廢和折讓結果的 `CheckCode` 是怎麼算的？它們沒有手冊算法需要的五個欄位。
 5. 對已作廢的發票開折讓，以及作廢不存在的折讓，會回傳哪些代碼？contract 在這兩種情況需要 `ConflictError` 和 `NotFoundError`。
-6. **Contract：** 用號碼查詢需要隨機碼，開折讓需要訂單編號。shared contract 應該傳 `provider_options`，還是 adapter 應該記住自己開過的發票？
+6. **Core：** 用號碼查詢需要隨機碼，開折讓需要訂單編號。目前由 contract 用 `follow_up` 傳入（4.8）。unified 輸入是否應該帶這些值？
 7. **Core：** 對一律拆出稅額的加值中心來說，`tax 0` 的 B2C `AmountSummary` 代表什麼（4.3）？
 8. 這些內容都沒有 live 驗證過。需要在 `cinv.ezpay.com.tw` 開一間測試商店。
+
+下面這些手冊也沒有寫。括號裡是 adapter 的做法：
+
+9. 失敗時 `Result` 長什麼樣子（空字串、空物件或沒有這個欄位：三種都接受）。
+10. 中英混合的文字，「中文 2 字或英數 6 字」這類長度要怎麼算（只要有非 ASCII 字元，就用中文的上限）。
+11. 品項名稱含有 `|` 時怎麼辦（adapter 拒絕）。
+12. 混合稅率的發票要送哪個 `TaxRate`（`5`）。
+13. 折讓品項稅額要怎麼四捨五入（四捨五入，最後一個品項補足差額）。

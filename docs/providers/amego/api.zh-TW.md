@@ -6,9 +6,9 @@
 
 ## 1. 狀態與來源
 
-> **可信度：** 只依文件。沒有 adapter，也沒有 live 執行過。4.2 和 6.4 是建議。
+> **可信度：** 已有 adapter（`Einvoice::Amego::Provider`）。它的 live spec 在 2026-10-22 於公開的測試帳號上通過。4.2 和 6.4 描述 adapter 的做法。live spec 沒有檢查每一列。
 
-這是 Amego 在 `https://invoice-api.amego.tw` 的 JSON API。2.x 還沒有對應的 adapter。這裡的內容都沒有對 live API 驗證過。所以 4.2 和 6.4 是**建議**：依文件判斷 adapter 應該怎麼做。
+這是 Amego 在 `https://invoice-api.amego.tw` 的 JSON API。2.x 的 adapter 是 `Einvoice::Amego::Provider` `[code]`。4.2 和 6.4 一開始是依文件寫的建議，現在改成描述 adapter 的做法，並註明 adapter 和建議不同的地方。標 `[live]` 的事實是在公開測試帳號上實際看到的。
 
 文件屬於光貿科技 Amego，公開在 <https://invoice.amego.tw/api_doc/>。本筆記是我們的整理。
 
@@ -17,6 +17,8 @@
 | 標記 | 來源 | 日期 | 提供的內容 |
 | --- | --- | --- | --- |
 | `[doc]` | Amego API 文件，<https://invoice.amego.tw/api_doc/>。用 apiDoc 產生的網站。2026-10-14 讀取資料 bundle（`main.bundle.js?2026093003`）。 | 2026-09-30 產生，文件版本 1.0.0 | 所有 endpoint、欄位、範例和基本規則。 |
+| `[live]` | 我們的 live spec（`spec/einvoice/amego/live_spec.rb`），在公開的測試帳號上執行，2026-10-22。 | 2026-10-22 | Amego 實際接受的內容和回應。 |
+| `[code]` | 2.x adapter，`lib/einvoice/amego/`。 | | adapter 實際的做法。 |
 | `[info]` | Amego 線上說明頁。文件中有連結：<https://invoice.amego.tw/info_detail?mid=70>（開立方式）、`mid=71`（錯誤代碼）、`mid=73`（會員載具規則）、`mid=74`（檢查規則）。2026-10-14 讀取。 | | 錯誤代碼和格式規則。 |
 
 **更新檢查。** 文件網站沒有更新記錄。bundle 的網址帶有建置編號（`main.bundle.js?2026093003`）。編號改變表示文件重新建置過。
@@ -115,6 +117,16 @@ sign=md5(<the JSON below> + "1729000000" + AppKey)
 
 失敗時：`{ "code": 3040171, "msg": "…" }`。查無資料時：`{ "code": 71, "msg": "查無資料" }`。
 
+### 2.6 官方測試向量
+
+範例頁 <https://invoice.amego.tw/api_doc/example> 有一組結果已知的範例。它的 Python 程式寫著 `sign` 是 `f53a336934b2af0589b845638d1495cc` `[doc]`。輸入是：
+
+- `data`：一張 B2B 發票（`OrderId` `A20200817105934`、`BuyerIdentifier` `28080623`、兩個品項），格式是 Python `json.dumps(indent=0)` 的輸出。也就是在每個 `{`、`[` 和每個項目後面換行，每個非 ASCII 字元寫成 `\uXXXX`。
+- `time`：`1628136135`，寫在範例的註解裡。
+- App Key：公開的測試金鑰。
+
+Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部分，任何合法的 JSON 排版都可以。client spec 驗證了這組範例（`spec/einvoice/amego/client_spec.rb`）。文件沒有其他結果已知的範例。
+
 ## 3. 操作
 
 五個 unified 操作使用下列 endpoint。欄位見第 5 節。
@@ -156,17 +168,17 @@ sign=md5(<the JSON below> + "1729000000" + AppKey)
 
 ### 4.1 操作
 
-| Unified | Endpoint | `provider_options`（建議） | 說明 |
+| Unified | Endpoint | `provider_options` | 說明 |
 | --- | --- | --- | --- |
 | `issue` | `f0401` | `track_api_code`、`customs_clearance_mark`、`zero_tax_rate_reason`、`brand_name`、`detail_amount_round`、`tax_adjustment` | 所有 MIG 總計都由 adapter 計算 |
 | `void` | `f0501` | 無 | 一次一張發票 |
-| `allowance` | `g0401` | `invoice_date`、`buyer`、`allowance_date` | 需要買方資料和發票日期。見 4.2 |
+| `allowance` | `g0401` | `buyer_identifier`、`buyer_name`、`invoice_date`、`allowance_date` | 需要買方資料和發票日期。見 4.2 |
 | `void_allowance` | `g0501` | 無 | 一次一張折讓 |
 | `query` | `invoice_query` | 無 | 限 180 天內 |
 
 ### 4.2 欄位
 
-下面每一列都是建議。
+adapter 的做法如下 `[code]`。
 
 #### `issue`
 
@@ -214,16 +226,16 @@ sign=md5(<the JSON below> + "1729000000" + AppKey)
 
 #### `allowance`
 
-`g0401` 需要原發票的買方資料和發票日期，`AllowanceInput` 兩者都沒有。建議：先呼叫 `invoice_query`，從結果取得 `buyer_identifier`、`buyer_name` 和 `invoice_date`。也可以改由 `provider_options` 提供，這樣就不用查詢。查詢只能用在 180 天內的發票。
+`g0401` 需要原發票的買方資料和發票日期，`AllowanceInput` 兩者都沒有。adapter 會先呼叫 `invoice_query`，從結果取得 `buyer_identifier`、`buyer_name` 和 `invoice_date`。`provider_options` 三個都提供時，adapter 就不查詢。查詢只能用在 180 天內的發票。
 
 | Unified | Amego | 規則或預設值 |
 | --- | --- | --- |
 | `allowance_id` | `AllowanceNumber` | 最多 16。在帳號內不可重複。在本地端檢查 |
 | `provider_options[:allowance_date]`，沒有就用今天（UTC+8） | `AllowanceDate` | `Ymd` |
 | （固定） | `AllowanceType` | `2` |
-| `provider_options[:buyer]`，沒有就用查詢結果 | `BuyerIdentifier`、`BuyerName` | 必須和原發票相符 |
+| `provider_options[:buyer_identifier]` 和 `[:buyer_name]`，沒有就用查詢結果 | `BuyerIdentifier`、`BuyerName` | 必須和原發票相符 |
 | `invoice_number` | `ProductItem[].OriginalInvoiceNumber` | |
-| `provider_options[:invoice_date]`，沒有就用 `date`，再沒有就用查詢結果 | `ProductItem[].OriginalInvoiceDate` | `Ymd`。把 `date` 當成發票日期，是沿用 ECPay adapter 的做法（見第 7 節） |
+| `provider_options[:invoice_date]`，沒有就用查詢結果 | `ProductItem[].OriginalInvoiceDate` | `Ymd`。原本的建議也會讀 `date`，和 ECPay adapter 一樣。adapter 不使用 `date`，因為 core 還沒定義它的意思（見第 7 節） |
 | `items[]` | `ProductItem[]` | `description` → `OriginalDescription`、`quantity` → `Quantity`、`unit_price` → `UnitPrice`、`amount` → `Amount`，加上 `Tax` 和 `TaxType`。所有金額都是未稅。見 4.3 |
 | `amount` | `TaxAmount`、`TotalAmount` | 見 4.3 |
 
@@ -346,9 +358,9 @@ contract 用 `sales 100, tax 0, total 100` 對 B2C 發票開折讓，所以稅�
 
 - **共用的測試帳號。** 所有開發者都用 `12345678` 這個帳號。live spec 必須產生不重複的訂單編號和折讓單號。contract 使用固定的折讓 id（`AL_1`、`AL_AV`），在 live 帳號上可能和別人重複。
 - **不存在的號碼。** 使用格式正確的發票號碼，例如 `unknown_invoice_number: "ZZ00000000"`。折讓單號是最多 16 字元的自由文字，所以預設的 `NOPE00000000` 可以用。
-- **開立後馬上作廢。** contract 會作廢剛開立的發票。Amego 可能回傳 `3050121`（還在開立中）或 `3050131`（佇列中）`[info 71]`。live spec 可能需要等待後重試。fake 可以忽略這個情況。
-- **對 B2C 發票開折讓。** contract 的折讓金額含稅，而且 `tax 0`。adapter 必須拆分（4.3）。
-- **折讓需要買方資料。** 採用建議的「先查詢」做法（4.2）時，contract 不用額外的參數就能執行。
+- **開立後馬上作廢。** contract 會作廢剛開立的發票。Amego 可能回傳 `3050121`（還在開立中）或 `3050131`（佇列中）`[info 71]`。2026-10-22 實測時，開立後馬上作廢直接成功，第二次作廢丟出 `ConflictError` `[live]`。live spec 遇到這兩個代碼仍會重試。fake 忽略這個情況。
+- **對 B2C 發票開折讓。** contract 的折讓金額含稅，而且 `tax 0`。adapter 會拆分（4.3）。Amego 接受了把 99 拆成 94 加稅額 5 `[live]`。
+- **折讓需要買方資料。** adapter 會先查詢（4.2），所以 contract 不需要 `follow_up`。
 - **fake。** fake 需要實作表單封包、`sign` 檢查，以及 2.3 中的回應格式。
 
 ## 5. 欄位參考
@@ -515,7 +527,7 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 
 ### 6.4 錯誤代碼
 
-`[info 71]`。Unified 錯誤和 `Reason` 兩欄是建議。
+`[info 71]`。Unified 錯誤和 `Reason` 兩欄是 adapter 的對應 `[code]`。代碼 `15` 和 `71` 有 live 實測過。查詢或作廢不存在的發票、作廢不存在的折讓，都得到 `NotFoundError` `[live]`。表外的代碼對應到 `ProviderError`。
 
 共通代碼：
 
@@ -601,4 +613,5 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 6. 陣列型呼叫送多筆時，其中一筆失敗，其他筆會成功嗎？在確認之前，一次只送一筆。
 7. **Core：** B2C 折讓的 `AmountSummary` 是什麼意思？contract 送的是 `tax 0`，稅額包含在總額裡。Amego 要求拆出稅額（4.3）。
 8. **Core：** `AllowanceInput` 的 `date` 是什麼意思？ECPay adapter 把它當成原發票日期。Amego 同時需要原發票日期和折讓日期。
-9. 這些內容都沒有 live 驗證過。可以用公開的測試帳號驗證。
+9. live spec 只檢查了主要流程，沒有檢查零稅率、混合稅率、載具和小數數量。
+10. payload 裡的空白用 `%20` 送出可以正常運作，對原始 JSON 計算的 `sign` 也能通過 `[live]`。我們沒有測試 `+`，所以不知道 Amego 用的是哪一種 PHP decoder。
