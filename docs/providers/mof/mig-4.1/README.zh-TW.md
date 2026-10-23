@@ -64,20 +64,20 @@ MIG 共有 21 種訊息 `[mig 表 3-1]`。B2B 交易可以用交換訊息或存�
 | Unified | MIG 訊息 | 說明 |
 | --- | --- | --- |
 | `issue` | F0401，B2B 交換用 A0101 | |
-| `void` | F0501 或 A0201 | 需要發票日期（見下方） |
-| `allowance` | G0401 或 B0101 | 需要每張原發票的日期（見下方） |
-| `void_allowance` | G0501 或 B0201 | 需要折讓日期 |
+| `void` | F0501 或 A0201 | 需要發票日期，來自 `InvoiceReference` |
+| `allowance` | G0401 或 B0101 | 需要每張原發票的日期，來自 `InvoiceReference` |
+| `void_allowance` | G0501 或 B0201 | 需要折讓日期，來自 `AllowanceReference` |
 | `query` | 無 | 查詢是加值中心提供的功能。MIG 沒有查詢訊息 |
 
 ### MIG 對 unified API 的影響
 
-下面列出 MIG 替我們回答的問題，以及我們的 model 和 MIG 不一樣的地方。
+下面列出 MIG 替我們回答的問題，以及我們的 model 和 MIG 不一樣的地方。從這些問題得出的規則，寫在 [unified model](../../README.zh-TW.md#unified-model)。
 
-- **作廢需要發票日期。** F0501 的 `InvoiceDate` 是必填 `[mig 表 16-2]`。不要求呼叫端提供日期的加值中心，必須自己查出來，或用猜的。`VoidInvoiceInput` 和 `AllowanceInput` 已經有 `date` 欄位，但 core 沒有定義它的意思：是操作日期，還是發票日期。ECPay adapter 把它當成發票日期。#36 討論過是否要明確加上 `invoice_date`。
-- **折讓需要每張原發票的號碼和日期。** G0401 的每個品項都必填 `OriginalInvoiceNumber` 和 `OriginalInvoiceDate` `[mig 表 18-5]`。
-- **作廢折讓需要折讓日期。** G0501 的 `AllowanceDate` 是必填 `[mig 表 19-2]`。`VoidAllowanceInput` 沒有這個欄位。
-- **作廢原因是必填。** F0501 和 G0501 的 `CancelReason` 都是 1 到 20 字元 `[mig 表 16-2, 19-2]`。`VoidAllowanceInput.reason` 是選填，所以 adapter 必須補上預設值。
-- **折讓金額不含稅。** G0401 品項的 `Amount` 和總計 `TotalAmount` 都是未稅金額。每個品項另外需要自己的整數 `Tax` `[mig 表 18-5, 18-6]`。
+- **作廢需要發票日期。** F0501 的 `InvoiceDate` 是必填 `[mig 表 16-2]`。unified model 把它放在 `InvoiceReference#invoice_datetime`。Input 沒有 `date` 欄位：作廢的時間是 `CancelDate` 和 `CancelTime`，由加值中心記錄。
+- **折讓需要每張原發票的號碼和日期。** G0401 的每個品項都必填 `OriginalInvoiceNumber` 和 `OriginalInvoiceDate` `[mig 表 18-5]`。兩者都來自 `InvoiceReference`。unified 的折讓只針對一張發票，跨多張發票的折讓不在 model 的範圍內。
+- **作廢折讓需要折讓日期。** G0501 的 `AllowanceDate` 是必填 `[mig 表 19-2]`。它來自 `AllowanceReference#allowance_date`，型別是 `Date`，因為 G0401 沒有折讓時間。
+- **作廢原因是必填。** F0501 和 G0501 的 `CancelReason` 都是 1 到 20 字元 `[mig 表 16-2, 19-2]`。core 要求作廢一定要有原因。作廢折讓時，呼叫端沒有給原因，core 就補上 `作廢折讓`。
+- **折讓金額不含稅。** G0401 品項的 `Amount` 和總計 `TotalAmount` 都是未稅金額。每個品項另外需要自己的整數 `Tax` `[mig 表 18-5, 18-6]`。呼叫端給的 `tax_amount` 是 `0` 時，由 core 拆出稅額。
 - **B2C 必須有隨機碼。** F0401 的 `RandomNumber` 是 4 位數字。買方是消費者時必填，買方是營業人時選填 `[mig 表 15-3]`。
 - **外幣只是備註。** `Currency`、`OriginalCurrencyAmount` 和 `ExchangeRate` 都是選填的備註。法定金額一律是新台幣整數 `[mig 表 15-6]`。這和 unified 的 `FOREIGN_CURRENCY` 設計一致。境外電商是例外：他們可以用外幣列示金額。
 - **混合稅率只能用在表頭。** 表頭的 `TaxType` 可以是 `9`（混合），品項不行 `[mig 表 15-5, 4-12]`。

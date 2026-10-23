@@ -54,20 +54,20 @@ The MIG has 21 messages `[mig 表 3-1]`. B2B trades can use exchange (交換) or
 | Unified | MIG message | Note |
 | --- | --- | --- |
 | `issue` | F0401, or A0101 for B2B exchange | |
-| `void` | F0501, or A0201 | Needs the invoice date (see below) |
-| `allowance` | G0401, or B0101 | Needs each original invoice's date (see below) |
-| `void_allowance` | G0501, or B0201 | Needs the allowance date |
+| `void` | F0501, or A0201 | Needs the invoice date. It comes from `InvoiceReference` |
+| `allowance` | G0401, or B0101 | Needs each original invoice's date. It comes from `InvoiceReference` |
+| `void_allowance` | G0501, or B0201 | Needs the allowance date. It comes from `AllowanceReference` |
 | `query` | none | Queries are a provider feature. The MIG has no query message |
 
 ### What the MIG tells us about the unified API
 
-These are the points where the MIG settles a question for us, or where our model and the MIG differ.
+These are the points where the MIG settles a question for us, or where our model and the MIG differ. The rules that came out of them are in [the unified model](../../README.md#the-unified-model).
 
-- **Voiding needs the invoice date.** F0501 requires `InvoiceDate` `[mig 表 16-2]`. A provider that does not ask for it must look it up or guess it. `VoidInvoiceInput` and `AllowanceInput` already have a `date` field, but the core does not say what it means: the operation date, or the invoice date. The ECPay adapter uses it as the invoice date. #36 discusses an explicit `invoice_date`.
-- **An allowance needs each original invoice's number and date.** Every G0401 item requires `OriginalInvoiceNumber` and `OriginalInvoiceDate` `[mig 表 18-5]`.
-- **Voiding an allowance needs the allowance date.** G0501 requires `AllowanceDate` `[mig 表 19-2]`. `VoidAllowanceInput` does not have it.
-- **The void reason is required.** F0501 `CancelReason` and G0501 `CancelReason` are 1 to 20 chars `[mig 表 16-2, 19-2]`. `VoidAllowanceInput.reason` is optional, so an adapter must fill a default.
-- **Allowance amounts exclude tax.** G0401 item `Amount` and total `TotalAmount` are tax-excluded. Each item also needs its own integer `Tax` `[mig 表 18-5, 18-6]`.
+- **Voiding needs the invoice date.** F0501 requires `InvoiceDate` `[mig 表 16-2]`. The unified model carries it in `InvoiceReference#invoice_datetime`. An input does not have a `date` field: the void time is `CancelDate` and `CancelTime`, and the provider records it.
+- **An allowance needs each original invoice's number and date.** Every G0401 item requires `OriginalInvoiceNumber` and `OriginalInvoiceDate` `[mig 表 18-5]`. Both come from `InvoiceReference`. The unified allowance credits one invoice. An allowance across several invoices is not in the model.
+- **Voiding an allowance needs the allowance date.** G0501 requires `AllowanceDate` `[mig 表 19-2]`. It comes from `AllowanceReference#allowance_date`, a `Date`, because G0401 has no allowance time.
+- **The void reason is required.** F0501 `CancelReason` and G0501 `CancelReason` are 1 to 20 chars `[mig 表 16-2, 19-2]`. The core requires a void reason. For a void allowance it fills `作廢折讓` when the caller gives none.
+- **Allowance amounts exclude tax.** G0401 item `Amount` and total `TotalAmount` are tax-excluded. Each item also needs its own integer `Tax` `[mig 表 18-5, 18-6]`. The core splits the tax when the caller gives `tax_amount` `0`.
 - **The random code is required for B2C.** F0401 `RandomNumber` is 4 digits. It is required when the buyer is a consumer, and optional for a business buyer `[mig 表 15-3]`.
 - **Foreign currency is a memo only.** `Currency`, `OriginalCurrencyAmount` and `ExchangeRate` are optional notes. The legal amounts stay in TWD integers `[mig 表 15-6]`. This matches the unified `FOREIGN_CURRENCY` design. Cross-border sellers (境外電商) are the exception: they may list amounts in a foreign currency.
 - **Mixed tax is header-level only.** The header `TaxType` can be `9` (mixed), but an item cannot `[mig 表 15-5, 4-12]`.
