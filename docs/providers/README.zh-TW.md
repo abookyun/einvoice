@@ -104,6 +104,7 @@
 | 我們的 2.x adapter 程式碼 | `[code]` | 我們的 adapter 怎麼做。不能證明 API 實際的行為 |
 | 1.x client 的程式碼 | `[1x-code]` | 舊版 client 怎麼做。它在正式環境執行了很多年 |
 | 財政部規格 | `[mig 表 x-y]` | 規格本身。見 MIG 筆記 |
+| 其他 SDK 的 wire fixture，由該 SDK 的作者實際執行過 | `[fixture]` | 由對方驗證過。筆記會寫明時間和來源 |
 
 另外有兩個沒有標記的註明：
 

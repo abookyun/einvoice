@@ -102,6 +102,7 @@ Every fact in a note has a source tag. The tag tells you how much to trust the f
 | Our 2.x adapter code | `[code]` | what our adapter does. Not proof of what the API does |
 | The 1.x client code | `[1x-code]` | what the old client does. It ran in production for years |
 | The MOF standard | `[mig 表 x-y]` | the standard. See the MIG note |
+| Wire fixtures of another SDK, run by its authors | `[fixture]` | verified by them. The note says when and where |
 
 Two more marks have no tag:
 
