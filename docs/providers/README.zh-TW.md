@@ -52,10 +52,10 @@
 
 | Reference | 欄位 |
 | --- | --- |
-| `InvoiceReference` | `number`、`invoice_datetime`、`random_code`、`order_id`、`total_amount` |
+| `InvoiceReference` | `number`、`invoice_datetime`、`random_code`、`order_id`、`total_amount`、`buyer_ubn`（消費者為 `nil`） |
 | `AllowanceReference` | `allowance_number`、`allowance_date`、`invoice_number` |
 
-加值中心需要某個欄位、呼叫端卻沒有給時，adapter 可以向加值中心查詢補上。補不到就丟出 `ValidationError`，並說明缺少哪個欄位。adapter 絕不用猜的值補上。
+加值中心需要某個欄位、呼叫端卻沒有給時，adapter 可以向加值中心查詢補上。補不到就丟出 `ValidationError`，並說明缺少哪個欄位。adapter 絕不用猜的值補上。查詢本身失敗時，見下方的錯誤。
 
 **日期。** Input 不帶「這次操作本身的時間」。這個時間由加值中心記錄。如果加值中心要求送出，adapter 就送出當下的時間（UTC+8）。名稱和型別照 MIG：
 
@@ -79,8 +79,14 @@
 
 **狀態。** 加值中心的狀態無法對應到 `InvoiceStatus` 時，`QueryInvoiceResult#status` 為 `nil`。
 
-**錯誤。** 每一種失敗都是 `Einvoice::Error`，不會是 Ruby 原生的錯誤。
+**錯誤。** 每一種失敗都是 `Einvoice::Error`，不會是 Ruby 原生的錯誤。錯誤類別分成兩組：
 
+| 分組 | 類別 | 失敗的原因 |
+| --- | --- | --- |
+| 發票 | `ValidationError`、`NotFoundError`、`ConflictError`、`NumberExhaustedError` | 請求違反財政部的規則，或發票不在需要的狀態。在每一家加值中心的意思都相同 |
+| 加值中心 | `AuthError`、`NetworkError`、`ProviderError`、`UnsupportedError` | 帳號、連線、加值中心自己的服務，或它不支援的功能 |
+
+- adapter 為了補上缺少的欄位而自己發出的查詢，屬於加值中心這一組。查詢失敗時，adapter 丟出帶有 `Reason::LOOKUP_FAILED` 的 `ProviderError`。錯誤訊息會指出它需要哪個欄位，`cause` 是查詢本身的錯誤。所以 `NotFoundError` 一定是指這次呼叫的那張發票。
 - 遇到我們不認得的錯誤代碼時，每家加值中心有自己的預設類別。第 6.4 節寫明預設類別和依據。
 - HTTP 5xx 和 429 是 `NetworkError`，呼叫端可以重試。
 - `Reason::RETRY_LATER` 表示加值中心說「現在不行，晚一點再試」，例如發票上傳前就作廢。

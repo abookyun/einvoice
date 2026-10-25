@@ -182,7 +182,7 @@ adapter 另外對應了兩個檢查：`/B2CInvoice/CheckBarcode`（手機條碼�
 
 `provider_options` 的鍵可以是字串或 symbol。
 
-**缺少發票日期時。** `void`、`allowance` 和用號碼查詢都需要發票日期。如果 reference 沒有 `invoice_datetime`，但有 `order_id`，adapter 會先用 `RelateNumber` 呼叫 `GetIssue`，取得 `IIS_Create_Date`。否則丟出 `ValidationError`，指出缺少 `invoice_datetime`。只給發票號碼是不夠的。
+**缺少發票日期時。** `void`、`allowance` 和用號碼查詢都需要發票日期。如果 reference 沒有 `invoice_datetime`，但有 `order_id`，adapter 會先用 `RelateNumber` 呼叫 `GetIssue`，取得 `IIS_Create_Date`。否則丟出 `ValidationError`，指出缺少 `invoice_datetime`。只給發票號碼是不夠的。查詢失敗時，adapter 丟出帶有 `LOOKUP_FAILED` 的 `ProviderError`（[unified model](../README.zh-TW.md#unified-model)）。
 
 **作廢折讓缺少發票號碼時。** `AllowanceInvalid` 需要 `InvoiceNo`。只給折讓單號時沒有這個值，所以丟出 `ValidationError`，指出缺少 `invoice_number`。
 

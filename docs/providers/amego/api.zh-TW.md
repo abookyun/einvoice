@@ -173,13 +173,13 @@ Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部
 | --- | --- | --- | --- |
 | `issue` | `f0401` | | `track_api_code`、`customs_clearance_mark`、`zero_tax_rate_reason`、`brand_name`、`detail_amount_round`、`tax_adjustment` |
 | `void` | `f0501` | `number` | |
-| `allowance` | `g0401` | `number`、`invoice_datetime` | `buyer_identifier`、`buyer_name` |
+| `allowance` | `g0401` | `number`、`invoice_datetime`、`buyer_ubn` | `buyer_name` |
 | `void_allowance` | `g0501` | `allowance_number` | |
 | `query` | `invoice_query` | `order_id` 或 `number` | |
 
 每次呼叫只送一筆資料，接受陣列的 endpoint 也一樣（2.3）。
 
-**折讓資料從查詢取得。** `g0401` 需要原發票的日期和買方（`BuyerIdentifier`、`BuyerName`）。reference 有日期，但沒有買方。所以 adapter 會先呼叫 `invoice_query`，取得買方；reference 沒有日期時，也一起取得日期。如果 `provider_options` 給了 `buyer_identifier` 和 `buyer_name`，而且 reference 有 `invoice_datetime`，adapter 就不查詢。查詢只能查 180 天內的發票。超過之後，呼叫端必須三個都給，否則 adapter 丟出 `ValidationError`。
+**折讓資料從查詢取得。** `g0401` 需要原發票的日期和買方（`BuyerIdentifier`、`BuyerName`）。`issue` 或 `query` 回傳的 reference 有日期和 `buyer_ubn`，但沒有買方名稱。所以 adapter 會先呼叫 `invoice_query`，取得名稱；reference 沒有日期時，也一起取得日期。如果 `provider_options` 給了 `buyer_name`，而且 reference 有 `invoice_datetime`，adapter 就不查詢。查詢只能查 180 天內的發票。超過之後，呼叫端必須自己提供，否則 adapter 丟出 `ValidationError`。查詢失敗時，adapter 丟出帶有 `LOOKUP_FAILED` 的 `ProviderError`（[unified model](../README.zh-TW.md#unified-model)）。
 
 ### 4.2 欄位
 
@@ -236,7 +236,8 @@ Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部
 | `allowance_id` | `AllowanceNumber` | 最多 16。在帳號內不能重複 |
 | （當下） | `AllowanceDate` | UTC+8 的今天，`Ymd`。Amego 要求必填，它就是這次折讓的日期 |
 | （固定） | `AllowanceType` | `2` |
-| `provider_options[:buyer_identifier]`、`[:buyer_name]`，沒有時取自查詢 | `BuyerIdentifier`、`BuyerName` | 必須和原發票一致 |
+| `invoice.buyer_ubn` | `BuyerIdentifier` | `nil` 時為 `0000000000`。必須和原發票一致 |
+| `provider_options[:buyer_name]`，沒有時取自查詢 | `BuyerName` | 必須和原發票一致 |
 | `invoice.number` | `ProductItem[].OriginalInvoiceNumber` | |
 | `invoice.invoice_datetime`，沒有時取自查詢 | `ProductItem[].OriginalInvoiceDate` | UTC+8 的 `Ymd` |
 | `items[]` | `ProductItem[]` | `description` → `OriginalDescription`、`quantity` → `Quantity`、`unit_price` → `UnitPrice`、`amount` → `Amount`，再加上品項的 `Tax` 和 `TaxType`。金額不含稅。見 4.3 |

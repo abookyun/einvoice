@@ -161,13 +161,13 @@ Other endpoints. An adapter can reach them through a `raw` method:
 | --- | --- | --- | --- |
 | `issue` | `invoice_issue`, `Status` `1` | | `customs_clearance` |
 | `void` | `invoice_invalid` | `number` | |
-| `allowance` | `allowance_issue`, `Status` `1` | `number`, `order_id` | `tax_type_for_mixed`, `buyer_email` |
+| `allowance` | `allowance_issue`, `Status` `1` | `number`, `order_id`, `buyer_ubn` | `tax_type_for_mixed`, `buyer_email` |
 | `void_allowance` | `allowanceInvalid` | `allowance_number` | |
 | `query` | `invoice_search` | `number` with `random_code`, or `order_id` with `total_amount` | |
 
 **A query always needs two keys.** With only a number, or only an order id, the adapter raises `ValidationError` and names the missing field. It cannot look the second key up.
 
-**Missing order id on an allowance.** `allowance_issue` needs the original invoice's `MerchantOrderNo`. If the reference has no `order_id` but has `random_code`, the adapter queries by number first and takes `MerchantOrderNo`. Otherwise it raises `ValidationError` for `order_id`.
+**Missing data on an allowance.** `allowance_issue` needs the original invoice's `MerchantOrderNo`, and the adapter needs to know if the buyer is a business (4.3). A reference from `issue` or `query` has both `order_id` and `buyer_ubn`. A plain invoice number has neither. If the reference has `random_code`, the adapter queries by number first and takes `MerchantOrderNo` and `BuyerUBN`. Otherwise it raises `ValidationError` for `order_id`. If the query fails, the adapter raises `ProviderError` with `LOOKUP_FAILED` ([the unified model](../README.md#the-unified-model)).
 
 ### 4.2 Fields
 
@@ -236,8 +236,8 @@ Result: `invoice_number` from `InvoiceNumber`, `status` `VOIDED`, `cancel_dateti
 | --- | --- | --- |
 | `invoice.number` | `InvoiceNo` | |
 | `invoice.order_id` | `MerchantOrderNo` | M. The original invoice's order id. See 4.1 when it is missing |
-| `items[]` | `ItemName`, `ItemCount`, `ItemUnit`, `ItemPrice`, `ItemAmt` | Prices without tax. See 4.3 |
-| (from the core) | `ItemTaxAmt` | The item tax. See 4.3 |
+| `items[]` | `ItemName`, `ItemCount`, `ItemUnit`, `ItemPrice`, `ItemAmt` | With tax for a consumer, without tax for a business. See 4.3 |
+| (from the core) | `ItemTaxAmt` | `0` for a consumer, else the item tax. See 4.3 |
 | `amount.total_amount` | `TotalAmt` | See 4.3 |
 | `provider_options[:tax_type_for_mixed]` | `TaxTypeForMixed` | M for a mixed invoice |
 | `provider_options[:buyer_email]` | `BuyerEmail` | ezPay sends the notice here |
@@ -250,7 +250,7 @@ Result:
 | --- | --- |
 | `allowance_number` | `AllowanceNo` |
 | `invoice_number` | `InvoiceNumber` |
-| `allowance_date` | Today in UTC+8. The result has no date, and `Status` `1` creates the allowance now |
+| `allowance_date` | `nil`. The result has no date, and ezPay sets it on its side |
 | `total_amount` | `AllowanceAmt` |
 | `reference` | `allowance_number`, `allowance_date`, `invoice_number` |
 
@@ -306,7 +306,12 @@ The query shows the same split for B2C: `Amt 1333`, `TaxAmt 67`, `TotalAmt 1400`
 - `ItemTaxAmt` is one value per item, separated by `|` like the other item fields `[inv 六]`.
 - `TotalAmt` is "the allowance total" `[inv 六]`. We read it as the sum of the items plus the item tax (inferred).
 
-The adapter uses prices without tax, because that is the shape the core gives (G0401): `ItemAmt` is each item's amount without tax, and `ItemTaxAmt` is its tax from the core. The core rounds half up and puts the remainder on the last taxable item. `ItemPrice` is `ItemAmt / ItemCount`. It must be an integer, or the adapter raises `ValidationError` (see 7).
+The adapter picks the form by the buyer of the original invoice, from `invoice.buyer_ubn`:
+
+- **A consumer** (`buyer_ubn` is `nil`): prices with tax. `ItemAmt` is each item's amount plus its tax from the core, and `ItemTaxAmt` is `0`. The "cannot deduct" rule does not matter, because a consumer does not deduct business tax. Prices with tax also divide well: two items of 50 stay 50 each.
+- **A business**: prices without tax, the shape the core gives (G0401). `ItemAmt` is each item's amount without tax, and `ItemTaxAmt` is its tax from the core.
+
+`TotalAmt` is `amount.total_amount` in both forms. `ItemPrice` is `ItemAmt / ItemCount`. It must be an integer, or the adapter raises `ValidationError`. Without tax, this can happen: 2 items for 95 (see 7).
 
 **Integers.** Item counts and prices are integers. The unified model allows decimals, so check before the call.
 
@@ -354,7 +359,7 @@ The query has no allowance data and no cancelled status. So the adapter never re
 - **Item fields are much smaller than the MIG.** `ItemName` is max 30, `ItemUnit` max 2 Chinese or 6 English characters, and `ItemCount` and `ItemPrice` are **integers** `[inv 四]`. The MIG allows 500 chars and 7 decimals.
 - **`TaxRate` is a percent.** Send `5`, not `0.05` `[inv 四]`. The query returns `0.05` `[inv 八]`. The MIG and the other providers use `0.05`.
 - **An allowance on a mixed invoice is split.** One allowance covers one tax type (`TaxTypeForMixed`). A mixed invoice needs one allowance per tax type `[inv 六]`.
-- **Allowance prices may include tax.** MIG G0401 wants amounts without tax and a tax per item. The adapter always sends them without tax.
+- **Allowance prices may include tax.** MIG G0401 wants amounts without tax and a tax per item. The adapter sends prices with tax for a consumer, and leaves the split to ezPay.
 - **The allowance number is longer than the MIG's.** ezPay returns an `AllowanceNo` of up to 20 characters (25 in `allowanceInvalid`). MIG `AllowanceNumber` is max 16. The manual's example is 16 characters (`A151015111705007`).
 - **No zero tax rate reason.** The manual was last changed before MIG 4.0 and has no field for `ZeroTaxRateReason`.
 
@@ -572,7 +577,7 @@ The list has no code for these cases: an allowance on a voided invoice, an allow
 3. Is special tax really `TaxType` `1` with a special `TaxRate`?
 4. How is the `CheckCode` of a void or allowance result built? It lacks the five fields of the documented rule.
 5. Which codes come back for an allowance on a voided invoice, and for voiding an allowance that does not exist? The contract needs `ConflictError` and `NotFoundError` there.
-6. An allowance item without tax may not divide into an integer `ItemPrice`, for example `ItemAmt` 95 over 2 items. Can such an allowance be sent with prices that include tax instead?
+6. For a business, an allowance item without tax may not divide into an integer `ItemPrice`, for example `ItemAmt` 95 over 2 items. Is there a way to send it?
 7. None of this is verified live. It needs a test shop on `cinv.ezpay.com.tw`.
 
 The manual does not say these either. The adapter's choice is in brackets:

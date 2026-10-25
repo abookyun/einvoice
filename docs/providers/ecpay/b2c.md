@@ -180,7 +180,7 @@ All paths start with `/B2CInvoice/`. Page 49890 is an older copy of the issue pa
 
 All `provider_options` keys are strings or symbols.
 
-**Missing invoice date.** `void`, `allowance` and a query by number need the invoice date. If the reference has no `invoice_datetime` but has `order_id`, the adapter queries `GetIssue` by `RelateNumber` first and takes `IIS_Create_Date`. Otherwise it raises `ValidationError` for `invoice_datetime`. A plain invoice number is not enough.
+**Missing invoice date.** `void`, `allowance` and a query by number need the invoice date. If the reference has no `invoice_datetime` but has `order_id`, the adapter queries `GetIssue` by `RelateNumber` first and takes `IIS_Create_Date`. Otherwise it raises `ValidationError` for `invoice_datetime`. A plain invoice number is not enough. If the query fails, the adapter raises `ProviderError` with `LOOKUP_FAILED` ([the unified model](../README.md#the-unified-model)).
 
 **Missing invoice number on void allowance.** `AllowanceInvalid` needs `InvoiceNo`. A plain allowance number has none, so it raises `ValidationError` for `invoice_number`.
 

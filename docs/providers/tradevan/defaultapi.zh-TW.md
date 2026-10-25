@@ -165,7 +165,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 2. 前綴加上 reference 的 `order_id`，和 `issue` 組出來的方式相同（4.2）。
 3. 用號碼呼叫 `searchInvoiceDetail` 查詢。它的回應有 `saleIdentifier` 和 `invoiceDate` `[readme]`。
 
-折讓的發票日期取自 reference，或取自同一次查詢。沒有號碼可以查詢時，adapter 丟出 `ValidationError`。
+折讓的發票日期取自 reference，或取自同一次查詢。沒有號碼可以查詢時，adapter 丟出 `ValidationError`。查詢失敗時，adapter 丟出帶有 `LOOKUP_FAILED` 的 `ProviderError`（[unified model](../README.zh-TW.md#unified-model)）。
 
 `get/searchInvoiceInfoByTransactionnumber` 可以用訂單編號找發票，但它的回應未知。adapter 沒有對應這個 endpoint，要用 `raw` 呼叫。
 
@@ -246,7 +246,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | `invoice.invoice_datetime`，沒有時取自查詢 | `itemList[].invoiceDate` | 必填。UTC+8 的 `yyyyMMdd` |
 | `items[]` | `itemList[]` | 同開立。`itemExclude` 是品項的未稅金額，`tax` 是它的稅額，`itemTotal` 是兩者相加（4.3） |
 
-結果：沒有任何來源顯示 type `A` 的回應。adapter 讀取 `allowanceNumber`，因為 type `I` 的回應有這個欄位。如果是空的，adapter 丟出帶有原始回應的 `ProviderError`。`allowance_date` 在回應有 `allowanceDate` 時取它，否則為 UTC+8 的今天。
+結果：沒有任何來源顯示 type `A` 的回應。adapter 讀取 `allowanceNumber`，因為 type `I` 的回應有這個欄位。如果是空的，adapter 丟出帶有原始回應的 `ProviderError`。`allowance_date` 在回應有 `allowanceDate` 時取它，否則為 `nil`。
 
 #### `void_allowance`
 

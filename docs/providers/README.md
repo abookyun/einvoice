@@ -50,10 +50,10 @@ Section 4 of every note maps the provider onto these rules. The core types follo
 
 | Reference | Fields |
 | --- | --- |
-| `InvoiceReference` | `number`, `invoice_datetime`, `random_code`, `order_id`, `total_amount` |
+| `InvoiceReference` | `number`, `invoice_datetime`, `random_code`, `order_id`, `total_amount`, `buyer_ubn` (`nil` for a consumer) |
 | `AllowanceReference` | `allowance_number`, `allowance_date`, `invoice_number` |
 
-When a provider needs a field that the caller did not give, the adapter may query the provider for it. If it cannot, it raises `ValidationError` and names the field. It never fills in a guess.
+When a provider needs a field that the caller did not give, the adapter may query the provider for it. If it cannot, it raises `ValidationError` and names the field. It never fills in a guess. If the query itself fails, see the errors below.
 
 **Dates.** An input does not carry the time of the operation itself. The provider records that time. If a provider asks for it, the adapter sends the current time in UTC+8. Names and types follow the MIG:
 
@@ -77,8 +77,14 @@ When a provider needs a field that the caller did not give, the adapter may quer
 
 **Status.** `QueryInvoiceResult#status` is `nil` when the provider's status cannot be mapped to `InvoiceStatus`.
 
-**Errors.** Every failure is an `Einvoice::Error`, never a plain Ruby error.
+**Errors.** Every failure is an `Einvoice::Error`, never a plain Ruby error. The classes fall into two groups:
 
+| Group | Classes | What failed |
+| --- | --- | --- |
+| The invoice | `ValidationError`, `NotFoundError`, `ConflictError`, `NumberExhaustedError` | The request breaks a rule of the MOF, or the invoice is not in the state it needs. These mean the same at every provider |
+| The provider | `AuthError`, `NetworkError`, `ProviderError`, `UnsupportedError` | The account, the connection, the provider's own service, or a feature it lacks |
+
+- A query that the adapter makes on its own, to fill a missing field, belongs to the provider group. If it fails, the adapter raises `ProviderError` with `Reason::LOOKUP_FAILED`. The message names the field it needed, and `cause` holds the error of the query. So a `NotFoundError` always means the invoice of the call itself.
 - Each provider has its own default class for an error code that we do not know. Section 6.4 gives it, with the evidence.
 - HTTP 5xx and 429 are a `NetworkError`, so the caller can retry.
 - `Reason::RETRY_LATER` means the provider says "not now, try later", for example a void before the invoice is uploaded.

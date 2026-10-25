@@ -163,7 +163,7 @@ Constructor settings: `acnt`, `acntp`, `key1`, `key2`, `base_url` (no default, s
 2. The prefix and the reference's `order_id`, as `issue` builds it (4.2).
 3. A `searchInvoiceDetail` query by number. Its response has `saleIdentifier` and `invoiceDate` `[readme]`.
 
-The allowance takes the invoice date from the reference, or from the same query. With no number to query, the adapter raises `ValidationError`.
+The allowance takes the invoice date from the reference, or from the same query. With no number to query, the adapter raises `ValidationError`. If the query fails, the adapter raises `ProviderError` with `LOOKUP_FAILED` ([the unified model](../README.md#the-unified-model)).
 
 `get/searchInvoiceInfoByTransactionnumber` finds an invoice by order id, but its response is unknown. The adapter does not map it. Reach it through `raw`.
 
@@ -244,7 +244,7 @@ Result: `invoice_number` from the input, `status` `VOIDED` after `voidStatus` `Y
 | `invoice.invoice_datetime`, else the query | `itemList[].invoiceDate` | M. `yyyyMMdd` in UTC+8 |
 | `items[]` | `itemList[]` | As for issue. `itemExclude` is the item amount without tax, `tax` its tax, and `itemTotal` the two together (4.3) |
 
-Result: no source shows the type `A` response. The adapter reads `allowanceNumber`, as the type `I` response has that field. If it is empty, the adapter raises `ProviderError` with the raw response. `allowance_date` is `allowanceDate` when the response has it, else today in UTC+8.
+Result: no source shows the type `A` response. The adapter reads `allowanceNumber`, as the type `I` response has that field. If it is empty, the adapter raises `ProviderError` with the raw response. `allowance_date` is `allowanceDate` when the response has it, else `nil`.
 
 #### `void_allowance`
 

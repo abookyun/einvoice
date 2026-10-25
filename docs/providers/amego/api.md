@@ -171,13 +171,13 @@ A track is set to one mode in the back office (發票作業 > 發票字軌列表
 | --- | --- | --- | --- |
 | `issue` | `f0401` | | `track_api_code`, `customs_clearance_mark`, `zero_tax_rate_reason`, `brand_name`, `detail_amount_round`, `tax_adjustment` |
 | `void` | `f0501` | `number` | |
-| `allowance` | `g0401` | `number`, `invoice_datetime` | `buyer_identifier`, `buyer_name` |
+| `allowance` | `g0401` | `number`, `invoice_datetime`, `buyer_ubn` | `buyer_name` |
 | `void_allowance` | `g0501` | `allowance_number` | |
 | `query` | `invoice_query` | `order_id`, or `number` | |
 
 Each call sends one entry, also to the array endpoints (2.3).
 
-**Allowance data from a query.** `g0401` needs the original invoice date and its buyer (`BuyerIdentifier`, `BuyerName`). A reference has the date but no buyer. So the adapter calls `invoice_query` first, and takes the buyer, and the date if the reference has none. When `provider_options` gives `buyer_identifier` and `buyer_name`, and the reference has `invoice_datetime`, the adapter skips the query. The query only works within 180 days. After that, the caller must give all three, or the adapter raises `ValidationError`.
+**Allowance data from a query.** `g0401` needs the original invoice date and its buyer (`BuyerIdentifier`, `BuyerName`). A reference from `issue` or `query` has the date and `buyer_ubn`, but no buyer name. So the adapter calls `invoice_query` first, and takes the name, and the date if the reference has none. When `provider_options` gives `buyer_name`, and the reference has `invoice_datetime`, the adapter skips the query. The query only works within 180 days. After that, the caller must give them, or the adapter raises `ValidationError`. If the query fails, the adapter raises `ProviderError` with `LOOKUP_FAILED` ([the unified model](../README.md#the-unified-model)).
 
 ### 4.2 Fields
 
@@ -234,7 +234,8 @@ The void is asynchronous. `code` `0` means Amego accepted the void into its queu
 | `allowance_id` | `AllowanceNumber` | Max 16. Must be unique in the account |
 | (now) | `AllowanceDate` | Today in UTC+8, `Ymd`. Amego requires it, and it is the date of this allowance |
 | (fixed) | `AllowanceType` | `2` |
-| `provider_options[:buyer_identifier]`, `[:buyer_name]`, else the query | `BuyerIdentifier`, `BuyerName` | Must match the original invoice |
+| `invoice.buyer_ubn` | `BuyerIdentifier` | `0000000000` when `nil`. Must match the original invoice |
+| `provider_options[:buyer_name]`, else the query | `BuyerName` | Must match the original invoice |
 | `invoice.number` | `ProductItem[].OriginalInvoiceNumber` | |
 | `invoice.invoice_datetime`, else the query | `ProductItem[].OriginalInvoiceDate` | `Ymd` in UTC+8 |
 | `items[]` | `ProductItem[]` | `description` → `OriginalDescription`, `quantity` → `Quantity`, `unit_price` → `UnitPrice`, `amount` → `Amount`, plus the item's `Tax` and `TaxType`. Amounts exclude tax. See 4.3 |
