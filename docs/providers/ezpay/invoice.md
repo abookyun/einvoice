@@ -4,9 +4,9 @@ English | [繁體中文](invoice.zh-TW.md)
 
 ## 1. Status and sources
 
-> **Trust:** experimental adapter (`Einvoice::EzPay::Provider`), built from this note alone. Its encryption and `CheckCode` match the manual's samples byte for byte (2.6). Nothing has run against ezPay: there is no shared test account.
+> **Trust:** an experimental adapter is in progress, built from this note alone. Its encryption and `CheckCode` match the manual's samples byte for byte (2.6). Nothing has run against ezPay: there is no shared test account. Section 4 and the class columns in 6.4 are the mapping the adapter follows.
 
-ezPay (簡單行動支付股份有限公司) runs the ezPay 電子發票加值服務平台. The 2.x adapter is `Einvoice::EzPay::Provider` `[code]`. We first wrote sections 4.2 and 6.4 as proposals from the manuals. They now describe the adapter.
+ezPay (簡單行動支付股份有限公司) runs the ezPay 電子發票加值服務平台. The 2.x adapter will be `Einvoice::EzPay::Provider`.
 
 We built the adapter from this note without the PDFs, to test the note. Then we checked every gap against the PDFs. Nothing in the note was wrong, but it missed some facts. This version adds them, and marks the places where the manual itself says nothing ("the manual does not say").
 
@@ -18,7 +18,6 @@ The manuals belong to 簡單行動支付 ezPay, and the PDFs say ezPay holds the
 | `[ces]` | 電子發票技術串接手冊 境外電商版, <https://inv.ezpay.com.tw/dw_files/info_api/EZP_CES_1_0_0.pdf>, 65 pages | EZP_CES_1.0.0, 2021-01-26 | Cross-border sellers |
 | `[track]` | 電子發票字軌管理 技術串接手冊, <https://inv.ezpay.com.tw/dw_files/info_api/EZP__Track__1_0_0.pdf>, 38 pages | EZP_Track_1.0.0, 2018-10 | Track (字軌) management |
 | `[bdv]` | 手機條碼與捐贈碼驗證 技術串接手冊, <https://inv.ezpay.com.tw/dw_files/info_api/BDV_1_0_0.pdf>, 24 pages | EZP_BDV_1.0.0, 2021-03-03 | Mobile barcode and donation code checks |
-| `[code]` | The 2.x adapter, `lib/einvoice/ezpay/` | | What the adapter does |
 
 All four were downloaded on 2026-10-14. We checked `[inv]` and `[bdv]` again on 2026-10-22. The `[inv]` manual has had no change since April 2024, and its last real field changes are from 2021.
 
@@ -91,6 +90,8 @@ The manual's PHP sample joins the fields with `http_build_query`, so the values 
 
 Void and allowance results also carry a `CheckCode`, but they do not have these five fields. The manual gives no other rule, so these cannot be checked (see 7).
 
+**Limits of the API.** `HashIV` is fixed per shop, so the same request always gives the same cipher text. Only issue and query results carry a `CheckCode` that we can check, and it covers five fields only. Void and allowance results, and error responses, have no check at all. So their integrity depends on TLS.
+
 The check APIs work differently (5.7). The request carries `CheckValue`: SHA-256 of `HashKey=...&<PostData_>&HashIV=...`, upper case. The response `Result` is encrypted too, and its `CheckCode` uses the same rule over the encrypted `Result` `[bdv 附件三]`. The manual's 附件四 says otherwise: it repeats the invoice rule from `[inv 附件二]`. But its own response sample matches 附件三, so trust 附件三.
 
 ### 2.5 Example
@@ -156,47 +157,49 @@ Other endpoints. An adapter can reach them through a `raw` method:
 
 ### 4.1 Operations
 
-| Unified | Endpoint | `provider_options` | Note |
+| Unified | Endpoint | Reference fields | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `invoice_issue`, `Status` `1` | `customs_clearance` | |
-| `void` | `invoice_invalid` | none | Not before the upload, the next day |
-| `allowance` | `allowance_issue`, `Status` `1` | `order_id` (M), `tax_type_for_mixed`, `buyer_email` | ezPay assigns the allowance number |
-| `void_allowance` | `allowanceInvalid` | none | |
-| `query` | `invoice_search` | `random_code` (by number), `total_amount` (by order id) | A second key is always needed |
+| `issue` | `invoice_issue`, `Status` `1` | | `customs_clearance` |
+| `void` | `invoice_invalid` | `number` | |
+| `allowance` | `allowance_issue`, `Status` `1` | `number`, `order_id` | `tax_type_for_mixed`, `buyer_email` |
+| `void_allowance` | `allowanceInvalid` | `allowance_number` | |
+| `query` | `invoice_search` | `number` with `random_code`, or `order_id` with `total_amount` | |
+
+**A query always needs two keys.** With only a number, or only an order id, the adapter raises `ValidationError` and names the missing field. It cannot look the second key up.
+
+**Missing order id on an allowance.** `allowance_issue` needs the original invoice's `MerchantOrderNo`. If the reference has no `order_id` but has `random_code`, the adapter queries by number first and takes `MerchantOrderNo`. Otherwise it raises `ValidationError` for `order_id`.
 
 ### 4.2 Fields
-
-The adapter does this `[code]`.
 
 #### `issue`
 
 | Unified | ezPay | Rule or default |
 | --- | --- | --- |
-| `order_id` | `MerchantOrderNo` | Max **20**, letters, digits and `_`. Check it locally. Other providers allow longer ids |
+| `order_id` | `MerchantOrderNo` | Max **20**, letters, digits and `_`. Other providers allow longer ids |
 | `category` (or the buyer's 統一編號) | `Category` | `B2B` / `B2C` |
 | `buyer.name` | `BuyerName` | M. B2C without a name: `消費者`. B2B: the company name, max 60 |
 | `buyer.ubn` | `BuyerUBN` | B2B only |
 | `buyer.address` | `BuyerAddress` | |
 | `buyer.email` | `BuyerEmail` | Max 50. M for the ezPay member carrier |
 | `buyer.phone` | (none) | No field on issue. Dropped |
-| `carrier.type` | `CarrierType` | `MOBILE_BARCODE` `0`, `CITIZEN_CERTIFICATE` `1`, `MEMBER` `2`. B2C only |
-| `carrier.code` | `CarrierNum` | `rawurlencode` first. For `MEMBER` without a code, use the buyer's email |
-| `donation.npoban` | `LoveCode` | B2C only. Not with a carrier |
+| `carrier.type` | `CarrierType` | `MOBILE_BARCODE` `0`, `CITIZEN_CERTIFICATE` `1`, `MEMBER` `2`. B2C only: a carrier on a B2B invoice is a `ValidationError` |
+| `carrier.code` | `CarrierNum` | `rawurlencode` first (2.2). For `MEMBER` without a code, use the buyer's email |
+| `donation.npoban` | `LoveCode` | B2C only. ezPay does not take it together with a carrier `[inv 四]`, so both together are a `ValidationError` |
 | (derived) | `PrintFlag` | `Y` for B2B, and for B2C with no carrier and no donation. Else `N` |
-| `tax_type`, `items[].tax_type` | `TaxType` | `9` when items differ (B2C only, else `ValidationError`). `SPECIAL`: see 6.1 |
-| `tax_rate` | `TaxRate` | A percent: `tax_rate × 100`, `5` when missing. `0` for zero rated and tax free |
+| `tax_type`, `items[].tax_type` | `TaxType` | `9` when items differ. Mixed tax is B2C only: B2B with mixed items is an `UnsupportedError`. `SPECIAL`: `UnsupportedError` (6.1) |
+| `tax_rate` | `TaxRate` | A percent: `tax_rate × 100`, so `5` or `0`. Any other rate: `UnsupportedError` |
 | `amount` | `Amt`, `TaxAmt`, `TotalAmt` | See 4.3 |
 | `items[]` | `ItemName`, `ItemCount`, `ItemUnit`, `ItemPrice`, `ItemAmt`, `ItemTaxType` | Each field is one string, items separated by `\|`. See below |
 | `price_mode` | (none) | ezPay fixes it by `Category`: B2B prices exclude tax, B2C prices include tax. A different `price_mode` is a `ValidationError` |
 | `remark` | `Comment` | Max 200 |
 | `currency` | (none) | Not TWD: `UnsupportedError`. The cross-border API is separate |
-| `date`, `exchange_rate` | (none) | Not sent |
+| `exchange_rate` | (none) | Not sent |
 
 Items, each joined with `|`:
 
 | Unified | ezPay | Rule |
 | --- | --- | --- |
-| `description` | `ItemName` | Max **30**. Longer: `ValidationError` |
+| `description` | `ItemName` | Max **30**. Longer: `ValidationError`. A `\|` in the text: `ValidationError` |
 | `quantity` | `ItemCount` | **Integer**. A decimal: `ValidationError` |
 | `unit` | `ItemUnit` | M. Max 2 Chinese or 6 English characters. `個` when missing |
 | `unit_price` | `ItemPrice` | **Integer** |
@@ -209,11 +212,12 @@ Result:
 | Unified | From |
 | --- | --- |
 | `invoice_number` | `InvoiceNumber` |
-| `invoice_date` | `CreateTime`, UTC+8 |
+| `invoice_datetime` | `CreateTime`, UTC+8 |
 | `random_code` | `RandomNum` |
 | `order_id` | `MerchantOrderNo` |
 | `total_amount` | `TotalAmt` |
 | `status` | `ISSUED` |
+| `reference` | Built from the fields above |
 
 Check `CheckCode` first (2.4).
 
@@ -221,25 +225,24 @@ Check `CheckCode` first (2.4).
 
 | Unified | ezPay | Rule or default |
 | --- | --- | --- |
-| `invoice_number` | `InvoiceNumber` | |
-| `reason` | `InvalidReason` | Max **6 Chinese** or 20 English characters. Check it locally |
-| `date` | (none) | Not needed |
+| `invoice.number` | `InvoiceNumber` | |
+| `reason` | `InvalidReason` | Max **6 Chinese** or 20 English characters. Stricter than the core, so check it locally |
 
-Result: `invoice_number` from `InvoiceNumber`, `status` `VOIDED`.
+Result: `invoice_number` from `InvoiceNumber`, `status` `VOIDED`, `cancel_datetime` `nil`.
 
 #### `allowance`
 
 | Unified | ezPay | Rule or default |
 | --- | --- | --- |
-| `invoice_number` | `InvoiceNo` | |
-| `provider_options[:order_id]` | `MerchantOrderNo` | M. The original invoice's order id. `AllowanceInput` does not have it, and a query cannot find it without the random code |
-| `items[]` | `ItemName`, `ItemCount`, `ItemUnit`, `ItemPrice`, `ItemAmt` | As for issue |
-| (computed) | `ItemTaxAmt` | See 4.3 |
+| `invoice.number` | `InvoiceNo` | |
+| `invoice.order_id` | `MerchantOrderNo` | M. The original invoice's order id. See 4.1 when it is missing |
+| `items[]` | `ItemName`, `ItemCount`, `ItemUnit`, `ItemPrice`, `ItemAmt` | Prices without tax. See 4.3 |
+| (from the core) | `ItemTaxAmt` | The item tax. See 4.3 |
 | `amount.total_amount` | `TotalAmt` | See 4.3 |
 | `provider_options[:tax_type_for_mixed]` | `TaxTypeForMixed` | M for a mixed invoice |
 | `provider_options[:buyer_email]` | `BuyerEmail` | ezPay sends the notice here |
 | (fixed) | `Status` | `1`: confirm now |
-| `allowance_id`, `date` | (none) | Not sent. ezPay assigns the number and the date |
+| `allowance_id` | (none) | Not sent. ezPay assigns the number |
 
 Result:
 
@@ -247,43 +250,43 @@ Result:
 | --- | --- |
 | `allowance_number` | `AllowanceNo` |
 | `invoice_number` | `InvoiceNumber` |
-| `allowance_date` | `nil`. The result has no date |
+| `allowance_date` | Today in UTC+8. The result has no date, and `Status` `1` creates the allowance now |
 | `total_amount` | `AllowanceAmt` |
+| `reference` | `allowance_number`, `allowance_date`, `invoice_number` |
 
 #### `void_allowance`
 
 | Unified | ezPay | Rule or default |
 | --- | --- | --- |
-| `allowance_number` | `AllowanceNo` | Max 25 |
-| `reason` | `InvalidReason` | `作廢折讓` when missing. Max 6 Chinese characters |
-| `invoice_number` | (none) | Not sent |
+| `allowance.allowance_number` | `AllowanceNo` | Max 25 |
+| `reason` | `InvalidReason` | Max 6 Chinese characters. The core's default `作廢折讓` fits |
 
-Result: `allowance_number` from `AllowanceNo`.
+Result: `allowance_number` from `AllowanceNo`, `cancel_datetime` `nil`.
 
 #### `query`
 
 | Unified | ezPay | Rule or default |
 | --- | --- | --- |
-| `invoice_number` + `provider_options[:random_code]` | `SearchType` `0`, `InvoiceNumber`, `RandomNum` | |
-| `order_id` + `provider_options[:total_amount]` | `SearchType` `1`, `MerchantOrderNo`, `TotalAmt` | |
-| neither key | | `ValidationError` |
+| `invoice.number` and `invoice.random_code` | `SearchType` `0`, `InvoiceNumber`, `RandomNum` | Used when both are present |
+| `invoice.order_id` and `invoice.total_amount` | `SearchType` `1`, `MerchantOrderNo`, `TotalAmt` | |
 
 Result:
 
 | Unified | From |
 | --- | --- |
 | `invoice_number` | `InvoiceNumber` |
-| `invoice_date` | `CreateTime`, UTC+8 |
+| `invoice_datetime` | `CreateTime`, UTC+8 |
 | `random_code` | `RandomNum` |
 | `order_id` | `MerchantOrderNo` |
 | `status` | See 4.4 |
-| `amount` | `sales = Amt`, `tax = TaxAmt`, `total = TotalAmt` |
+| `amount` | See 4.3 |
 | `buyer` | `BuyerName`, `BuyerUBN`, `BuyerAddress`, `BuyerPhone`, `BuyerEmail` |
 | `items` | `ItemDetail` (a JSON string): `ItemName`, `ItemCount`, `ItemWord` (unit), `ItemPrice`, `ItemAmount`, `ItemTaxType` |
+| `reference` | Built from the fields above, with `TotalAmt` as `total_amount` |
 
 ### 4.3 Amounts and tax
 
-The unified `AmountSummary` must satisfy `sales + tax = total`. The shared contract issues a taxable B2C invoice as `sales 100, tax 0, total 100`.
+The unified rules are in [the unified model](../README.md#the-unified-model).
 
 **Issue.** ezPay always splits out the tax, also for B2C `[inv 四]`:
 
@@ -292,22 +295,18 @@ The unified `AmountSummary` must satisfy `sales + tax = total`. The shared contr
 - Item prices exclude tax for B2B, and include tax for B2C. So for B2C, the item total and `TotalAmt` include tax, but `Amt` does not.
 - ezPay only checks `ItemAmt = ItemCount × ItemPrice` and `TotalAmt = Amt + TaxAmt`. The rest is up to the caller `[inv 三]`.
 
-The adapter: when the unified amount has `tax 0` for a taxable invoice (the contract's B2C shape), compute `TaxAmt = total - round(total / 1.05)` and `Amt = total - TaxAmt`. Otherwise send `sales_amount`, `tax_amount` and `total_amount` as they are.
+For B2B, the unified amount already has this shape: send `sales_amount`, `tax_amount` and `total_amount`. For B2C, the unified amount has `tax 0` (F0401). The adapter splits the tax with the core's tax helper: `TaxAmt` is the tax of the taxable items, and `Amt = TotalAmt - TaxAmt`.
 
 The query shows the same split for B2C: `Amt 1333`, `TaxAmt 67`, `TotalAmt 1400` `[inv 八(二)]`.
 
 **Allowance.**
 
-- Item prices may include tax or not `[inv 六]`. If they include tax, `ItemTaxAmt` must be `0`, and the buyer cannot deduct that tax.
-- If they exclude tax, `ItemTaxAmt = ItemAmt × rate`.
+- Item prices may include tax or not. If they include tax, `ItemTaxAmt` must be `0`, and the buyer cannot deduct that tax `[inv 六]`.
+- If they exclude tax, `ItemTaxAmt = ItemAmt × rate` `[inv 六]`. The manual does not say how to round.
 - `ItemTaxAmt` is one value per item, separated by `|` like the other item fields `[inv 六]`.
 - `TotalAmt` is "the allowance total" `[inv 六]`. We read it as the sum of the items plus the item tax (inferred).
-- The manual does not say how to round `ItemAmt × rate`.
 
-Which prices to use is the seller's choice: the manual says to ask the accountant (請自行與會計人員確認採何種金額) `[inv 六]`. `AllowanceInput` has no buyer, so the adapter cannot tell B2C from B2B. It reads the amount instead `[code]`:
-
-- `tax_amount` `0` (the contract's B2C shape): prices with tax, and every `ItemTaxAmt` is `0`.
-- `tax_amount` above `0`: prices without tax. Each item tax is `ItemAmt × 5%`, rounded, and the last item takes the rest, so the item taxes add up to `tax_amount`.
+The adapter uses prices without tax, because that is the shape the core gives (G0401): `ItemAmt` is each item's amount without tax, and `ItemTaxAmt` is its tax from the core. The core rounds half up and puts the remainder on the last taxable item. `ItemPrice` is `ItemAmt / ItemCount`. It must be an integer, or the adapter raises `ValidationError` (see 7).
 
 **Integers.** Item counts and prices are integers. The unified model allows decimals, so check before the call.
 
@@ -319,15 +318,16 @@ Which prices to use is the seller's choice: the manual says to ask the accountan
 | --- | --- |
 | `InvoiceStatus` `1` | `ISSUED` |
 | `InvoiceStatus` `2` | `VOIDED` |
+| any other value | `nil` |
 
-The query has no allowance data and no cancelled status. So an adapter cannot report `ALLOWANCE` from a query.
+The query has no allowance data and no cancelled status. So the adapter never reports `ALLOWANCE` from a query.
 
 `UploadStatus` shows the upload to the MOF: `0` not uploaded, `1` uploaded, `2` uploading, `3` failed, `4` timed out.
 
 ### 4.5 Timing
 
 - ezPay uploads the day's issues, voids and allowances to the MOF from 01:00 the next day. From 06:00 it updates the upload status from the MOF reply `[inv 三]`.
-- An invoice can only be voided **after** it is uploaded (`LIB10009`) `[inv 九]`. So an invoice issued today cannot be voided today.
+- An invoice can only be voided **after** it is uploaded (`LIB10009`, `RETRY_LATER`) `[inv 九]`. So an invoice issued today cannot be voided today.
 - An invoice whose upload failed cannot be voided (`INV70002`).
 - Before the 14th of an odd month, invoices of the two months before can still be voided. On 13 July, May and June invoices can be voided `[inv 一]`.
 - An invoice with an allowance cannot be voided (`LIB10007`).
@@ -335,46 +335,36 @@ The query has no allowance data and no cancelled status. So an adapter cannot re
 
 ### 4.6 Capabilities
 
-| Capability | API | Note |
-| --- | --- | --- |
-| `ISSUE`, `VOID`, `ALLOWANCE`, `VOID_ALLOWANCE` | yes | Voids only from the next day |
-| `QUERY` | partly | Needs the random code with the number |
-| `B2B` | yes | `Category` `B2B` |
-| `MIXED_TAX` | partly | B2C only |
-| `QUERY_BY_ORDER_ID` | partly | Needs the total with the order id |
-| `SCHEDULED_ISSUE` | yes | `Status` `3` with `CreateStatusTime` |
-| `CARRIER_VALIDATION` | yes | `checkBarCode`, `checkLoveCode` (5.7). The adapter does not have them yet |
-| `FOREIGN_CURRENCY` | no | Only in the separate cross-border API |
-
-A capability is yes or no. For "partly", the adapter must decide: declare it and document the extra key, or leave it out.
+| Capability | API | Adapter | Note |
+| --- | --- | --- | --- |
+| `ISSUE`, `VOID`, `ALLOWANCE`, `VOID_ALLOWANCE` | yes | yes | Voids only from the next day |
+| `QUERY` | yes | yes | The reference must have the random code (4.1) |
+| `B2B` | yes | yes | `Category` `B2B` |
+| `MIXED_TAX` | yes | yes | B2C only. B2B with mixed items is an `UnsupportedError` |
+| `QUERY_BY_ORDER_ID` | yes | yes | The reference must have `order_id` and `total_amount` |
+| `SCHEDULED_ISSUE` | yes | no | `Status` `3` with `CreateStatusTime` |
+| `CARRIER_VALIDATION` | yes | yes | `validate_carrier` calls `checkBarCode` for a mobile barcode (5.7) |
+| `FOREIGN_CURRENCY` | no | no | Only in the separate cross-border API |
 
 ### 4.7 Against the MIG
 
 - **Voids need no date.** `invoice_invalid` and `allowanceInvalid` take only the number and a reason. ezPay fills the dates from its records (inferred), because MIG F0501 and G0501 need them.
-- **The void reason is short.** `InvalidReason` is at most 6 Chinese characters or 20 English ones `[inv 五, 七]`. The MIG allows 20 characters of any kind. A Chinese reason of 7 to 20 characters passes the unified rules but fails here.
+- **The void reason is short.** `InvalidReason` is at most 6 Chinese characters or 20 English ones `[inv 五, 七]`. The MIG allows 20 characters of any kind. A Chinese reason of 7 to 20 characters passes the core but fails here.
+- **No carrier with a donation.** The MIG allows both on one invoice. ezPay does not `[inv 四]`.
 - **Item fields are much smaller than the MIG.** `ItemName` is max 30, `ItemUnit` max 2 Chinese or 6 English characters, and `ItemCount` and `ItemPrice` are **integers** `[inv 四]`. The MIG allows 500 chars and 7 decimals.
 - **`TaxRate` is a percent.** Send `5`, not `0.05` `[inv 四]`. The query returns `0.05` `[inv 八]`. The MIG and the other providers use `0.05`.
 - **An allowance on a mixed invoice is split.** One allowance covers one tax type (`TaxTypeForMixed`). A mixed invoice needs one allowance per tax type `[inv 六]`.
-- **Allowance prices may include tax.** MIG G0401 wants amounts without tax and a tax per item.
+- **Allowance prices may include tax.** MIG G0401 wants amounts without tax and a tax per item. The adapter always sends them without tax.
 - **The allowance number is longer than the MIG's.** ezPay returns an `AllowanceNo` of up to 20 characters (25 in `allowanceInvalid`). MIG `AllowanceNumber` is max 16. The manual's example is 16 characters (`A151015111705007`).
 - **No zero tax rate reason.** The manual was last changed before MIG 4.0 and has no field for `ZeroTaxRateReason`.
 
 ### 4.8 Contract and live tests
 
-ezPay breaks several assumptions of the shared contract. The provider spec handles them like this `[code]`:
-
-- `follow_up` passes `random_code` and `order_id` from the issue result.
-- `unknown_query_options` passes a random code with the unknown invoice number, so the query reaches the fake and comes back as `INV20006` (`NotFoundError`).
-- The fake voids at once.
-
-The assumptions:
-
-- **Query by number.** The contract sends only `invoice_number`. ezPay also needs the random code. The contract's `follow_up` option now sends it.
-- **Void right after issue.** The contract voids an invoice it has just issued. Live, ezPay refuses until the next day's upload (`LIB10009`). A fake can allow it. A live spec cannot test voids in one run.
-- **Credit a voided invoice.** This test voids first, so it has the same problem live. ezPay has no documented code for "allowance on a voided invoice", so the expected `ConflictError` is unknown (see 7).
-- **Unknown invoice.** The contract queries an unknown invoice with only `invoice_number`, and expects `NotFoundError`. Without a random code, the adapter raises `ValidationError` before the call (4.2). The contract's `unknown_query_options` option sends one.
-- **Unknown allowance.** ezPay has no documented code for "allowance not found". `IAI10002` (query failed) is the closest (see 7).
-- **Allowance needs the order id.** The contract does not send it. The adapter needs `provider_options[:order_id]`. The contract sends it with `follow_up`.
+- **References.** The contract passes the reference from `issue` to the next steps. It has `random_code` and `order_id`, so query and allowance work.
+- **Unknown invoice.** The contract queries an unknown invoice with a reference that has a random code. The query reaches ezPay and comes back as `INV20006` (`NotFoundError`).
+- **Void right after issue.** The contract voids an invoice it has just issued. Live, ezPay refuses until the next day's upload (`LIB10009`). The fake voids at once. A live spec cannot test voids in one run.
+- **Credit a voided invoice.** This test voids first, so it has the same problem live. ezPay has no documented code for "allowance on a voided invoice". The adapter reads `LIB10005` on an allowance as `ALLOWANCE_BLOCKED_BY_VOID` (6.4, see 7).
+- **Unknown allowance.** ezPay has no documented code for "allowance not found". The adapter reads `IAI10002` (query failed) on an allowance void as `NotFoundError` (6.4, see 7).
 - **Order ids.** Max 20 chars. The contract's ids (`ORDER_A`, …) fit. A live spec with long generated ids may not.
 - **Test shop.** There is no shared account. Each developer opens a test shop on `cinv.ezpay.com.tw` and adds test tracks.
 
@@ -514,7 +504,7 @@ The response has `Status`, `Message`, `APIID` (`barCodeCheck` or `LoveCodeCheck`
 | `TAXABLE` | `1` | `1` |
 | `ZERO_RATED` | `2` | `2` |
 | `TAX_FREE` | `3` | `3` |
-| `SPECIAL` | `1` with the special `TaxRate` (inferred from the `TaxRate` note) | `4` |
+| `SPECIAL` | Maybe `1` with the special `TaxRate` (inferred from the `TaxRate` note). The adapter raises `UnsupportedError` (see 7) | `4` |
 | (mixed, derived) | `9` | `9` |
 
 `4` (special rate) is not listed in the manual.
@@ -535,9 +525,11 @@ ezPay's codes are its own. They are not the MIG codes, and not ECPay's.
 
 ### 6.4 Error codes
 
-`[inv 九]`. The unified error and `Reason` columns are what the adapter maps `[code]`. A `CheckCode` that does not match is a `ProviderError`. The table matches the manual line by line. The manual gives each `IAI` code only one short line.
+`[inv 九]`. The unified error and `Reason` columns are the mapping. A `CheckCode` that does not match is a `ProviderError`. The table matches the manual line by line. The manual gives each `IAI` code only one short line.
 
-For two cases without a code, the adapter guesses by operation (`Errors::CONTEXT`): `LIB10005` on an allowance is `ALLOWANCE_BLOCKED_BY_VOID`, and `IAI10002` on an allowance void is `NotFoundError`.
+For two cases without a code, the class depends on the operation (inferred): `LIB10005` on an allowance is `ALLOWANCE_BLOCKED_BY_VOID`, and `IAI10002` on an allowance void is `NotFoundError`.
+
+**Default class.** A code outside the table is a `ProviderError`. The manual lists every code it knows, and gives no rule for others.
 
 | Code | Meaning | Unified error | `Reason` |
 | --- | --- | --- | --- |
@@ -568,7 +560,7 @@ For two cases without a code, the adapter guesses by operation (`Errors::CONTEXT
 | `LIB10005` | Already voided | `ConflictError` | `ALREADY_VOIDED` |
 | `LIB10007` | Has an allowance, cannot void | `ConflictError` | `VOID_BLOCKED_BY_ALLOWANCE` |
 | `LIB10008` | Past the void deadline | `ConflictError` | `PAST_DEADLINE` |
-| `LIB10009` | Not uploaded yet, cannot void | `ConflictError` | |
+| `LIB10009` | Not uploaded yet, cannot void | `ConflictError` | `RETRY_LATER` |
 | `IAI10001` to `IAI10006` | Allowance void errors: missing parameter, query failed, update failed, wrong parameter, insert failed, stopped | `ProviderError` | |
 
 The list has no code for these cases: an allowance on a voided invoice, an allowance that does not exist, or a duplicate allowance.
@@ -580,14 +572,13 @@ The list has no code for these cases: an allowance on a voided invoice, an allow
 3. Is special tax really `TaxType` `1` with a special `TaxRate`?
 4. How is the `CheckCode` of a void or allowance result built? It lacks the five fields of the documented rule.
 5. Which codes come back for an allowance on a voided invoice, and for voiding an allowance that does not exist? The contract needs `ConflictError` and `NotFoundError` there.
-6. **Core:** query by number needs the random code, and an allowance needs the order id. The contract passes them with `follow_up` for now (4.8). Should the unified inputs carry them instead?
-7. **Core:** what does a B2C `AmountSummary` with `tax 0` mean for a provider that always splits the tax (4.3)?
-8. None of this is verified live. It needs a test shop on `cinv.ezpay.com.tw`.
+6. An allowance item without tax may not divide into an integer `ItemPrice`, for example `ItemAmt` 95 over 2 items. Can such an allowance be sent with prices that include tax instead?
+7. None of this is verified live. It needs a test shop on `cinv.ezpay.com.tw`.
 
 The manual does not say these either. The adapter's choice is in brackets:
 
-9. What `Result` looks like on a failure (empty string, empty object or missing: the adapter accepts all three).
-10. How to count a length such as "2 Chinese or 6 English characters" for mixed text (any non-ASCII character gets the Chinese limit).
-11. What happens when an item name contains `|` (the adapter refuses it).
-12. Which `TaxRate` a mixed tax invoice sends (`5`).
-13. How to round an allowance item tax (round, and the last item takes the rest).
+8. What `Result` looks like on a failure (empty string, empty object or missing: the adapter accepts all three).
+9. How to count a length such as "2 Chinese or 6 English characters" for mixed text (any non-ASCII character gets the Chinese limit).
+10. What happens when an item name contains `|` (the adapter refuses it).
+11. Which `TaxRate` a mixed tax invoice sends (`5`).
+12. How to round an allowance item tax (round, and the last item takes the rest).
