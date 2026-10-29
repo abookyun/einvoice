@@ -6,9 +6,9 @@
 
 ## 1. 狀態與來源
 
-> **可信度：** 只依文件。沒有 adapter，也沒有 live 執行過。4.2 和 6.4 是建議。
+> **可信度：** adapter 進行中。它的 live spec 在 2026-10-22 於公開的測試帳號上通過，看到的事實標為 `[live]`。第 4 節和 6.4 的錯誤類別欄是 adapter 要遵守的對應方式。live spec 沒有檢查每一列。
 
-這是 Amego 在 `https://invoice-api.amego.tw` 的 JSON API。2.x 還沒有對應的 adapter。這裡的內容都沒有對 live API 驗證過。所以 4.2 和 6.4 是**建議**：依文件判斷 adapter 應該怎麼做。
+這是 Amego 在 `https://invoice-api.amego.tw` 的 JSON API。2.x 的 adapter 會是 `Einvoice::Amego::Provider`。標 `[live]` 的事實是在公開測試帳號上實際看到的。
 
 文件屬於光貿科技 Amego，公開在 <https://invoice.amego.tw/api_doc/>。本筆記是我們的整理。
 
@@ -17,6 +17,7 @@
 | 標記 | 來源 | 日期 | 提供的內容 |
 | --- | --- | --- | --- |
 | `[doc]` | Amego API 文件，<https://invoice.amego.tw/api_doc/>。用 apiDoc 產生的網站。2026-10-14 讀取資料 bundle（`main.bundle.js?2026093003`）。 | 2026-09-30 產生，文件版本 1.0.0 | 所有 endpoint、欄位、範例和基本規則。 |
+| `[live]` | 我們的 live spec（`spec/einvoice/amego/live_spec.rb`），在公開的測試帳號上執行，2026-10-22。 | 2026-10-22 | Amego 實際接受的內容和回應。 |
 | `[info]` | Amego 線上說明頁。文件中有連結：<https://invoice.amego.tw/info_detail?mid=70>（開立方式）、`mid=71`（錯誤代碼）、`mid=73`（會員載具規則）、`mid=74`（檢查規則）。2026-10-14 讀取。 | | 錯誤代碼和格式規則。 |
 
 **更新檢查。** 文件網站沒有更新記錄。bundle 的網址帶有建置編號（`main.bundle.js?2026093003`）。編號改變表示文件重新建置過。
@@ -53,6 +54,8 @@ Amego 會在它那一端對 POST 資料做一次 URL decode。`/json/time` 回�
 有些 API 的 `data` 是陣列，例如 `f0501`、`g0401` 和 `g0501`。有些是單一物件，例如 `f0401` `[info 71: codes 23, 3040112]`。
 
 沒有加密。`sign` 只證明呼叫端知道 App Key。
+
+**API 的限制。** payload 是明文 JSON，所以買方資料只靠 TLS 保護。`sign` 用的是 MD5，回應則完全沒有簽章。測試和正式環境共用同一台主機，只靠帳號區分。如果應用程式不小心用了共用的測試帳號，開出的會是測試發票，而且不會有任何錯誤。
 
 ### 2.3 回應
 
@@ -115,6 +118,16 @@ sign=md5(<the JSON below> + "1729000000" + AppKey)
 
 失敗時：`{ "code": 3040171, "msg": "…" }`。查無資料時：`{ "code": 71, "msg": "查無資料" }`。
 
+### 2.6 官方測試向量
+
+範例頁 <https://invoice.amego.tw/api_doc/example> 有一組結果已知的範例。它的 Python 程式寫著 `sign` 是 `f53a336934b2af0589b845638d1495cc` `[doc]`。輸入是：
+
+- `data`：一張 B2B 發票（`OrderId` `A20200817105934`、`BuyerIdentifier` `28080623`、兩個品項），格式是 Python `json.dumps(indent=0)` 的輸出。也就是在每個 `{`、`[` 和每個項目後面換行，每個非 ASCII 字元寫成 `\uXXXX`。
+- `time`：`1628136135`，寫在範例的註解裡。
+- App Key：公開的測試金鑰。
+
+Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部分，任何合法的 JSON 排版都可以。client spec 驗證了這組範例（`spec/einvoice/amego/client_spec.rb`）。文件沒有其他結果已知的範例。
+
 ## 3. 操作
 
 五個 unified 操作使用下列 endpoint。欄位見第 5 節。
@@ -156,75 +169,78 @@ sign=md5(<the JSON below> + "1729000000" + AppKey)
 
 ### 4.1 操作
 
-| Unified | Endpoint | `provider_options`（建議） | 說明 |
+| Unified | Endpoint | Reference 欄位 | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `f0401` | `track_api_code`、`customs_clearance_mark`、`zero_tax_rate_reason`、`brand_name`、`detail_amount_round`、`tax_adjustment` | 所有 MIG 總計都由 adapter 計算 |
-| `void` | `f0501` | 無 | 一次一張發票 |
-| `allowance` | `g0401` | `invoice_date`、`buyer`、`allowance_date` | 需要買方資料和發票日期。見 4.2 |
-| `void_allowance` | `g0501` | 無 | 一次一張折讓 |
-| `query` | `invoice_query` | 無 | 限 180 天內 |
+| `issue` | `f0401` | | `track_api_code`、`customs_clearance_mark`、`zero_tax_rate_reason`、`brand_name`、`detail_amount_round`、`tax_adjustment` |
+| `void` | `f0501` | `number` | |
+| `allowance` | `g0401` | `number`、`invoice_datetime`、`buyer_ubn` | `buyer_name` |
+| `void_allowance` | `g0501` | `allowance_number` | |
+| `query` | `invoice_query` | `order_id` 或 `number` | |
+
+每次呼叫只送一筆資料，接受陣列的 endpoint 也一樣（2.3）。
+
+**折讓資料從查詢取得。** `g0401` 需要原發票的日期和買方（`BuyerIdentifier`、`BuyerName`）。`issue` 或 `query` 回傳的 reference 有日期和 `buyer_ubn`，但沒有買方名稱。所以 adapter 會先呼叫 `invoice_query`，取得名稱；reference 沒有日期時，也一起取得日期。如果 `provider_options` 給了 `buyer_name`，而且 reference 有 `invoice_datetime`，adapter 就不查詢。查詢只能查 180 天內的發票。超過之後，呼叫端必須自己提供，否則 adapter 丟出 `ValidationError`。查詢失敗時，adapter 丟出帶有 `LOOKUP_FAILED` 的 `ProviderError`（[unified model](../README.zh-TW.md#unified-model)）。
 
 ### 4.2 欄位
-
-下面每一列都是建議。
 
 #### `issue`
 
 | Unified | Amego | 規則或預設值 |
 | --- | --- | --- |
-| `order_id` | `OrderId` | 最多 40。在本地端檢查 |
+| `order_id` | `OrderId` | 最多 40 |
 | `buyer.ubn` | `BuyerIdentifier` | B2C 為 `0000000000` |
-| `buyer.name` | `BuyerName` | M。B2C 沒有名稱時送 `消費者`。B2B 沒有名稱時送統一編號。不可以是 `0` 到 `0000` |
-| `buyer.address`、`.phone`、`.email` | `BuyerAddress`、`BuyerTelephoneNumber`、`BuyerEmailAddress` | Amego 把開立通知寄到這個 email |
+| `buyer.name` | `BuyerName` | 必填。B2C 沒有名稱時送 `消費者`。B2B 沒有名稱時送統一編號。不能是 `0` 到 `0000` |
+| `buyer.address`、`.phone`、`.email` | `BuyerAddress`、`BuyerTelephoneNumber`、`BuyerEmailAddress` | Amego 會把發票通知寄到這個 email |
 | `carrier`（`MOBILE_BARCODE`） | `CarrierType` `3J0002`，`CarrierId1` = `CarrierId2` = `code` | |
 | `carrier`（`CITIZEN_CERTIFICATE`） | `CarrierType` `CQ0001`，兩個 id 都是 `code` | |
-| `carrier`（`MEMBER`） | `CarrierType` `amego`，兩個 id 都是 `code` | 沒有 `code` 時，用買方的 email，再沒有就用 `a` 加買方的手機號碼（6.2）。兩者都沒有時丟出 `ValidationError` |
-| `donation.npoban` | `NPOBAN` | |
+| `carrier`（`MEMBER`） | `CarrierType` `amego`，兩個 id 都是 `code` | 沒有 `code` 時，用買方的 email；沒有 email 時，用 `a` 加上買方的手機號碼（6.2）。兩個都沒有：`ValidationError` |
+| `donation.npoban` | `NPOBAN` | 可以同時帶載具 |
 | `remark` | `MainRemark` | 最多 200 |
-| `tax_type`、`items[].tax_type` | `TaxType` | 品項的課稅別不一致時為 `9`，否則為該代碼（6.1） |
-| `tax_rate` | `TaxRate` | 沒有值時為 `0.05` |
-| `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` 為 `0`，否則為 `1`。`0` 只能用在 B2B：B2C 加 `TAX_EXCLUSIVE` 時丟出 `ValidationError` |
-| `amount` | `SalesAmount`、`FreeTaxSalesAmount`、`ZeroTaxSalesAmount`、`TaxAmount`、`TotalAmount` | 由品項計算。見 4.3 |
-| `items[]` | `ProductItem` | `description` → `Description`（最多 256）、`quantity` → `Quantity`、`unit` → `Unit`、`unit_price` → `UnitPrice`、`amount` → `Amount`、`remark` → `Remark`、`tax_type` → `TaxType`（品項的，沒有就用發票的） |
-| `currency` | （無） | 不是 TWD 時丟出 `UnsupportedError`（見第 7 節） |
-| `category` | （無） | 決定是否為 B2B，和 core 相同 |
-| `date`、`exchange_rate` | （無） | 不送。發票日期由 Amego 設定 |
+| `tax_type`、`items[].tax_type` | `TaxType` | 品項的課稅別不同時為 `9`，否則為對應代碼（6.1）。`SPECIAL`：`UnsupportedError` |
+| `tax_rate` | `TaxRate` | 小數字串，例如 `0.05`。只接受 `0` 和 `0.05`，其他稅率：`UnsupportedError` |
+| `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` 為 `0`，否則為 `1`。`0` 只能用在 B2B：B2C 用 `TAX_EXCLUSIVE` 會丟出 `ValidationError` |
+| `amount` | `SalesAmount`、`FreeTaxSalesAmount`、`ZeroTaxSalesAmount`、`TaxAmount`、`TotalAmount` | 從品項計算。見 4.3 |
+| `provider_options[:customs_clearance_mark]` | `CustomsClearanceMark` | `1` 或 `2`。有零稅率品項時必填 |
+| `provider_options[:zero_tax_rate_reason]` | `ZeroTaxRateReason` | `71` 到 `79`。有零稅率品項時必填 |
+| `items[]` | `ProductItem` | `description` → `Description`（最多 256）、`quantity` → `Quantity`、`unit` → `Unit`、`unit_price` → `UnitPrice`、`amount` → `Amount`、`remark` → `Remark`、`tax_type` → `TaxType`（品項的課稅別，沒有時用發票的） |
+| `currency` | （無） | 不是新台幣時丟出 `UnsupportedError`（見第 7 節） |
+| `category` | （無） | 和 core 一樣，用來判斷是否為 B2B |
+| `exchange_rate` | （無） | 不送出 |
 
 結果：
 
 | Unified | 來源 |
 | --- | --- |
 | `invoice_number` | `invoice_number` |
-| `invoice_date` | `invoice_time`（Unix 時間） |
+| `invoice_datetime` | `invoice_time`（Unix time），UTC+8 |
 | `random_code` | `random_number` |
 | `order_id`、`total_amount` | 輸入值 |
 | `status` | `ISSUED` |
+| `reference` | 用上面的欄位組成 |
 
 #### `void`
 
 | Unified | Amego | 規則或預設值 |
 | --- | --- | --- |
-| `invoice_number` | `[0].CancelInvoiceNumber` | |
+| `invoice.number` | `[0].CancelInvoiceNumber` | |
 | `reason` | `[0].CancelReason` | 最多 20 |
-| `date` | （無） | 不需要 |
 
-結果：`invoice_number` 取自輸入值，`status` 為 `VOIDED`。
+結果：`invoice_number` 取自輸入值，`status` 為 `VOIDED`，`cancel_datetime` 為 `nil`。回應只有 `code` 和 `msg`。
 
-作廢是非同步的。`code` 為 `0` 表示 Amego 已經把作廢放進佇列，不表示作廢已經完成。作廢後馬上查詢，結果仍然可能是 `ISSUED`（4.4）。
+作廢是非同步的。`code` 為 `0` 表示 Amego 已經把作廢放進佇列，不表示作廢已經完成。作廢後馬上查詢，可能仍然回報 `ISSUED`（4.4）。
 
 #### `allowance`
 
-`g0401` 需要原發票的買方資料和發票日期，`AllowanceInput` 兩者都沒有。建議：先呼叫 `invoice_query`，從結果取得 `buyer_identifier`、`buyer_name` 和 `invoice_date`。也可以改由 `provider_options` 提供，這樣就不用查詢。查詢只能用在 180 天內的發票。
-
 | Unified | Amego | 規則或預設值 |
 | --- | --- | --- |
-| `allowance_id` | `AllowanceNumber` | 最多 16。在帳號內不可重複。在本地端檢查 |
-| `provider_options[:allowance_date]`，沒有就用今天（UTC+8） | `AllowanceDate` | `Ymd` |
+| `allowance_id` | `AllowanceNumber` | 最多 16。在帳號內不能重複 |
+| （當下） | `AllowanceDate` | UTC+8 的今天，`Ymd`。Amego 要求必填，它就是這次折讓的日期 |
 | （固定） | `AllowanceType` | `2` |
-| `provider_options[:buyer]`，沒有就用查詢結果 | `BuyerIdentifier`、`BuyerName` | 必須和原發票相符 |
-| `invoice_number` | `ProductItem[].OriginalInvoiceNumber` | |
-| `provider_options[:invoice_date]`，沒有就用 `date`，再沒有就用查詢結果 | `ProductItem[].OriginalInvoiceDate` | `Ymd`。把 `date` 當成發票日期，是沿用 ECPay adapter 的做法（見第 7 節） |
-| `items[]` | `ProductItem[]` | `description` → `OriginalDescription`、`quantity` → `Quantity`、`unit_price` → `UnitPrice`、`amount` → `Amount`，加上 `Tax` 和 `TaxType`。所有金額都是未稅。見 4.3 |
+| `invoice.buyer_ubn` | `BuyerIdentifier` | `nil` 時為 `0000000000`。必須和原發票一致 |
+| `provider_options[:buyer_name]`，沒有時取自查詢 | `BuyerName` | 必須和原發票一致 |
+| `invoice.number` | `ProductItem[].OriginalInvoiceNumber` | |
+| `invoice.invoice_datetime`，沒有時取自查詢 | `ProductItem[].OriginalInvoiceDate` | UTC+8 的 `Ymd` |
+| `items[]` | `ProductItem[]` | `description` → `OriginalDescription`、`quantity` → `Quantity`、`unit_price` → `UnitPrice`、`amount` → `Amount`，再加上品項的 `Tax` 和 `TaxType`。金額不含稅。見 4.3 |
 | `amount` | `TaxAmount`、`TotalAmount` | 見 4.3 |
 
 結果：
@@ -235,41 +251,43 @@ sign=md5(<the JSON below> + "1729000000" + AppKey)
 | `invoice_number` | 輸入值 |
 | `allowance_date` | adapter 送出的 `AllowanceDate` |
 | `total_amount` | 輸入值 |
+| `reference` | `allowance_number`、`allowance_date`、`invoice_number` |
 
 #### `void_allowance`
 
 | Unified | Amego | 規則或預設值 |
 | --- | --- | --- |
-| `allowance_number` | `[0].CancelAllowanceNumber` | |
-| `invoice_number`、`reason` | （無） | 不送 |
+| `allowance.allowance_number` | `[0].CancelAllowanceNumber` | |
+| `reason` | （無） | 不送出。`g0501` 沒有原因欄位 |
 
-結果：`allowance_number` 取自輸入值。
+結果：`allowance_number` 取自輸入值，`cancel_datetime` 為 `nil`。
 
 #### `query`
 
 | Unified | Amego | 規則或預設值 |
 | --- | --- | --- |
-| `order_id` | `{ "type": "order", "order_id": … }` | 有值時優先使用 |
-| `invoice_number` | `{ "type": "invoice", "invoice_number": … }` | |
+| `invoice.order_id` | `{ "type": "order", "order_id": … }` | 有就使用 |
+| `invoice.number` | `{ "type": "invoice", "invoice_number": … }` | |
 
 結果：
 
 | Unified | 來源 |
 | --- | --- |
 | `invoice_number` | `invoice_number` |
-| `invoice_date` | `invoice_date`（`YYYYMMDD`）和 `invoice_time`（`HH:mm:ss`），UTC+8 |
+| `invoice_datetime` | `invoice_date`（`YYYYMMDD`）和 `invoice_time`（`HH:mm:ss`），UTC+8 |
 | `random_code` | `random_number` |
 | `order_id` | `order_id` |
 | `status` | 見 4.4 |
 | `amount` | 見 4.3 |
-| `buyer` | `buyer_name`、`buyer_identifier`（`0000000000` 變成 `nil`）、`buyer_address`、`buyer_telephone_number`、`buyer_email_address` |
+| `buyer` | `buyer_name`、`buyer_identifier`（`0000000000` 轉成 `nil`）、`buyer_address`、`buyer_telephone_number`、`buyer_email_address` |
 | `items` | `product_item[]`：`description`、`quantity`、`unit_price`、`amount`、`unit`、`tax_type`、`remark` |
+| `reference` | 用上面的欄位組成 |
 
 ### 4.3 金額與稅額
 
-unified 的 `AmountSummary` 必須符合 `sales + tax = total`。shared contract 開立 B2C 應稅發票時，傳的是 `sales 100, tax 0, total 100`。
+unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 
-**開立。** Amego 要求所有 MIG 總計，並提供計算公式 `[doc]`。單價含稅時（`DetailVat` 為 `1`）：
+**開立。** Amego 要求所有 MIG 總計欄位，並提供計算公式 `[doc]`。品項價格含稅（`DetailVat` 為 `1`）時：
 
 ```
 SalesAmount        = round(sum of Amount where TaxType = 1)
@@ -281,75 +299,72 @@ B2B:  TaxAmount = SalesAmount - round(SalesAmount / 1.05)
 TotalAmount = SalesAmount + FreeTaxSalesAmount + ZeroTaxSalesAmount + TaxAmount
 ```
 
-單價未稅時（`DetailVat` 為 `0`，只限 B2B），`TaxAmount = round(SalesAmount × 0.05)`，其他相同。
+品項價格未稅（`DetailVat` 為 `0`，只限 B2B）時，`TaxAmount = round(SalesAmount × 0.05)`，其他相同。
 
-建議：用這個公式從品項計算總計。接著檢查 `TotalAmount` 是否等於 `amount.total_amount`；B2B 時另外檢查 `TaxAmount` 是否等於 `amount.tax_amount`。不一致時，在呼叫前丟出 `ValidationError`。B2C 用這個公式會得到 `tax 0`，正好是 contract 的形式。
+adapter 用 core 的稅額 helper，從品項算出這些總計，再檢查 `TotalAmount` 是否等於 `amount.total_amount`；B2B 時也檢查 `TaxAmount` 是否等於 `amount.tax_amount`。不一致就在呼叫前丟出 `ValidationError`。B2C 時公式算出的稅額為 `0`，和 F0401 一致。
 
-除非 `DetailAmountRound` 為 `1`，品項金額會保留 7 位小數 `[doc]`。
+除非 `DetailAmountRound` 為 `1`，否則品項金額保留 7 位小數 `[doc]`。
 
-**折讓。** 金額不含稅，每個品項有自己的整數 `Tax` `[doc]`。`TotalAmount` 是未稅合計，`TaxAmount` 是稅額。
+**折讓。** 金額不含稅，每個品項有自己的整數 `Tax` `[doc]`。這正是 core 給出的格式（G0401）。adapter 直接送出每個品項的金額和稅額。`TotalAmount` 是未稅金額的合計，`TaxAmount` 是品項稅額的合計。99 元拆成 94 加稅額 5 的折讓，Amego 接受了 `[live]`。
 
-contract 用 `sales 100, tax 0, total 100` 對 B2C 發票開折讓，所以稅額包含在 100 裡。這種情況的建議：用和 B2B 開立相同的方式拆出稅額。`tax = total - round(total / 1.05)`，`TotalAmount = total - tax`。每個品項也用同樣方式拆分，並把四捨五入的差額放在最後一個品項，讓品項的 `Tax` 加總等於 `TaxAmount`。這也是 core 的問題：見第 7 節。
-
-**查詢。** `total_amount` 是總計。`tax_amount` 只有 B2B 才會拆出，和開立時相同。建議：`total = total_amount`、`tax = tax_amount`、`sales = total - tax`。
+**查詢。** `total_amount` 是總計。`tax_amount` 只有 B2B 才會拆出來，和開立時一樣。結果是 `total = total_amount`、`tax = tax_amount`、`sales = total - tax`。
 
 ### 4.4 狀態
 
 `invoice_query` 回報兩件事 `[doc]`：
 
-- `invoice_type`：這張發票最後一次的 MIG 訊息。使用的是 **4.0 以前的名稱**：`C0401` 開立、`C0501` 作廢、`C0701` 註銷、B2B 存證用 `A0401` 和 `A0501`、B2B 交換用 `A0101` 到 `A0302`。
+- `invoice_type`：這張發票最後一個 MIG 訊息。它用的是 **4.0 版以前的名稱**：`C0401` 開立、`C0501` 作廢、`C0701` 註銷，B2B 存證用 `A0401` 和 `A0501`，B2B 交換用 `A0101` 到 `A0302`。
 - `invoice_status`：上傳狀態（6.3）。
 
-`wait` 列出還在佇列中的變更，例如還沒處理的作廢。`allowance` 列出這張發票的折讓，每筆有自己的種類和狀態（2024-10-24 新增）。
+`wait` 列出還在佇列中的變更，例如還沒處理的作廢。`allowance` 列出這張發票的折讓，每一筆都有自己的類型和狀態（2024-10-24 新增）。
 
-建議的對應（推論）：
+對應方式（推論）：
 
 | `invoice_type` | Unified `InvoiceStatus` |
 | --- | --- |
-| `C0401`、`A0401`、`A0101`、`A0102` | `allowance` 中有尚未作廢的項目（`D0401` / `G0401`，不是 `D0501` / `G0501`）時為 `ALLOWANCE`，否則為 `ISSUED` |
+| `C0401`、`A0401`、`A0101`、`A0102` | `allowance` 裡有尚未作廢的折讓（`D0401` / `G0401`，不是 `D0501` / `G0501`）時為 `ALLOWANCE`，否則為 `ISSUED` |
 | `C0501`、`A0501`、`A0201`、`A0202` | `VOIDED` |
-| `C0701` | 已註銷：沒有對應的 unified 狀態 |
-| `A0301`、`A0302` | 已退回：沒有對應的 unified 狀態 |
+| `C0701`（註銷） | `nil` |
+| `A0301`、`A0302`（退回） | `nil` |
 
-在 `wait` 中的作廢還沒有完成。在 `invoice_type` 改變之前，發票仍然是 `ISSUED`。
+`wait` 裡的作廢還沒完成。在 `invoice_type` 改變之前，發票仍然是 `ISSUED`。
 
 ### 4.5 時限
 
-- 只能查詢 180 天內的發票。超過時回傳代碼 `51` `[doc]`。
-- 作廢、開立或註銷會進入佇列等待處理。有變更在佇列中時，作廢會回傳 `3050131`。對還在開立中的發票作廢，會回傳 `3050121` `[info 71]`。所以開立後馬上作廢可能會失敗。見 4.8。
-- 作廢有期限（`3050126`、`4050135`），但文件沒有寫期限多長（見第 7 節）。
-- `invoice_modify` 只能在 180 天內、上傳之後使用 `[info 71]`。
+- 只能查詢 180 天內的發票，超過會回傳代碼 `51` `[doc]`。
+- 作廢、開立或註銷會進入佇列等待處理。有變更在佇列中時，作廢會回傳 `3050131`。對還在開立中的發票作廢，會回傳 `3050121` `[info 71]`。兩者都表示「晚一點再試」（6.4）。
+- 作廢有時間限制（`3050126`、`4050135`），但文件沒有寫是多久（見第 7 節）。
+- `invoice_modify` 只能在 180 天內、而且上傳之後使用 `[info 71]`。
 
 ### 4.6 Capabilities
 
-| Capability | API | 說明 |
-| --- | --- | --- |
-| `ISSUE`、`VOID`、`ALLOWANCE`、`VOID_ALLOWANCE`、`QUERY` | 支援 | |
-| `B2B` | 支援 | 在 `BuyerIdentifier` 填統一編號 |
-| `MIXED_TAX` | 支援 | `TaxType` `9` |
-| `QUERY_BY_ORDER_ID` | 支援 | `invoice_query` 加 `type: order` |
-| `SCHEDULED_ISSUE` | 不支援 | 沒有這種 endpoint |
-| `CARRIER_VALIDATION` | 部分支援 | `barcode` 可以檢查手機條碼。沒有捐贈碼檢查，這部分可以用 `Einvoice::MOF::DonationCodes` |
-| `FOREIGN_CURRENCY` | 未知 | `f0401` 沒有幣別欄位。`f0401_custom` 有（見第 7 節） |
+| Capability | API | Adapter | 說明 |
+| --- | --- | --- | --- |
+| `ISSUE`、`VOID`、`ALLOWANCE`、`VOID_ALLOWANCE`、`QUERY` | 有 | 有 | |
+| `B2B` | 有 | 有 | `BuyerIdentifier` 帶統一編號 |
+| `MIXED_TAX` | 有 | 有 | `TaxType` `9` |
+| `QUERY_BY_ORDER_ID` | 有 | 有 | `invoice_query` 用 `type: order` |
+| `SCHEDULED_ISSUE` | 無 | 無 | 沒有這種 endpoint |
+| `CARRIER_VALIDATION` | 有 | 有 | `validate_carrier` 對手機條碼呼叫 `barcode`。`9000113` 表示未註冊。愛心碼由 `Einvoice::MOF::DonationCodes` 處理 |
+| `FOREIGN_CURRENCY` | 未知 | 無 | `f0401` 沒有幣別欄位，`f0401_custom` 有（見第 7 節） |
 
 ### 4.7 與 MIG 的差異
 
-- **總計就是 MIG 的總計。** `f0401` 收 `SalesAmount`、`FreeTaxSalesAmount`、`ZeroTaxSalesAmount`、`TaxType`、`TaxRate`、`TaxAmount` 和 `TotalAmount`，全部必填，和 F0401 相同。
-- **折讓就是 MIG G0401。** `AllowanceNumber` 由賣方指定（最多 16，不可重複）。`AllowanceDate` 必填。金額不含稅，每個品項有自己的 `Tax`。每個品項都需要 `OriginalInvoiceNumber` 和 `OriginalInvoiceDate`。
-- **作廢需要的資料比 MIG 少。** `f0501` 只收號碼和選填的原因。`g0501` 只收折讓單號。因為 F0501 和 G0501 要求日期和原因，Amego 必須從自己的紀錄補上（推論）。
-- **`AllowanceType` 必須是 `2`。** Amego 從 2025-01-01 起拒絕 `1` `[info 71: code 4040145]`。
-- **一張折讓只對應一張發票。** 一張折讓只能折讓一張發票 `[info 71: codes 4040132, 4040133]`。MIG 允許品項來自多張發票。
+- **總計欄位就是 MIG 的總計欄位。** `f0401` 接受 `SalesAmount`、`FreeTaxSalesAmount`、`ZeroTaxSalesAmount`、`TaxType`、`TaxRate`、`TaxAmount` 和 `TotalAmount`，全部必填，和 F0401 一樣。
+- **折讓就是 MIG G0401。** `AllowanceNumber` 由賣方指定（最多 16，不能重複）。`AllowanceDate` 必填。金額不含稅，每個品項有自己的 `Tax`。每個品項都需要 `OriginalInvoiceNumber` 和 `OriginalInvoiceDate`。
+- **作廢需要的資料比 MIG 少。** `f0501` 只需要發票號碼和選填的原因，`g0501` 只需要折讓單號。F0501 和 G0501 要求日期和原因，所以 Amego 一定是從自己的紀錄補上（推論）。
+- **`AllowanceType` 必須是 `2`。** 自 2025-01-01 起，Amego 拒絕 `1` `[info 71: code 4040145]`。
+- **一張折讓只能對應一張發票** `[info 71: codes 4040132, 4040133]`。MIG 允許品項來自多張發票。unified model 也是一張折讓對應一張發票。
 - **`Description` 最多 256** `[doc]`。MIG 允許 500。
-- **B2B 走存證（推論）。** `f0401` 允許統一編號搭配載具欄位和混合稅率，A0101 不允許。查詢仍然可能回報交換類別（A0101 到 A0302），所以 Amego 裡有些發票可能來自交換流程。
+- **B2B 走存證（推論）。** `f0401` 接受統一編號加上載具欄位和混合稅率，A0101 不允許這些。但查詢仍可能回報交換類型（A0101 到 A0302），所以 Amego 裡可能有部分發票來自交換。
 
 ### 4.8 Contract 與 live 測試
 
-- **共用的測試帳號。** 所有開發者都用 `12345678` 這個帳號。live spec 必須產生不重複的訂單編號和折讓單號。contract 使用固定的折讓 id（`AL_1`、`AL_AV`），在 live 帳號上可能和別人重複。
+- **共用的測試帳號。** 所有開發者都用帳號 `12345678`。live spec 必須產生不重複的訂單編號和折讓單號。contract 用固定的折讓 id（`AL_1`、`AL_AV`），在 live 帳號上可能會重複。
 - **不存在的號碼。** 使用格式正確的發票號碼，例如 `unknown_invoice_number: "ZZ00000000"`。折讓單號是最多 16 字元的自由文字，所以預設的 `NOPE00000000` 可以用。
-- **開立後馬上作廢。** contract 會作廢剛開立的發票。Amego 可能回傳 `3050121`（還在開立中）或 `3050131`（佇列中）`[info 71]`。live spec 可能需要等待後重試。fake 可以忽略這個情況。
-- **對 B2C 發票開折讓。** contract 的折讓金額含稅，而且 `tax 0`。adapter 必須拆分（4.3）。
-- **折讓需要買方資料。** 採用建議的「先查詢」做法（4.2）時，contract 不用額外的參數就能執行。
-- **fake。** fake 需要實作表單封包、`sign` 檢查，以及 2.3 中的回應格式。
+- **開立後馬上作廢。** contract 會作廢剛開立的發票。Amego 可能回傳 `3050121`（還在開立中）或 `3050131`（佇列中）`[info 71]`。2026-10-22 實測時，開立後馬上作廢直接成功，第二次作廢丟出 `ConflictError` `[live]`。live spec 遇到 `RETRY_LATER` 仍會重試。fake 不模擬佇列。
+- **折讓。** `issue` 回傳的 reference 提供發票日期。adapter 仍會查詢買方，所以 fake 必須回應 `invoice_query`。
+- **fake。** fake 需要表單外層格式、`sign` 檢查，以及 2.3 的回應格式。
 
 ## 5. 欄位參考
 
@@ -515,7 +530,9 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 
 ### 6.4 錯誤代碼
 
-`[info 71]`。Unified 錯誤和 `Reason` 兩欄是建議。
+`[info 71]`。Unified 錯誤和 `Reason` 兩欄是對應方式。代碼 `15` 和 `71` 有 live 實測過。查詢或作廢不存在的發票、作廢不存在的折讓，都得到 `NotFoundError` `[live]`。
+
+**預設類別。** 表外的代碼視為 `ProviderError`。Amego 的常見代碼列得很完整，欄位錯誤也有自己的代碼範圍，所以不認得的代碼比較可能是伺服器的問題，而不是欄位錯誤。
 
 共通代碼：
 
@@ -559,12 +576,12 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 | --- | --- | --- | --- |
 | `3050111` | 發票號碼錯誤 | `ValidationError` | |
 | `3050113` | 原因超過 20 字 | `ValidationError` | |
-| `3050121` | 發票還在開立中 | `ConflictError` | |
+| `3050121` | 發票還在開立中 | `ConflictError` | `RETRY_LATER` |
 | `3050122` | 已作廢 | `ConflictError` | `ALREADY_VOIDED` |
 | `3050123` | 已註銷 | `ConflictError` | |
 | `3050125` | 發票不存在 | `NotFoundError` | |
 | `3050126` | 超過可變更的期限 | `ConflictError` | `PAST_DEADLINE` |
-| `3050131` | 等待佇列中的開立、作廢或註銷 | `ConflictError` | |
+| `3050131` | 等待佇列中的開立、作廢或註銷 | `ConflictError` | `RETRY_LATER` |
 | `3050141` | 發票已有折讓 | `ConflictError` | `VOID_BLOCKED_BY_ALLOWANCE` |
 
 `g0401` 的代碼是 `4040xxx`：
@@ -587,7 +604,7 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 | `4050132` | 已作廢 | `ConflictError` | `ALREADY_VOIDED` |
 | `4050134` | 折讓不存在 | `NotFoundError` | |
 | `4050135` | 超過期限 | `ConflictError` | `PAST_DEADLINE` |
-| `4050141` | 等待佇列中的變更 | `ConflictError` | |
+| `4050141` | 等待佇列中的變更 | `ConflictError` | `RETRY_LATER` |
 
 `barcode` 的代碼：`9000111` 空白、`9000112` 格式錯誤、`9000113` 不存在。做載具檢查時，`9000113` 表示「未登記」，不是錯誤。
 
@@ -597,8 +614,7 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 2. 發票可以作廢的期限是多久？代碼 `3050126` 表示有期限，但文件沒有寫。
 3. `f0401` 沒有 `Currency` 或 `ExchangeRate`，但 `f0401_custom` 兩者都有。`f0401` 是否也接受？
 4. 查詢把品項的 `remark` 列為最多 40，開立 API 列為最多 120。哪一個才對？
-5. Amego 的自然人憑證規則是 `^TP[0-9]{14}$`。ECPay 的是「2 個大寫英文字母加 14 位數字」。MIG 沒有規定格式。哪一個才對？
+5. Amego 的自然人憑證規則是 `^TP[0-9]{14}$`。ECPay 的是「2 個大寫英文字母加 14 位數字」，core 也照這個檢查。MIG 沒有規定格式。Amego 會拒絕其他英文字母嗎？
 6. 陣列型呼叫送多筆時，其中一筆失敗，其他筆會成功嗎？在確認之前，一次只送一筆。
-7. **Core：** B2C 折讓的 `AmountSummary` 是什麼意思？contract 送的是 `tax 0`，稅額包含在總額裡。Amego 要求拆出稅額（4.3）。
-8. **Core：** `AllowanceInput` 的 `date` 是什麼意思？ECPay adapter 把它當成原發票日期。Amego 同時需要原發票日期和折讓日期。
-9. 這些內容都沒有 live 驗證過。可以用公開的測試帳號驗證。
+7. live spec 只檢查了主要流程，沒有檢查零稅率、混合稅率、載具和小數數量。
+8. payload 裡的空白用 `%20` 送出可以正常運作，對原始 JSON 計算的 `sign` 也能通過 `[live]`。我們沒有測試 `+`，所以不知道 Amego 用的是哪一種 PHP decoder。

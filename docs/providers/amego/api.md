@@ -4,9 +4,9 @@ English | [繁體中文](api.zh-TW.md)
 
 ## 1. Status and sources
 
-> **Trust:** docs only. There is no adapter and no live run. Sections 4.2 and 6.4 are proposals.
+> **Trust:** an adapter is in progress. Its live spec passed on the public test account on 2026-10-22, and the facts it saw are marked `[live]`. Section 4 and the class columns in 6.4 are the mapping the adapter follows. The live spec did not check every row.
 
-This is Amego's JSON API at `https://invoice-api.amego.tw`. The 2.x line has no adapter for it yet. Nothing here is verified against the live API. So sections 4.2 and 6.4 are **proposals**: what an adapter should do, based on the docs.
+This is Amego's JSON API at `https://invoice-api.amego.tw`. The 2.x adapter will be `Einvoice::Amego::Provider`. Facts marked `[live]` were seen on the public test account.
 
 The docs belong to 光貿科技 Amego and are published at <https://invoice.amego.tw/api_doc/>. This note is our summary.
 
@@ -15,6 +15,7 @@ The API follows the MIG closely. Its endpoints are named after MIG messages (`f0
 | Tag | Source | Date | What it gives |
 | --- | --- | --- | --- |
 | `[doc]` | Amego API docs, <https://invoice.amego.tw/api_doc/>. An apiDoc site. We read the data bundle (`main.bundle.js?2026093003`) on 2026-10-14. | Generated 2026-09-30, doc version 1.0.0 | All endpoints, fields, examples, and the basic rules. |
+| `[live]` | Our live spec (`spec/einvoice/amego/live_spec.rb`) on the public test account, 2026-10-22. | 2026-10-22 | What Amego really accepted and answered. |
 | `[info]` | Amego help pages. The docs link to them: <https://invoice.amego.tw/info_detail?mid=70> (issue modes), `mid=71` (error codes), `mid=73` (member carrier rules), `mid=74` (checks). Read on 2026-10-14. | | Error codes and format rules. |
 
 **Updates.** The docs site has no change log. The bundle URL carries a build number (`main.bundle.js?2026093003`). A new number means the docs were rebuilt.
@@ -51,6 +52,8 @@ Amego URL decodes the POST data once on its side. `/json/time` returns the serve
 Some APIs take an array in `data`, for example `f0501`, `g0401` and `g0501`. Others take one object, for example `f0401` `[info 71: codes 23, 3040112]`.
 
 There is no encryption. The `sign` only proves that the caller knows the App Key.
+
+**Limits of the API.** The payload is plain JSON, so only TLS protects the buyer's data. The `sign` is MD5, and the response has no signature at all. Test and production share one host, and only the credentials pick the account. An app that ships the shared test account by mistake issues test invoices, with no error.
 
 ### 2.3 Response
 
@@ -113,6 +116,16 @@ The docs give no full response for `f0401`. By the field list, it is:
 
 A failure: `{ "code": 3040171, "msg": "…" }`. A query that finds nothing: `{ "code": 71, "msg": "查無資料" }`.
 
+### 2.6 Official test vectors
+
+The example page <https://invoice.amego.tw/api_doc/example> has one sample with a known result. Its Python code says the `sign` is `f53a336934b2af0589b845638d1495cc` `[doc]`. The inputs:
+
+- `data`: a B2B invoice (`OrderId` `A20200817105934`, `BuyerIdentifier` `28080623`, two items), as Python's `json.dumps(indent=0)` writes it. That is a newline after each `{`, `[` and item, and `\uXXXX` for each non-ASCII character.
+- `time`: `1628136135`, from a comment in the sample.
+- App Key: the public test key.
+
+Amego signs the string as it was sent. The JSON layout is part of the input, and any valid JSON layout works. The client spec checks this sample (`spec/einvoice/amego/client_spec.rb`). The docs have no other sample with a result.
+
 ## 3. Operations
 
 The five unified operations use these endpoints. Section 5 has their fields.
@@ -154,75 +167,78 @@ A track is set to one mode in the back office (發票作業 > 發票字軌列表
 
 ### 4.1 Operations
 
-| Unified | Endpoint | `provider_options` (proposed) | Note |
+| Unified | Endpoint | Reference fields | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `f0401` | `track_api_code`, `customs_clearance_mark`, `zero_tax_rate_reason`, `brand_name`, `detail_amount_round`, `tax_adjustment` | The adapter computes all MIG totals |
-| `void` | `f0501` | none | One invoice per call |
-| `allowance` | `g0401` | `invoice_date`, `buyer`, `allowance_date` | Needs the buyer and the invoice date. See 4.2 |
-| `void_allowance` | `g0501` | none | One allowance per call |
-| `query` | `invoice_query` | none | Within 180 days |
+| `issue` | `f0401` | | `track_api_code`, `customs_clearance_mark`, `zero_tax_rate_reason`, `brand_name`, `detail_amount_round`, `tax_adjustment` |
+| `void` | `f0501` | `number` | |
+| `allowance` | `g0401` | `number`, `invoice_datetime`, `buyer_ubn` | `buyer_name` |
+| `void_allowance` | `g0501` | `allowance_number` | |
+| `query` | `invoice_query` | `order_id`, or `number` | |
+
+Each call sends one entry, also to the array endpoints (2.3).
+
+**Allowance data from a query.** `g0401` needs the original invoice date and its buyer (`BuyerIdentifier`, `BuyerName`). A reference from `issue` or `query` has the date and `buyer_ubn`, but no buyer name. So the adapter calls `invoice_query` first, and takes the name, and the date if the reference has none. When `provider_options` gives `buyer_name`, and the reference has `invoice_datetime`, the adapter skips the query. The query only works within 180 days. After that, the caller must give them, or the adapter raises `ValidationError`. If the query fails, the adapter raises `ProviderError` with `LOOKUP_FAILED` ([the unified model](../README.md#the-unified-model)).
 
 ### 4.2 Fields
-
-All rows are proposals.
 
 #### `issue`
 
 | Unified | Amego | Rule or default |
 | --- | --- | --- |
-| `order_id` | `OrderId` | Max 40. Check it locally |
+| `order_id` | `OrderId` | Max 40 |
 | `buyer.ubn` | `BuyerIdentifier` | `0000000000` for B2C |
 | `buyer.name` | `BuyerName` | M. For B2C without a name, send `消費者`. For B2B without a name, send the 統一編號. Never `0` to `0000` |
 | `buyer.address`, `.phone`, `.email` | `BuyerAddress`, `BuyerTelephoneNumber`, `BuyerEmailAddress` | Amego sends the invoice notice to the email |
 | `carrier` (`MOBILE_BARCODE`) | `CarrierType` `3J0002`, `CarrierId1` = `CarrierId2` = `code` | |
 | `carrier` (`CITIZEN_CERTIFICATE`) | `CarrierType` `CQ0001`, both ids = `code` | |
 | `carrier` (`MEMBER`) | `CarrierType` `amego`, both ids = `code` | Without a `code`, use the buyer's email, else `a` + the buyer's mobile number (6.2). Neither: `ValidationError` |
-| `donation.npoban` | `NPOBAN` | |
+| `donation.npoban` | `NPOBAN` | A carrier can be sent with it |
 | `remark` | `MainRemark` | Max 200 |
-| `tax_type`, `items[].tax_type` | `TaxType` | `9` when items have different tax types, else the code (6.1) |
-| `tax_rate` | `TaxRate` | `0.05` when missing |
+| `tax_type`, `items[].tax_type` | `TaxType` | `9` when items have different tax types, else the code (6.1). `SPECIAL`: `UnsupportedError` |
+| `tax_rate` | `TaxRate` | As a decimal string, for example `0.05`. Only `0` and `0.05`. Any other rate: `UnsupportedError` |
 | `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` `0`, else `1`. `0` only for B2B: B2C with `TAX_EXCLUSIVE` is a `ValidationError` |
 | `amount` | `SalesAmount`, `FreeTaxSalesAmount`, `ZeroTaxSalesAmount`, `TaxAmount`, `TotalAmount` | Computed from the items. See 4.3 |
+| `provider_options[:customs_clearance_mark]` | `CustomsClearanceMark` | `1` or `2`. Required when a zero rated item is present |
+| `provider_options[:zero_tax_rate_reason]` | `ZeroTaxRateReason` | `71` to `79`. Required when a zero rated item is present |
 | `items[]` | `ProductItem` | `description` → `Description` (max 256), `quantity` → `Quantity`, `unit` → `Unit`, `unit_price` → `UnitPrice`, `amount` → `Amount`, `remark` → `Remark`, `tax_type` → `TaxType` (the item's, else the invoice's) |
 | `currency` | (none) | Not TWD: `UnsupportedError` (see 7) |
 | `category` | (none) | Decides B2B, as in the core |
-| `date`, `exchange_rate` | (none) | Not sent. Amego sets the invoice date |
+| `exchange_rate` | (none) | Not sent |
 
 Result:
 
 | Unified | From |
 | --- | --- |
 | `invoice_number` | `invoice_number` |
-| `invoice_date` | `invoice_time` (Unix time) |
+| `invoice_datetime` | `invoice_time` (Unix time), UTC+8 |
 | `random_code` | `random_number` |
 | `order_id`, `total_amount` | The input |
 | `status` | `ISSUED` |
+| `reference` | Built from the fields above |
 
 #### `void`
 
 | Unified | Amego | Rule or default |
 | --- | --- | --- |
-| `invoice_number` | `[0].CancelInvoiceNumber` | |
+| `invoice.number` | `[0].CancelInvoiceNumber` | |
 | `reason` | `[0].CancelReason` | Max 20 |
-| `date` | (none) | Not needed |
 
-Result: `invoice_number` from the input, `status` `VOIDED`.
+Result: `invoice_number` from the input, `status` `VOIDED`, `cancel_datetime` `nil`. The response has only `code` and `msg`.
 
 The void is asynchronous. `code` `0` means Amego accepted the void into its queue, not that the void is done. A query right after the void can still report `ISSUED` (4.4).
 
 #### `allowance`
 
-`g0401` needs the buyer of the original invoice and its date. `AllowanceInput` has neither. Proposal: call `invoice_query` first, and take `buyer_identifier`, `buyer_name` and `invoice_date` from it. `provider_options` can give them instead, which skips the query. The query only works within 180 days.
-
 | Unified | Amego | Rule or default |
 | --- | --- | --- |
-| `allowance_id` | `AllowanceNumber` | Max 16. Must be unique in the account. Check it locally |
-| `provider_options[:allowance_date]`, else today (UTC+8) | `AllowanceDate` | `Ymd` |
+| `allowance_id` | `AllowanceNumber` | Max 16. Must be unique in the account |
+| (now) | `AllowanceDate` | Today in UTC+8, `Ymd`. Amego requires it, and it is the date of this allowance |
 | (fixed) | `AllowanceType` | `2` |
-| `provider_options[:buyer]`, else the query | `BuyerIdentifier`, `BuyerName` | Must match the original invoice |
-| `invoice_number` | `ProductItem[].OriginalInvoiceNumber` | |
-| `provider_options[:invoice_date]`, else `date`, else the query | `ProductItem[].OriginalInvoiceDate` | `Ymd`. `date` as the invoice date follows the ECPay adapter (see 7) |
-| `items[]` | `ProductItem[]` | `description` → `OriginalDescription`, `quantity` → `Quantity`, `unit_price` → `UnitPrice`, `amount` → `Amount`, plus `Tax` and `TaxType`. All amounts tax excluded. See 4.3 |
+| `invoice.buyer_ubn` | `BuyerIdentifier` | `0000000000` when `nil`. Must match the original invoice |
+| `provider_options[:buyer_name]`, else the query | `BuyerName` | Must match the original invoice |
+| `invoice.number` | `ProductItem[].OriginalInvoiceNumber` | |
+| `invoice.invoice_datetime`, else the query | `ProductItem[].OriginalInvoiceDate` | `Ymd` in UTC+8 |
+| `items[]` | `ProductItem[]` | `description` → `OriginalDescription`, `quantity` → `Quantity`, `unit_price` → `UnitPrice`, `amount` → `Amount`, plus the item's `Tax` and `TaxType`. Amounts exclude tax. See 4.3 |
 | `amount` | `TaxAmount`, `TotalAmount` | See 4.3 |
 
 Result:
@@ -233,39 +249,41 @@ Result:
 | `invoice_number` | The input |
 | `allowance_date` | The `AllowanceDate` the adapter sent |
 | `total_amount` | The input |
+| `reference` | `allowance_number`, `allowance_date`, `invoice_number` |
 
 #### `void_allowance`
 
 | Unified | Amego | Rule or default |
 | --- | --- | --- |
-| `allowance_number` | `[0].CancelAllowanceNumber` | |
-| `invoice_number`, `reason` | (none) | Not sent |
+| `allowance.allowance_number` | `[0].CancelAllowanceNumber` | |
+| `reason` | (none) | Not sent. `g0501` has no reason field |
 
-Result: `allowance_number` from the input.
+Result: `allowance_number` from the input, `cancel_datetime` `nil`.
 
 #### `query`
 
 | Unified | Amego | Rule or default |
 | --- | --- | --- |
-| `order_id` | `{ "type": "order", "order_id": … }` | Used when present |
-| `invoice_number` | `{ "type": "invoice", "invoice_number": … }` | |
+| `invoice.order_id` | `{ "type": "order", "order_id": … }` | Used when present |
+| `invoice.number` | `{ "type": "invoice", "invoice_number": … }` | |
 
 Result:
 
 | Unified | From |
 | --- | --- |
 | `invoice_number` | `invoice_number` |
-| `invoice_date` | `invoice_date` (`YYYYMMDD`) and `invoice_time` (`HH:mm:ss`), UTC+8 |
+| `invoice_datetime` | `invoice_date` (`YYYYMMDD`) and `invoice_time` (`HH:mm:ss`), UTC+8 |
 | `random_code` | `random_number` |
 | `order_id` | `order_id` |
 | `status` | See 4.4 |
 | `amount` | See 4.3 |
 | `buyer` | `buyer_name`, `buyer_identifier` (`0000000000` becomes `nil`), `buyer_address`, `buyer_telephone_number`, `buyer_email_address` |
 | `items` | `product_item[]`: `description`, `quantity`, `unit_price`, `amount`, `unit`, `tax_type`, `remark` |
+| `reference` | Built from the fields above |
 
 ### 4.3 Amounts and tax
 
-The unified `AmountSummary` must satisfy `sales + tax = total`. The shared contract issues a taxable B2C invoice as `sales 100, tax 0, total 100`.
+The unified rules are in [the unified model](../README.md#the-unified-model).
 
 **Issue.** Amego wants all MIG totals, and gives the formula `[doc]`. With prices that include tax (`DetailVat` `1`):
 
@@ -281,15 +299,13 @@ TotalAmount = SalesAmount + FreeTaxSalesAmount + ZeroTaxSalesAmount + TaxAmount
 
 With prices that exclude tax (`DetailVat` `0`, B2B only), `TaxAmount = round(SalesAmount × 0.05)`, and the rest is the same.
 
-Proposal: compute the totals from the items with this formula. Then check that `TotalAmount` equals `amount.total_amount`, and for B2B that `TaxAmount` equals `amount.tax_amount`. Raise `ValidationError` before the call if they differ. For B2C, this formula gives `tax 0`, which is the contract's shape.
+The adapter computes these totals from the items with the core's tax helper. Then it checks that `TotalAmount` equals `amount.total_amount`, and for B2B that `TaxAmount` equals `amount.tax_amount`. If they differ, it raises `ValidationError` before the call. For B2C the formula gives `tax 0`, as F0401 does.
 
 Item amounts keep 7 decimals unless `DetailAmountRound` is `1` `[doc]`.
 
-**Allowance.** Amounts exclude tax, and each item has its own integer `Tax` `[doc]`. `TotalAmount` is the sum without tax, and `TaxAmount` is the tax.
+**Allowance.** Amounts exclude tax, and each item has its own integer `Tax` `[doc]`. This is the shape that the core gives (G0401). The adapter sends each item's amount and tax as they are. `TotalAmount` is the sum without tax, and `TaxAmount` is the sum of the item taxes. A 99 split into 94 and a tax of 5 was accepted `[live]`.
 
-The contract credits a B2C invoice as `sales 100, tax 0, total 100`, so the tax is inside the 100. Proposal for this case: split the tax out the same way as for B2B issue. `tax = total - round(total / 1.05)`, `TotalAmount = total - tax`. Split each item the same way, and put the rounding difference on the last item, so that the item `Tax` values add up to `TaxAmount`. This is a core question too: see 7.
-
-**Query.** `total_amount` is the total. `tax_amount` is only split out for B2B, as on issue. Proposal: `total = total_amount`, `tax = tax_amount`, `sales = total - tax`.
+**Query.** `total_amount` is the total. `tax_amount` is only split out for B2B, as on issue. The result is `total = total_amount`, `tax = tax_amount`, `sales = total - tax`.
 
 ### 4.4 Status
 
@@ -300,35 +316,35 @@ The contract credits a B2C invoice as `sales 100, tax 0, total 100`, so the tax 
 
 `wait` lists changes still in the queue, for example a void that is not processed yet. `allowance` lists the invoice's allowances, each with its own type and status (added 2024-10-24).
 
-Proposed mapping (inferred):
+Mapping (inferred):
 
 | `invoice_type` | Unified `InvoiceStatus` |
 | --- | --- |
 | `C0401`, `A0401`, `A0101`, `A0102` | `ALLOWANCE` when `allowance` has an entry that is not voided (`D0401` / `G0401`, not `D0501` / `G0501`), else `ISSUED` |
 | `C0501`, `A0501`, `A0201`, `A0202` | `VOIDED` |
-| `C0701` | cancelled: no unified status |
-| `A0301`, `A0302` | rejected: no unified status |
+| `C0701` (cancelled) | `nil` |
+| `A0301`, `A0302` (rejected) | `nil` |
 
 A void in `wait` is not done yet. The invoice is still `ISSUED` until `invoice_type` changes.
 
 ### 4.5 Timing
 
 - Queries work within 180 days of the invoice. After that, code `51` `[doc]`.
-- A void, issue or cancel waits in a queue. While one is queued, a void returns `3050131`, and a void of an invoice that is still being issued returns `3050121` `[info 71]`. So a void right after an issue may fail. See 4.8.
+- A void, issue or cancel waits in a queue. While one is queued, a void returns `3050131`, and a void of an invoice that is still being issued returns `3050121` `[info 71]`. Both mean "try later" (6.4).
 - There is a time limit for voids (`3050126`, `4050135`), but the docs do not give it (see 7).
 - `invoice_modify` works within 180 days, and only after the upload `[info 71]`.
 
 ### 4.6 Capabilities
 
-| Capability | API | Note |
-| --- | --- | --- |
-| `ISSUE`, `VOID`, `ALLOWANCE`, `VOID_ALLOWANCE`, `QUERY` | yes | |
-| `B2B` | yes | A 統一編號 in `BuyerIdentifier` |
-| `MIXED_TAX` | yes | `TaxType` `9` |
-| `QUERY_BY_ORDER_ID` | yes | `invoice_query` with `type: order` |
-| `SCHEDULED_ISSUE` | no | No such endpoint |
-| `CARRIER_VALIDATION` | partly | `barcode` checks a mobile barcode. There is no donation code check. `Einvoice::MOF::DonationCodes` can do that part |
-| `FOREIGN_CURRENCY` | unknown | `f0401` has no currency fields. `f0401_custom` has them (see 7) |
+| Capability | API | Adapter | Note |
+| --- | --- | --- | --- |
+| `ISSUE`, `VOID`, `ALLOWANCE`, `VOID_ALLOWANCE`, `QUERY` | yes | yes | |
+| `B2B` | yes | yes | A 統一編號 in `BuyerIdentifier` |
+| `MIXED_TAX` | yes | yes | `TaxType` `9` |
+| `QUERY_BY_ORDER_ID` | yes | yes | `invoice_query` with `type: order` |
+| `SCHEDULED_ISSUE` | no | no | No such endpoint |
+| `CARRIER_VALIDATION` | yes | yes | `validate_carrier` calls `barcode` for a mobile barcode. `9000113` means not registered. Donation codes go through `Einvoice::MOF::DonationCodes` |
+| `FOREIGN_CURRENCY` | unknown | no | `f0401` has no currency fields. `f0401_custom` has them (see 7) |
 
 ### 4.7 Against the MIG
 
@@ -336,7 +352,7 @@ A void in `wait` is not done yet. The invoice is still `ISSUED` until `invoice_t
 - **Allowances are MIG G0401.** The seller assigns `AllowanceNumber` (max 16, unique). `AllowanceDate` is required. Amounts exclude tax, and each item has its own `Tax`. Each item needs `OriginalInvoiceNumber` and `OriginalInvoiceDate`.
 - **Voids need less than the MIG.** `f0501` takes only the number and an optional reason. `g0501` takes only the allowance number. Amego must fill the dates and the reason from its records, because F0501 and G0501 require them (inferred).
 - **`AllowanceType` must be `2`.** Since 2025-01-01 Amego rejects `1` `[info 71: code 4040145]`.
-- **One invoice per allowance.** An allowance can only credit one invoice `[info 71: codes 4040132, 4040133]`. The MIG allows items from several invoices.
+- **One invoice per allowance.** An allowance can only credit one invoice `[info 71: codes 4040132, 4040133]`. The MIG allows items from several invoices. The unified model also credits one invoice.
 - **`Description` is max 256** `[doc]`. The MIG allows 500.
 - **B2B is storage (inferred).** `f0401` takes a 統一編號 together with carrier fields and mixed tax, which A0101 does not allow. The query can still report exchange types (A0101 to A0302), so some invoices in Amego may come from exchange.
 
@@ -344,9 +360,8 @@ A void in `wait` is not done yet. The invoice is still `ISSUED` until `invoice_t
 
 - **Shared test account.** Every developer uses the account `12345678`. A live spec must build unique order ids and unique allowance numbers. The contract uses fixed allowance ids (`AL_1`, `AL_AV`), which can collide on the live account.
 - **Unknown numbers.** Use a well-formed invoice number, for example `unknown_invoice_number: "ZZ00000000"`. Allowance numbers are free text up to 16 chars, so the default `NOPE00000000` fits.
-- **Void right after issue.** The contract voids an invoice it has just issued. Amego may answer `3050121` (still being issued) or `3050131` (queued) `[info 71]`. A live spec may need to wait and retry. A fake can ignore this.
-- **Allowance on a B2C invoice.** The contract's allowance amounts include tax with `tax 0`. The adapter must split them (4.3).
-- **Allowance needs the buyer.** With the proposed query first (4.2), the contract runs without extra options.
+- **Void right after issue.** The contract voids an invoice it has just issued. Amego may answer `3050121` (still being issued) or `3050131` (queued) `[info 71]`. On 2026-10-22 a void right after the issue worked at once, and a second void raised `ConflictError` `[live]`. The live spec still retries on `RETRY_LATER`. The fake ignores the queue.
+- **Allowance.** The reference from `issue` gives the invoice date. The adapter still queries for the buyer, so the fake must answer `invoice_query`.
 - **A fake.** A fake needs the form envelope, the `sign` check, and the response shapes in 2.3.
 
 ## 5. Field reference
@@ -513,7 +528,9 @@ The visible and hidden codes must match `[info 71: codes 3040131, 3040133]`. An 
 
 ### 6.4 Error codes
 
-`[info 71]`. The unified error and `Reason` columns are proposals.
+`[info 71]`. The unified error and `Reason` columns are the mapping. Code `15` and `71` were seen live. An unknown invoice in a query or a void, and an unknown allowance in a void, all gave `NotFoundError` `[live]`.
+
+**Default class.** A code outside the tables is a `ProviderError`. Amego's code list is complete for the common codes, and its field errors have their own ranges, so an unknown code is more likely a server problem than a bad field.
 
 Common codes:
 
@@ -557,12 +574,12 @@ Common codes:
 | --- | --- | --- | --- |
 | `3050111` | Invoice number wrong | `ValidationError` | |
 | `3050113` | Reason longer than 20 | `ValidationError` | |
-| `3050121` | Invoice is still being issued | `ConflictError` | |
+| `3050121` | Invoice is still being issued | `ConflictError` | `RETRY_LATER` |
 | `3050122` | Already voided | `ConflictError` | `ALREADY_VOIDED` |
 | `3050123` | Already cancelled | `ConflictError` | |
 | `3050125` | Invoice does not exist | `NotFoundError` | |
 | `3050126` | Past the time limit for changes | `ConflictError` | `PAST_DEADLINE` |
-| `3050131` | Waiting for a queued issue, void or cancel | `ConflictError` | |
+| `3050131` | Waiting for a queued issue, void or cancel | `ConflictError` | `RETRY_LATER` |
 | `3050141` | Invoice has an allowance | `ConflictError` | `VOID_BLOCKED_BY_ALLOWANCE` |
 
 `g0401` codes are `4040xxx`:
@@ -585,7 +602,7 @@ Common codes:
 | `4050132` | Already voided | `ConflictError` | `ALREADY_VOIDED` |
 | `4050134` | Allowance does not exist | `NotFoundError` | |
 | `4050135` | Past the time limit | `ConflictError` | `PAST_DEADLINE` |
-| `4050141` | Waiting for a queued change | `ConflictError` | |
+| `4050141` | Waiting for a queued change | `ConflictError` | `RETRY_LATER` |
 
 `barcode` codes: `9000111` empty, `9000112` wrong format, `9000113` does not exist. For a carrier check, `9000113` means "not registered", not an error.
 
@@ -595,8 +612,7 @@ Common codes:
 2. How long can an invoice be voided? Code `3050126` says there is a limit, but the docs do not give it.
 3. `f0401` has no `Currency` or `ExchangeRate`, but `f0401_custom` has both. Does `f0401` accept them anyway?
 4. The query lists the item `remark` as max 40, the issue API as max 120. Which is right?
-5. Amego's citizen certificate rule is `^TP[0-9]{14}$`. ECPay's is "2 capital letters and 14 digits". The MIG gives no format. Which is right?
+5. Amego's citizen certificate rule is `^TP[0-9]{14}$`. ECPay's is "2 capital letters and 14 digits", and the core checks that. The MIG gives no format. Does Amego reject other letters?
 6. When an array call has several entries and one fails, do the others succeed? Until we know, send one entry per call.
-7. **Core:** what does a B2C allowance's `AmountSummary` mean? The contract sends `tax 0` with the tax inside the total. Amego wants the tax split out (4.3).
-8. **Core:** what does `date` mean on `AllowanceInput`? The ECPay adapter uses it as the original invoice date. Amego needs both that and the allowance date.
-9. None of this is verified live. The public test account can do that.
+7. The live spec checked the main paths only. It did not check zero rate, mixed tax, carriers or a decimal quantity.
+8. A space in the payload works when sent as `%20`, and the `sign` over the raw JSON still passes `[live]`. We did not test `+`, so we do not know which PHP decoder Amego uses.
