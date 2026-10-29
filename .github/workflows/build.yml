@@ -16,7 +16,7 @@ jobs:
   test:
     strategy:
       matrix:
-        ruby-version: ['3.2', '3.3', '3.4']
+        ruby-version: ['3.2', '3.3', '3.4', '4.0']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
