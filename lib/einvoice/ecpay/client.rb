@@ -84,9 +84,7 @@ module Einvoice
 
         response = http.request(post_request(uri, body))
         parse_json(response)
-      rescue Einvoice::Error
-        raise
-      rescue StandardError => e
+      rescue *Error::NETWORK_ERRORS => e
         raise NetworkError.new("ECPay request failed: #{e.message}", provider: PROVIDER, cause: e)
       end
 
@@ -97,9 +95,15 @@ module Einvoice
         request
       end
 
+      # ECPay answers some errors with HTTP 500 and a normal envelope (a wrong
+      # HashKey gives TransCode 110), so the body decides when it can be read.
+      # Only a body that is not JSON falls back to the HTTP status.
       def parse_json(response)
         JSON.parse(response.body.to_s)
       rescue JSON::ParserError => e
+        status_error = NetworkError.for_status(response, provider: PROVIDER)
+        raise status_error if status_error
+
         raise ProviderError.new(
           "ECPay returned a non-JSON response (HTTP #{response.code})",
           provider: PROVIDER, raw_code: response.code, cause: e

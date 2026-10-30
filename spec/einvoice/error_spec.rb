@@ -45,6 +45,23 @@ RSpec.describe Einvoice::Error do
     end
   end
 
+  describe "NetworkError.for_status" do
+    def response(code)
+      instance_double(Net::HTTPResponse, code: code.to_s)
+    end
+
+    it "gives a network error for 5xx and 429" do
+      expect(Einvoice::NetworkError.for_status(response(502), provider: "x").reason).to be_nil
+      expect(Einvoice::NetworkError.for_status(response(429), provider: "x").reason)
+        .to eq(Einvoice::Reason::RATE_LIMITED)
+    end
+
+    it "gives nil for other statuses" do
+      expect(Einvoice::NetworkError.for_status(response(200), provider: "x")).to be_nil
+      expect(Einvoice::NetworkError.for_status(response(404), provider: "x")).to be_nil
+    end
+  end
+
   describe "#to_h" do
     it "drops nil fields and omits raw" do
       error = Einvoice::AuthError.new("bad key", provider: "ecpay", raw_code: "0")

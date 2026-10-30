@@ -119,10 +119,16 @@ RSpec.describe Einvoice::MOF::DonationCodes do
       end
     end
 
-    it "reports any other HTTP status as a provider error" do
+    it "reports HTTP 5xx and 429 as a network error" do
       stub_request(:get, any_query).to_return(status: 503, body: "unavailable")
       expect { codes.lookup("2718") }
-        .to raise_error(Einvoice::ProviderError, /HTTP 503/)
+        .to raise_error(Einvoice::NetworkError, /HTTP 503/)
+    end
+
+    it "reports any other HTTP status as a provider error" do
+      stub_request(:get, any_query).to_return(status: 404, body: "missing")
+      expect { codes.lookup("2718") }
+        .to raise_error(Einvoice::ProviderError, /HTTP 404/)
     end
 
     it "reports a non-JSON response as a provider error" do

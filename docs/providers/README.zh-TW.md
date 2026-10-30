@@ -88,7 +88,8 @@
 
 - adapter 為了補上缺少的欄位而自己發出的查詢，屬於加值中心這一組。查詢失敗時，adapter 丟出帶有 `Reason::LOOKUP_FAILED` 的 `ProviderError`。錯誤訊息會指出它需要哪個欄位，`cause` 是查詢本身的錯誤。所以 `NotFoundError` 一定是指這次呼叫的那張發票。
 - 遇到我們不認得的錯誤代碼時，每家加值中心有自己的預設類別。第 6.4 節寫明預設類別和依據。
-- HTTP 5xx 和 429 是 `NetworkError`，呼叫端可以重試。
+- body 不是加值中心的回應時，HTTP 5xx 和 429 是 `NetworkError`，呼叫端可以重試。adapter 讀得懂的 body，不管 HTTP 狀態是什麼，都依 body 決定錯誤。例如 ECPay 金鑰錯誤時，回的是 HTTP 500 加上正常的 envelope。
+- client 只 rescue 連線錯誤。adapter 自己的 bug 不是 `NetworkError`。
 - `Reason::RETRY_LATER` 表示加值中心說「現在不行，晚一點再試」，例如發票上傳前就作廢。
 
 **Capability。**

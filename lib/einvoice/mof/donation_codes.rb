@@ -116,9 +116,7 @@ module Einvoice
         response = http.request(Net::HTTP::Get.new(uri.request_uri))
         check!(response)
         response
-      rescue Einvoice::Error
-        raise
-      rescue StandardError => e
+      rescue *Error::NETWORK_ERRORS => e
         raise NetworkError.new("財政部 request failed: #{e.message}", provider: PROVIDER, cause: e)
       end
 
@@ -127,6 +125,7 @@ module Einvoice
       def check!(response)
         case response.code.to_i
         when 200 then nil
+        when 429, 500..599 then raise NetworkError.for_status(response, provider: PROVIDER)
         when 401, 403
           raise AuthError.new(
             "財政部 now requires credentials for the donation-code dataset (HTTP #{response.code})",

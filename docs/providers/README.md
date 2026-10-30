@@ -86,7 +86,8 @@ When a provider needs a field that the caller did not give, the adapter may quer
 
 - A query that the adapter makes on its own, to fill a missing field, belongs to the provider group. If it fails, the adapter raises `ProviderError` with `Reason::LOOKUP_FAILED`. The message names the field it needed, and `cause` holds the error of the query. So a `NotFoundError` always means the invoice of the call itself.
 - Each provider has its own default class for an error code that we do not know. Section 6.4 gives it, with the evidence.
-- HTTP 5xx and 429 are a `NetworkError`, so the caller can retry.
+- When the body is not a provider response, HTTP 5xx and 429 are a `NetworkError`, so the caller can retry. A body that the adapter can read decides the error, whatever the status. ECPay, for example, sends a wrong key as HTTP 500 with a normal envelope.
+- The client rescues only connection errors. A bug in an adapter is not a `NetworkError`.
 - `Reason::RETRY_LATER` means the provider says "not now, try later", for example a void before the invoice is uploaded.
 
 **Capabilities.**

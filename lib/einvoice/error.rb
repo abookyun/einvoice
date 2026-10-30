@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+require "net/http"
+require "openssl"
+require "timeout"
+
 module Einvoice
   # Normalized, action-oriented reason symbols — one level finer than the error
   # class. The classes are deliberately coarse ({ConflictError} alone covers
@@ -54,6 +58,12 @@ module Einvoice
   class Error < StandardError
     # Stable, provider-independent code for the base class. Subclasses override.
     CODE = :unknown
+    # The low-level errors that mean the connection failed. Clients rescue only
+    # these, so a bug in an adapter is not reported as a NetworkError.
+    NETWORK_ERRORS = [
+      IOError, SocketError, SystemCallError, Timeout::Error, EOFError,
+      OpenSSL::SSL::SSLError, Net::HTTPBadResponse, Net::ProtocolError
+    ].freeze
 
     attr_reader :provider, :reason, :raw_code, :raw_message, :raw
 
@@ -123,9 +133,19 @@ module Einvoice
     CODE = :number_exhausted
   end
 
-  # Network / timeout / transport failure.
+  # Network / timeout / transport failure, and HTTP 5xx or 429. The caller can
+  # retry.
   class NetworkError < Error
     CODE = :network
+
+    # The error for an HTTP status that means "try again", or nil.
+    def self.for_status(response, provider:)
+      status = response.code.to_i
+      return unless status == 429 || status >= 500
+
+      reason = status == 429 ? Reason::RATE_LIMITED : nil
+      new("#{provider} returned HTTP #{status}", provider: provider, reason: reason, raw_code: response.code)
+    end
   end
 
   # Provider returned an error we could not map.
