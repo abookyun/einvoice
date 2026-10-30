@@ -167,6 +167,18 @@ RSpec.describe Einvoice::ECPay::Provider do
       )
     end
 
+    it "keeps the calendar day of a Date on a host east of UTC+8" do
+      original = ENV.fetch("TZ", nil)
+      ENV["TZ"] = "Asia/Tokyo"
+      issued = provider.issue(issue_input)
+      day = Einvoice::Taipei.date(issued.invoice_date)
+      provider.void(invoice_number: issued.invoice_number, reason: "客戶取消", date: day)
+
+      expect(ecpay.payload).to include("InvoiceDate" => day.strftime("%Y-%m-%d"))
+    ensure
+      ENV["TZ"] = original
+    end
+
     it "flags a second void as already voided" do
       issued = provider.issue(issue_input)
       provider.void(invoice_number: issued.invoice_number, reason: "客戶取消")

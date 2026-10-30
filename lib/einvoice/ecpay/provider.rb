@@ -279,13 +279,12 @@ module Einvoice
         Time.new(year.to_i, month.to_i, day.to_i, hour.to_i, minute.to_i, second.to_i, "+08:00")
       end
 
-      # ECPay dates are Taipei-local, so format in +08:00 rather than the host's
-      # zone. A string is taken as already-formatted and passed through.
+      # ECPay dates are Taipei-local. A string is taken as already-formatted and
+      # passed through.
       def taipei_date(date = nil)
         return date if date.is_a?(String)
 
-        time = date.respond_to?(:to_time) ? date.to_time : date
-        (time || Time.now).getlocal("+08:00").strftime("%Y-%m-%d")
+        (date ? Taipei.date(date, provider: name) : Taipei.today).strftime("%Y-%m-%d")
       end
     end
   end
