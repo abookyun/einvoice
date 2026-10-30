@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 - A `Einvoice::Provider` contract modeling the five e-invoice operations (issue / void / allowance / void-allowance / query) once, provider-agnostic, backed by unified value types (`Data.define`) and an input coercion + validation layer that raises `Einvoice::ValidationError` locally before anything hits the network.
-- A normalized error hierarchy (`Einvoice::Error` and subclasses) carrying a stable `#code`, the provider's raw `#raw_code` / `#raw_message`, and an optional action-oriented `#reason` (e.g. `:already_voided`).
+- A normalized error hierarchy (`Einvoice::Error` and subclasses) carrying a stable `#code`, the provider's raw `#raw_code` / `#raw_message`, and an optional action-oriented `#reason` (e.g. `:already_voided`). `#group` says which side failed: `:invoice` or `:provider`.
 - A `Capability` system so providers declare what they support (`#supports?`, `#assert_supports!`) instead of feature gaps surfacing as runtime failures. This alpha's only adapter (ECPay) declares issue / void / allowance / void-allowance / query, B2B, and carrier validation; it does not yet declare foreign-currency, mixed-tax-rate, or query-by-order-id support.
 - `Einvoice::MockProvider`, an in-memory reference implementation of the `Provider` contract for testing application code without a real adapter.
 - **ECPay (綠界) provider**: the first real adapter on the unified core, covering all five operations plus carrier validation, with AES envelope crypto and specs replayed from VCR cassettes recorded against ECPay's public stage API.

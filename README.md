@@ -57,7 +57,7 @@ Inputs accept plain hashes (string or symbol keys) — enum fields take the cano
 
 ### Errors
 
-Every failure is an `Einvoice::Error` subclass carrying a stable `#code`, the provider's `#raw_code` / `#raw_message`, and an optional action-oriented `#reason`. Rescue precisely or broadly:
+Every failure is an `Einvoice::Error` subclass carrying a stable `#code`, the provider's `#raw_code` / `#raw_message`, and an optional action-oriented `#reason`. `#group` tells which side failed: `:invoice` (the request breaks a rule of the MOF, or the invoice is not in the state it needs) or `:provider` (the account, the connection, or the provider's own service). Rescue precisely or broadly:
 
 ```ruby
 begin

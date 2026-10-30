@@ -66,8 +66,24 @@ RSpec.describe Einvoice::Error do
     it "drops nil fields and omits raw" do
       error = Einvoice::AuthError.new("bad key", provider: "ecpay", raw_code: "0")
       expect(error.to_h).to eq(
-        provider: "ecpay", code: :auth, message: "bad key", raw_code: "0"
+        provider: "ecpay", code: :auth, group: :provider, message: "bad key", raw_code: "0"
       )
+    end
+  end
+
+  describe "#group" do
+    it "puts the invoice errors in the invoice group" do
+      [Einvoice::ValidationError, Einvoice::NotFoundError, Einvoice::ConflictError,
+       Einvoice::NumberExhaustedError].each do |klass|
+        expect(klass.new(provider: "mock").group).to eq(:invoice)
+      end
+    end
+
+    it "puts the other errors in the provider group" do
+      [Einvoice::AuthError, Einvoice::NetworkError, Einvoice::ProviderError,
+       Einvoice::UnsupportedError, Einvoice::UnknownError].each do |klass|
+        expect(klass.new(provider: "mock").group).to eq(:provider)
+      end
     end
   end
 

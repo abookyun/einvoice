@@ -58,6 +58,11 @@ module Einvoice
   class Error < StandardError
     # Stable, provider-independent code for the base class. Subclasses override.
     CODE = :unknown
+    # Which side failed. +:invoice+: the request breaks a rule of the MOF, or the
+    # invoice is not in the state it needs. These mean the same at every
+    # provider. +:provider+: the account, the connection, the provider's own
+    # service, or a feature it lacks.
+    GROUP = :provider
     # The low-level errors that mean the connection failed. Clients rescue only
     # these, so a bug in an adapter is not reported as a NetworkError.
     NETWORK_ERRORS = [
@@ -83,6 +88,11 @@ module Einvoice
       self.class::CODE
     end
 
+    # +:invoice+ or +:provider+. See {GROUP}.
+    def group
+      self.class::GROUP
+    end
+
     # Preserve an explicitly-passed cause, else fall back to Ruby's ambient one.
     def cause
       @explicit_cause || super
@@ -94,6 +104,7 @@ module Einvoice
       {
         provider: provider,
         code: code,
+        group: group,
         reason: reason,
         message: message,
         raw_code: raw_code,
@@ -116,21 +127,25 @@ module Einvoice
   # Request failed local or remote validation.
   class ValidationError < Error
     CODE = :validation
+    GROUP = :invoice
   end
 
   # Referenced invoice/allowance does not exist.
   class NotFoundError < Error
     CODE = :not_found
+    GROUP = :invoice
   end
 
   # Operation invalid for the invoice's current state (e.g. void a voided one).
   class ConflictError < Error
     CODE = :conflict
+    GROUP = :invoice
   end
 
   # 字軌 / 配號 exhausted — no invoice number available.
   class NumberExhaustedError < Error
     CODE = :number_exhausted
+    GROUP = :invoice
   end
 
   # Network / timeout / transport failure, and HTTP 5xx or 429. The caller can

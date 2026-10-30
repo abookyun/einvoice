@@ -64,6 +64,7 @@ provider.void(invoice_number: result.invoice_number, reason: "客戶取消")
 - 固定不變的 `#code`。
 - 加值中心原始的 `#raw_code` 和 `#raw_message`。
 - 選填的 `#reason`，說明呼叫端接下來該怎麼處理。
+- `#group`，說明是哪一方失敗：`:invoice`（請求違反財政部的規則，或發票的狀態不對）或 `:provider`（帳號、連線，或加值中心自己的服務）。
 
 可以只 rescue 特定類別，也可以一次 rescue 全部：
 
