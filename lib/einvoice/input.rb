@@ -14,6 +14,25 @@ module Einvoice
   # Deliberately dependency-free: a small hand-written validator, not a schema
   # library, keeping the core's runtime dependencies at zero.
   module Input
+    # 統一編號 [mig 表 4-7].
+    UBN_FORMAT = /\A\d{8}\z/
+    # 手機條碼: "/" and 7 of 0-9 A-Z . + -. 自然人憑證: 2 letters and 14 digits.
+    CARRIER_FORMATS = {
+      CarrierType::MOBILE_BARCODE => %r{\A/[0-9A-Z.+-]{7}\z},
+      CarrierType::CITIZEN_CERTIFICATE => /\A[A-Z]{2}\d{14}\z/
+    }.freeze
+    # MIG F0501 and G0501 allow a reason of 1 to 20 characters.
+    MAX_REASON_LENGTH = 20
+    DEFAULT_VOID_ALLOWANCE_REASON = "作廢折讓"
+    # The rates the MIG allows [mig 表 4-18].
+    TAX_RATES = [0, Rational(1, 100), Rational(2, 100), Rational(5, 100), Rational(15, 100),
+                 Rational(25, 100)].freeze
+    DEFAULT_TAX_RATES = {
+      TaxType::TAXABLE => Rational(5, 100),
+      TaxType::ZERO_RATED => 0r,
+      TaxType::TAX_FREE => 0r
+    }.freeze
+
     module_function
 
     def issue(input, provider: nil)
@@ -22,15 +41,19 @@ module Einvoice
       h = hash!(input, "input", provider)
       items = build_items(h[:items], provider)
       amount = build_amount(h[:amount], provider)
+      buyer = build_buyer(h[:buyer], provider)
+      tax_type = enum!(h[:tax_type], TaxType, :tax_type, provider)
+      category = h[:category] && enum!(h[:category], InvoiceCategory, :category, provider)
+      check_category!(category, buyer, provider)
       IssueInvoiceInput.new(
         order_id: fetch!(h, :order_id, provider),
-        buyer: build_buyer(h[:buyer], provider),
+        buyer: buyer,
         items: items,
         amount: amount,
-        tax_type: enum!(h[:tax_type], TaxType, :tax_type, provider),
+        tax_type: tax_type,
         price_mode: enum!(h[:price_mode], PriceMode, :price_mode, provider),
-        tax_rate: h[:tax_rate],
-        category: h[:category] && enum!(h[:category], InvoiceCategory, :category, provider),
+        tax_rate: tax_rate!(h[:tax_rate], tax_type, provider),
+        category: category,
         carrier: build_carrier(h[:carrier], provider),
         donation: build_donation(h[:donation], provider),
         remark: h[:remark],
@@ -47,7 +70,7 @@ module Einvoice
       h = hash!(input, "input", provider)
       VoidInvoiceInput.new(
         invoice_number: fetch!(h, :invoice_number, provider),
-        reason: fetch!(h, :reason, provider),
+        reason: reason!(fetch!(h, :reason, provider), provider),
         date: h[:date],
         provider_options: h[:provider_options]
       )
@@ -74,7 +97,7 @@ module Einvoice
       VoidAllowanceInput.new(
         invoice_number: fetch!(h, :invoice_number, provider),
         allowance_number: fetch!(h, :allowance_number, provider),
-        reason: h[:reason],
+        reason: reason!(blank?(h[:reason]) ? DEFAULT_VOID_ALLOWANCE_REASON : h[:reason], provider),
         provider_options: h[:provider_options]
       )
     end
@@ -100,7 +123,10 @@ module Einvoice
       return value if value.is_a?(Buyer)
 
       h = hash!(value, "buyer", provider)
-      Buyer.new(name: h[:name], ubn: h[:ubn], email: h[:email], address: h[:address],
+      ubn = blank?(h[:ubn]) ? nil : h[:ubn].to_s
+      fail!("buyer ubn must be 8 digits, got #{ubn.inspect}", provider) if ubn && !ubn.match?(UBN_FORMAT)
+
+      Buyer.new(name: h[:name], ubn: ubn, email: h[:email], address: h[:address],
                 phone: h[:phone])
     end
 
@@ -109,7 +135,12 @@ module Einvoice
       return value if value.is_a?(Carrier)
 
       h = hash!(value, "carrier", provider)
-      Carrier.new(type: enum!(h[:type], CarrierType, :carrier_type, provider), code: h[:code])
+      type = enum!(h[:type], CarrierType, :carrier_type, provider)
+      format = CARRIER_FORMATS[type]
+      if format && !h[:code].to_s.match?(format)
+        fail!("carrier code for #{type} must match #{format.source}, got #{h[:code].inspect}", provider)
+      end
+      Carrier.new(type: type, code: h[:code])
     end
 
     def build_donation(value, provider)
@@ -134,6 +165,9 @@ module Einvoice
       sales = integer!(h[:sales_amount], :sales_amount, provider)
       tax = integer!(h[:tax_amount], :tax_amount, provider)
       total = integer!(h[:total_amount], :total_amount, provider)
+      { sales_amount: sales, tax_amount: tax, total_amount: total }.each do |field, value|
+        fail!("#{field} must not be negative, got #{value}", provider) if value.negative?
+      end
       unless sales + tax == total
         fail!("amount total #{total} != sales #{sales} + tax #{tax}", provider)
       end
@@ -147,6 +181,9 @@ module Einvoice
         next item if item.is_a?(InvoiceItem)
 
         h = hash!(item, "items[#{index}]", provider)
+        %i[quantity unit_price amount].each do |field|
+          Number.decimal!(fetch!(h, field, provider), field: "items[#{index}].#{field}", provider: provider)
+        end
         InvoiceItem.new(
           description: fetch!(h, :description, provider),
           quantity: fetch!(h, :quantity, provider),
@@ -157,6 +194,37 @@ module Einvoice
           remark: h[:remark]
         )
       end
+    end
+
+    # --- checks ----------------------------------------------------------------
+
+    # A B2B invoice needs a 統一編號. An explicit category has to agree with it.
+    def check_category!(category, buyer, provider)
+      business = buyer&.business? || false
+      if category == InvoiceCategory::B2B && !business
+        fail!("a B2B invoice needs buyer.ubn", provider)
+      elsif category == InvoiceCategory::B2C && business
+        fail!("a B2C invoice cannot carry buyer.ubn #{buyer.ubn}", provider)
+      end
+    end
+
+    # A decimal rate that the MIG allows. The default depends on the tax type.
+    # A special-tax invoice has no default: the caller has to give its rate.
+    def tax_rate!(value, tax_type, provider)
+      return DEFAULT_TAX_RATES[tax_type] if value.nil?
+
+      rate = Number.decimal!(value, field: "tax_rate", provider: provider)
+      unless TAX_RATES.include?(rate)
+        fail!("tax_rate must be one of the MIG rates (0, 0.01, 0.02, 0.05, 0.15, 0.25), got #{value.inspect}",
+              provider)
+      end
+      rate
+    end
+
+    def reason!(reason, provider)
+      length = reason.to_s.length
+      fail!("reason must be #{MAX_REASON_LENGTH} characters or fewer, got #{length}", provider) if length > MAX_REASON_LENGTH
+      reason
     end
 
     # --- helpers ---------------------------------------------------------------

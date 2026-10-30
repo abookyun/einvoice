@@ -55,6 +55,14 @@ provider.void(invoice_number: result.invoice_number, reason: "客戶取消")
 
 Inputs accept plain hashes (string or symbol keys) — enum fields take the canonical symbol (`:taxable`) or a wire-style string (`"TAXABLE"`). They are validated and coerced into immutable value objects before anything hits the network; a malformed request raises `Einvoice::ValidationError` locally.
 
+The checks follow the MIG:
+
+- A buyer `ubn` is 8 digits. A B2B invoice needs one, and an explicit `category` has to agree with it.
+- Totals are whole numbers and not negative. Item quantity, price and amount are numbers with at most 7 decimal places.
+- A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits.
+- `tax_rate` is a decimal, such as `0.05`, and has to be a MIG rate. It defaults to `0.05` for taxable sales and `0` for zero-rated or tax-free sales.
+- A void reason is at most 20 characters. A void allowance reason defaults to `作廢折讓`.
+
 ### Errors
 
 Every failure is an `Einvoice::Error` subclass carrying a stable `#code`, the provider's `#raw_code` / `#raw_message`, and an optional action-oriented `#reason`. `#group` tells which side failed: `:invoice` (the request breaks a rule of the MOF, or the invoice is not in the state it needs) or `:provider` (the account, the connection, or the provider's own service). Rescue precisely or broadly:

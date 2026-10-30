@@ -91,7 +91,6 @@ module Einvoice
       # void the allowance first.
       def void(input)
         parsed = Input.void(input, provider: name)
-        Payload.check_reason!(parsed.reason, "Reason") if @validate_payload
         options = Payload.string_keys(parsed.provider_options)
 
         result = @client.request("/B2CInvoice/Invalid", {
@@ -135,8 +134,7 @@ module Einvoice
       # 作廢折讓. Voids one 折讓單, not the invoice.
       def void_allowance(input)
         parsed = Input.void_allowance(input, provider: name)
-        reason = parsed.reason || "作廢折讓"
-        Payload.check_reason!(reason, "Reason") if @validate_payload
+        reason = parsed.reason
 
         result = @client.request("/B2CInvoice/AllowanceInvalid", {
                                    "InvoiceNo" => parsed.invoice_number,

@@ -60,6 +60,70 @@ RSpec.describe Einvoice::Input do
     end
   end
 
+  describe "MIG checks on an issue" do
+    def issue(**changes)
+      described_class.issue(issue_hash.merge(changes.transform_keys(&:to_s)))
+    end
+
+    def error_for(&block)
+      block.call
+      nil
+    rescue Einvoice::ValidationError => e
+      e.message
+    end
+
+    it "requires an 8-digit buyer ubn" do
+      expect(error_for { issue(buyer: { "ubn" => "abc" }) }).to match(/buyer ubn must be 8 digits/)
+      expect(issue(buyer: { "ubn" => 53_538_851 }).buyer.ubn).to eq("53538851")
+    end
+
+    it "makes the category agree with the buyer ubn" do
+      expect(error_for { issue(category: "B2B") }).to match(/B2B invoice needs buyer.ubn/)
+      expect(error_for { issue(category: "B2C", buyer: { "ubn" => "53538851" }) })
+        .to match(/B2C invoice cannot carry buyer.ubn/)
+      expect(issue(category: "B2B", buyer: { "ubn" => "53538851" }).category).to eq(:b2b)
+    end
+
+    it "rejects negative totals" do
+      expect(error_for { issue(amount: { "sales_amount" => -100, "tax_amount" => 0, "total_amount" => -100 }) })
+        .to match(/sales_amount must not be negative/)
+    end
+
+    it "requires item numbers with at most 7 decimal places" do
+      item = { "description" => "x", "quantity" => "lots", "unit_price" => 100, "amount" => 100 }
+      expect(error_for { issue(items: [item]) }).to match(/items\[0\].quantity must be a number/)
+      expect(error_for { issue(items: [item.merge("quantity" => "0.00000001")]) })
+        .to match(/items\[0\].quantity may have at most 7 decimal places/)
+      item = item.merge("quantity" => "0.5", "unit_price" => 200)
+      expect(issue(items: [item]).items.first.quantity).to eq("0.5")
+    end
+
+    it "checks the carrier code shape" do
+      expect(error_for { issue(carrier: { "type" => "MOBILE_BARCODE", "code" => "ABC" }) })
+        .to match(/carrier code for mobile_barcode/)
+      expect(error_for { issue(carrier: { "type" => "CITIZEN_CERTIFICATE", "code" => "A1" }) })
+        .to match(/carrier code for citizen_certificate/)
+      expect(issue(carrier: { "type" => "MOBILE_BARCODE", "code" => "/ABC+123" }).carrier.code).to eq("/ABC+123")
+    end
+
+    it "allows a donation and a carrier together" do
+      input = issue(donation: { "npoban" => "168001" })
+      expect([input.carrier, input.donation]).to all(be_truthy)
+    end
+
+    it "defaults tax_rate by tax type" do
+      expect(issue.tax_rate).to eq(Rational(5, 100))
+      expect(issue(tax_type: "ZERO_RATED").tax_rate).to eq(0)
+      expect(issue(tax_type: "SPECIAL").tax_rate).to be_nil
+    end
+
+    it "accepts only the MIG tax rates, as decimals" do
+      expect(issue(tax_type: "SPECIAL", tax_rate: 0.15).tax_rate).to eq(Rational(15, 100))
+      expect(error_for { issue(tax_rate: 5) }).to match(/tax_rate must be one of the MIG rates/)
+      expect(error_for { issue(tax_rate: 0.3) }).to match(/tax_rate must be one of the MIG rates/)
+    end
+  end
+
   describe ".query" do
     it "requires at least one of invoice_number / order_id" do
       expect { described_class.query({}) }.to raise_error(Einvoice::ValidationError)
@@ -72,6 +136,18 @@ RSpec.describe Einvoice::Input do
       expect { described_class.void({ "invoice_number" => "JU1" }) }
         .to raise_error(Einvoice::ValidationError, /reason/)
       expect(described_class.void({ "invoice_number" => "JU1", "reason" => "x" }).reason).to eq("x")
+    end
+
+    it "limits the reason to 20 characters" do
+      expect { described_class.void({ "invoice_number" => "JU1", "reason" => "x" * 21 }) }
+        .to raise_error(Einvoice::ValidationError, /reason must be 20 characters or fewer/)
+    end
+  end
+
+  describe ".void_allowance" do
+    it "fills the reason the MIG suggests" do
+      input = described_class.void_allowance({ "invoice_number" => "JU1", "allowance_number" => "A1" })
+      expect(input.reason).to eq("作廢折讓")
     end
   end
 

@@ -145,7 +145,7 @@ RSpec.describe Einvoice::ECPay::Payload do
 
     it "rejects a malformed 統一編號" do
       expect { build(buyer: { ubn: "123", name: "測試公司" }) }
-        .to raise_error(Einvoice::ValidationError, /CustomerIdentifier must be 8 digits/)
+        .to raise_error(Einvoice::ValidationError, /buyer ubn must be 8 digits/)
     end
 
     # A 統編 invoice has to be either printed or stored in a carrier; ECPay

@@ -26,8 +26,8 @@ module Einvoice
         CarrierType::MOBILE_BARCODE => "3"       # 手機條碼
       }.freeze
 
-      # ECPay caps 作廢/折讓 reasons at 20 characters, and 自訂編號 at 50.
-      MAX_REASON_LENGTH = 20
+      # ECPay caps 自訂編號 at 50 characters. Input checks the 20-character
+      # reason limit, which ECPay shares with the MIG.
       MAX_RELATE_NUMBER_LENGTH = 50
       # Default unit (單位) when an item does not name one; ItemWord is required.
       DEFAULT_UNIT = "式"
@@ -172,16 +172,6 @@ module Einvoice
 
         data["TaxType"] == MIXED_TAX_CODE &&
           data["Items"].any? { |item| item["ItemTaxType"] == "2" }
-      end
-
-      # ECPay rejects a 作廢/折讓 reason longer than 20 characters.
-      def check_reason!(reason, field)
-        return if reason.to_s.length <= MAX_REASON_LENGTH
-
-        raise ValidationError.new(
-          "#{field} must be #{MAX_REASON_LENGTH} characters or fewer, got #{reason.to_s.length}",
-          provider: Client::PROVIDER
-        )
       end
 
       def string_keys(hash)
