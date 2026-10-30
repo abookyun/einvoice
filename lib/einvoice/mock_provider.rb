@@ -49,7 +49,7 @@ module Einvoice
       invoice_number = next_invoice_number
       result = IssueInvoiceResult.new(
         invoice_number: invoice_number,
-        invoice_date: parsed.date || Time.now,
+        invoice_datetime: Taipei.now,
         random_code: format("%04d", (@seq * 7) % 10_000),
         order_id: parsed.order_id,
         total_amount: parsed.amount.total_amount,
@@ -70,7 +70,7 @@ module Einvoice
 
       stored[:status] = InvoiceStatus::VOIDED
       VoidInvoiceResult.new(invoice_number: parsed.invoice_number, status: InvoiceStatus::VOIDED,
-                            raw: { mock: true })
+                            cancel_datetime: Taipei.now, raw: { mock: true })
     end
 
     def allowance(input)
@@ -90,7 +90,7 @@ module Einvoice
       AllowanceResult.new(
         allowance_number: allowance_number,
         invoice_number: parsed.invoice_number,
-        allowance_date: parsed.date || Time.now,
+        allowance_date: Taipei.today,
         total_amount: parsed.amount.total_amount,
         raw: { mock: true }
       )
@@ -103,7 +103,8 @@ module Einvoice
         @allowances.include?(parsed.allowance_number)
 
       @allowances.delete(parsed.allowance_number)
-      VoidAllowanceResult.new(allowance_number: parsed.allowance_number, raw: { mock: true })
+      VoidAllowanceResult.new(allowance_number: parsed.allowance_number, cancel_datetime: Taipei.now,
+                              raw: { mock: true })
     end
 
     def query(input)
@@ -115,7 +116,7 @@ module Einvoice
 
       QueryInvoiceResult.new(
         invoice_number: invoice_number,
-        invoice_date: stored[:result].invoice_date,
+        invoice_datetime: stored[:result].invoice_datetime,
         random_code: stored[:result].random_code,
         order_id: stored[:input].order_id,
         status: stored[:status],

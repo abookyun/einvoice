@@ -43,6 +43,21 @@ RSpec.describe Einvoice::MockProvider do
       })
     end
 
+    it "names and types its dates as the MIG does" do
+      expect(issued.invoice_datetime.utc_offset).to eq(8 * 3600)
+      allowance = provider.allowance({
+        invoice_number: issued.invoice_number, allowance_id: "A1",
+        items: [{ description: "x", quantity: 1, unit_price: 100, amount: 100 }],
+        amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
+      })
+      expect(allowance.allowance_date).to be_a(Date)
+      cancelled = provider.void_allowance({ invoice_number: issued.invoice_number,
+                                            allowance_number: allowance.allowance_number })
+      expect(cancelled.cancel_datetime.utc_offset).to eq(8 * 3600)
+      voided = provider.void({ invoice_number: issued.invoice_number, reason: "x" })
+      expect(voided.cancel_datetime.utc_offset).to eq(8 * 3600)
+    end
+
     it "reflects an allowance in a subsequent query" do
       provider.allowance({
         invoice_number: issued.invoice_number, allowance_id: "A1",

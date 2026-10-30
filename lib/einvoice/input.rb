@@ -59,7 +59,6 @@ module Einvoice
         remark: h[:remark],
         currency: h[:currency],
         exchange_rate: h[:exchange_rate],
-        date: h[:date],
         provider_options: h[:provider_options]
       )
     end

@@ -68,7 +68,7 @@ RSpec.describe Einvoice::ECPay::Provider do
 
       expect(result.invoice_number).to match(/\A[A-Z]{2}\d{8}\z/)
       expect(result.random_code).to match(/\A\d{4}\z/)
-      expect(result.invoice_date).to be_a(Time)
+      expect(result.invoice_datetime).to be_a(Time)
       expect(result.status).to eq(Einvoice::InvoiceStatus::ISSUED)
     end
 
@@ -171,7 +171,7 @@ RSpec.describe Einvoice::ECPay::Provider do
       original = ENV.fetch("TZ", nil)
       ENV["TZ"] = "Asia/Tokyo"
       issued = provider.issue(issue_input)
-      day = Einvoice::Taipei.date(issued.invoice_date)
+      day = Einvoice::Taipei.date(issued.invoice_datetime)
       provider.void(invoice_number: issued.invoice_number, reason: "客戶取消", date: day)
 
       expect(ecpay.payload).to include("InvoiceDate" => day.strftime("%Y-%m-%d"))

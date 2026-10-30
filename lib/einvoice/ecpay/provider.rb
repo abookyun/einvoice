@@ -74,7 +74,7 @@ module Einvoice
 
         IssueInvoiceResult.new(
           invoice_number: result["InvoiceNo"].to_s,
-          invoice_date: parse_time(result["InvoiceDate"]),
+          invoice_datetime: parse_time(result["InvoiceDate"]),
           random_code: result["RandomNumber"].to_s,
           order_id: parsed.order_id,
           total_amount: parsed.amount.total_amount,
@@ -125,7 +125,7 @@ module Einvoice
         AllowanceResult.new(
           allowance_number: result["IA_Allow_No"].to_s,
           invoice_number: result["IA_Invoice_No"] || parsed.invoice_number,
-          allowance_date: parse_time(result["IA_Date"]),
+          allowance_date: parse_time(result["IA_Date"])&.to_date,
           total_amount: parsed.amount.total_amount,
           raw: result
         )
@@ -206,7 +206,7 @@ module Einvoice
 
         QueryInvoiceResult.new(
           invoice_number: result["IIS_Number"] || parsed.invoice_number.to_s,
-          invoice_date: parse_time(result["IIS_Create_Date"]),
+          invoice_datetime: parse_time(result["IIS_Create_Date"]),
           random_code: result["IIS_Random_Number"].to_s,
           order_id: result["IIS_Relate_Number"] || parsed.order_id,
           status: derive_status(result),

@@ -42,7 +42,7 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
       expect(result).to be_a(Einvoice::IssueInvoiceResult)
       expect(result.invoice_number).to match(/\A[A-Z]{2}\d{8}\z/)
       expect(result.random_code).to match(/\A\d{4}\z/)
-      expect(result.invoice_date).to be_a(Time)
+      expect(result.invoice_datetime).to be_a(Time)
       expect(result.status).to eq(Einvoice::InvoiceStatus::ISSUED)
       expect(result.total_amount).to eq(100)
       # The untouched provider payload stays available for anything unmapped.
@@ -62,7 +62,7 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
       expect(found.order_id).to eq(order)
       expect(found.status).to eq(Einvoice::InvoiceStatus::ISSUED)
       expect(found.random_code).to eq(issued.random_code)
-      expect(found.invoice_date).to be_a(Time)
+      expect(found.invoice_datetime).to be_a(Time)
     end
 
     it "maps the amounts and the buyer ECPay returns",
@@ -130,7 +130,7 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
       expect(allowance).to be_a(Einvoice::AllowanceResult)
       expect(allowance.allowance_number).not_to be_empty
       expect(allowance.invoice_number).to eq(issued.invoice_number)
-      expect(allowance.allowance_date).to be_a(Time)
+      expect(allowance.allowance_date).to be_a(Date)
 
       # A partly credited invoice reads as ALLOWANCE, not ISSUED.
       expect(provider.query(order_id: order).status).to eq(Einvoice::InvoiceStatus::ALLOWANCE)

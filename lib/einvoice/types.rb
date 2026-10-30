@@ -106,11 +106,11 @@ module Einvoice
 
   IssueInvoiceInput = Data.define(
     :order_id, :buyer, :items, :amount, :tax_type, :price_mode, :tax_rate, :category,
-    :carrier, :donation, :remark, :currency, :exchange_rate, :date, :provider_options
+    :carrier, :donation, :remark, :currency, :exchange_rate, :provider_options
   ) do
     def initialize(order_id:, buyer:, items:, amount:, tax_type:, price_mode:, tax_rate: nil,
                    category: nil, carrier: nil, donation: nil, remark: nil, currency: nil,
-                   exchange_rate: nil, date: nil, provider_options: nil)
+                   exchange_rate: nil, provider_options: nil)
       super
     end
 
@@ -120,8 +120,9 @@ module Einvoice
     end
   end
 
+  # +invoice_datetime+ is a Time in UTC+8 (MIG InvoiceDate and InvoiceTime).
   IssueInvoiceResult = Data.define(
-    :invoice_number, :invoice_date, :random_code, :order_id, :total_amount, :status, :raw
+    :invoice_number, :invoice_datetime, :random_code, :order_id, :total_amount, :status, :raw
   )
 
   # --- Void (作廢) ---
@@ -132,7 +133,13 @@ module Einvoice
     end
   end
 
-  VoidInvoiceResult = Data.define(:invoice_number, :status, :raw)
+  # +cancel_datetime+ is a Time in UTC+8 (MIG CancelDate and CancelTime), or nil
+  # when the provider does not return it.
+  VoidInvoiceResult = Data.define(:invoice_number, :status, :cancel_datetime, :raw) do
+    def initialize(invoice_number:, status:, raw:, cancel_datetime: nil)
+      super
+    end
+  end
 
   # --- Allowance (折讓) and its cancellation (折讓作廢) ---
 
@@ -142,6 +149,7 @@ module Einvoice
     end
   end
 
+  # +allowance_date+ is a Date (MIG AllowanceDate has no time).
   AllowanceResult = Data.define(:allowance_number, :invoice_number, :allowance_date, :total_amount, :raw)
 
   VoidAllowanceInput = Data.define(:invoice_number, :allowance_number, :reason, :provider_options) do
@@ -150,7 +158,11 @@ module Einvoice
     end
   end
 
-  VoidAllowanceResult = Data.define(:allowance_number, :raw)
+  VoidAllowanceResult = Data.define(:allowance_number, :cancel_datetime, :raw) do
+    def initialize(allowance_number:, raw:, cancel_datetime: nil)
+      super
+    end
+  end
 
   # --- Query (查詢) ---
 
@@ -162,6 +174,6 @@ module Einvoice
   end
 
   QueryInvoiceResult = Data.define(
-    :invoice_number, :invoice_date, :random_code, :order_id, :status, :amount, :buyer, :items, :raw
+    :invoice_number, :invoice_datetime, :random_code, :order_id, :status, :amount, :buyer, :items, :raw
   )
 end
