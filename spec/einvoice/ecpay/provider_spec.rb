@@ -101,9 +101,9 @@ RSpec.describe Einvoice::ECPay::Provider do
   end
 
   describe "#query" do
-    it "looks up by 自訂編號 when given an order id" do
+    it "looks up by 自訂編號 when the reference has an order id" do
       provider.issue(issue_input(order_id: "ORDER_Q"))
-      result = provider.query(order_id: "ORDER_Q")
+      result = provider.query(invoice: { order_id: "ORDER_Q" })
 
       expect(ecpay.payload).to include("RelateNumber" => "ORDER_Q")
       expect(result.order_id).to eq("ORDER_Q")
@@ -113,19 +113,24 @@ RSpec.describe Einvoice::ECPay::Provider do
 
     it "pairs an invoice number with its issue date, as GetIssue requires" do
       issued = provider.issue(issue_input)
-      provider.query(invoice_number: issued.invoice_number)
+      provider.query(invoice: { number: issued.invoice_number, invoice_datetime: issued.invoice_datetime })
 
       expect(ecpay.payload).to include(
         "InvoiceNo" => issued.invoice_number,
-        "InvoiceDate" => Time.now.getlocal("+08:00").strftime("%Y-%m-%d")
+        "InvoiceDate" => issued.invoice_datetime.strftime("%Y-%m-%d")
       )
     end
 
-    it "accepts an explicit issue date for an older invoice" do
+    it "needs the issue date to query by number" do
+      expect { provider.query(invoice: "LA25000001") }
+        .to raise_error(Einvoice::ValidationError, /invoice.invoice_datetime/)
+      expect(ecpay.requests).to be_empty
+    end
+
+    it "does not find an invoice under another date" do
       issued = provider.issue(issue_input)
       expect do
-        provider.query(invoice_number: issued.invoice_number,
-                       provider_options: { invoice_date: "2020-01-01" })
+        provider.query(invoice: { number: issued.invoice_number, invoice_datetime: Date.new(2020, 1, 1) })
       end.to raise_error(Einvoice::NotFoundError)
 
       expect(ecpay.payload).to include("InvoiceDate" => "2020-01-01")
@@ -133,36 +138,38 @@ RSpec.describe Einvoice::ECPay::Provider do
 
     it "reports a voided invoice as voided" do
       issued = provider.issue(issue_input)
-      provider.void(invoice_number: issued.invoice_number, reason: "客戶取消")
+      provider.void(invoice: issued.reference, reason: "客戶取消")
 
-      expect(provider.query(order_id: "ORDER_1").status).to eq(Einvoice::InvoiceStatus::VOIDED)
+      expect(provider.query(invoice: issued.reference).status).to eq(Einvoice::InvoiceStatus::VOIDED)
     end
 
     it "reports a credited invoice as having an allowance" do
       issued = provider.issue(issue_input)
-      provider.allowance(invoice_number: issued.invoice_number, allowance_id: "AL_1",
+      provider.allowance(invoice: issued.reference, allowance_id: "AL_1",
                          items: [{ description: "咖啡拿鐵", quantity: 1, unit_price: 40,
                                    amount: 40 }],
                          amount: { sales_amount: 40, tax_amount: 0, total_amount: 40 })
 
-      expect(provider.query(order_id: "ORDER_1").status)
+      expect(provider.query(invoice: issued.reference).status)
         .to eq(Einvoice::InvoiceStatus::ALLOWANCE)
     end
 
     it "drops ECPay's zero placeholder for a B2C buyer's 統一編號" do
-      provider.issue(issue_input)
-      expect(provider.query(order_id: "ORDER_1").buyer.ubn).to be_nil
+      issued = provider.issue(issue_input)
+      found = provider.query(invoice: issued.reference)
+      expect(found.buyer.ubn).to be_nil
+      expect(found.reference).to eq(issued.reference)
     end
   end
 
   describe "#void" do
-    it "defaults the invoice date to today in Taipei" do
+    it "sends the issue date of the reference" do
       issued = provider.issue(issue_input)
-      provider.void(invoice_number: issued.invoice_number, reason: "客戶取消")
+      provider.void(invoice: issued.reference, reason: "客戶取消")
 
       expect(ecpay.payload).to include(
         "InvoiceNo" => issued.invoice_number,
-        "InvoiceDate" => Time.now.getlocal("+08:00").strftime("%Y-%m-%d"),
+        "InvoiceDate" => issued.invoice_datetime.strftime("%Y-%m-%d"),
         "Reason" => "客戶取消"
       )
     end
@@ -172,18 +179,42 @@ RSpec.describe Einvoice::ECPay::Provider do
       ENV["TZ"] = "Asia/Tokyo"
       issued = provider.issue(issue_input)
       day = Einvoice::Taipei.date(issued.invoice_datetime)
-      provider.void(invoice_number: issued.invoice_number, reason: "客戶取消", date: day)
+      provider.void(invoice: { number: issued.invoice_number, invoice_datetime: day }, reason: "客戶取消")
 
       expect(ecpay.payload).to include("InvoiceDate" => day.strftime("%Y-%m-%d"))
     ensure
       ENV["TZ"] = original
     end
 
+    it "looks the issue date up by order id when the reference has none" do
+      issued = provider.issue(issue_input)
+      provider.void(invoice: { number: issued.invoice_number, order_id: "ORDER_1" }, reason: "客戶取消")
+
+      expect(ecpay.path(-2)).to eq("/B2CInvoice/GetIssue")
+      expect(ecpay.payload(-2)).to include("RelateNumber" => "ORDER_1")
+      expect(ecpay.payload).to include("InvoiceDate" => issued.invoice_datetime.strftime("%Y-%m-%d"))
+    end
+
+    it "reports a failed lookup as the provider's error, not a missing invoice" do
+      expect { provider.void(invoice: { number: "LA25000001", order_id: "NO_SUCH" }, reason: "客戶取消") }
+        .to raise_error(Einvoice::ProviderError) { |e|
+          expect(e.reason).to eq(Einvoice::Reason::LOOKUP_FAILED)
+          expect(e.cause).to be_a(Einvoice::NotFoundError)
+          expect(e.message).to match(/void needs invoice.invoice_datetime/)
+        }
+    end
+
+    it "does not guess the issue date of a plain number" do
+      expect { provider.void(invoice: "LA25000001", reason: "客戶取消") }
+        .to raise_error(Einvoice::ValidationError, /void needs invoice.invoice_datetime/)
+      expect(ecpay.requests).to be_empty
+    end
+
     it "flags a second void as already voided" do
       issued = provider.issue(issue_input)
-      provider.void(invoice_number: issued.invoice_number, reason: "客戶取消")
+      provider.void(invoice: issued.reference, reason: "客戶取消")
 
-      expect { provider.void(invoice_number: issued.invoice_number, reason: "客戶取消") }
+      expect { provider.void(invoice: issued.reference, reason: "客戶取消") }
         .to raise_error(Einvoice::ConflictError) { |e|
           expect(e.reason).to eq(Einvoice::Reason::ALREADY_VOIDED)
         }
@@ -191,25 +222,25 @@ RSpec.describe Einvoice::ECPay::Provider do
 
     it "tells the caller to void the allowance first" do
       issued = provider.issue(issue_input)
-      provider.allowance(invoice_number: issued.invoice_number, allowance_id: "AL_1",
+      provider.allowance(invoice: issued.reference, allowance_id: "AL_1",
                          items: [{ description: "咖啡拿鐵", quantity: 1, unit_price: 40,
                                    amount: 40 }],
                          amount: { sales_amount: 40, tax_amount: 0, total_amount: 40 })
 
-      expect { provider.void(invoice_number: issued.invoice_number, reason: "客戶取消") }
+      expect { provider.void(invoice: issued.reference, reason: "客戶取消") }
         .to raise_error(Einvoice::ConflictError) { |e|
           expect(e.reason).to eq(Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE)
         }
     end
 
-    it "rejects a reason longer than ECPay's 20-character limit locally" do
-      expect { provider.void(invoice_number: "LA25000001", reason: "超" * 21) }
+    it "rejects a reason longer than 20 characters locally" do
+      expect { provider.void(invoice: "LA25000001", reason: "超" * 21) }
         .to raise_error(Einvoice::ValidationError, /20 characters or fewer/)
       expect(ecpay.requests).to be_empty
     end
 
     it "raises NotFoundError for an unknown invoice" do
-      expect { provider.void(invoice_number: "ZZ00000000", reason: "客戶取消") }
+      expect { provider.void(invoice: { number: "ZZ00000000", invoice_datetime: Time.now }, reason: "客戶取消") }
         .to raise_error(Einvoice::NotFoundError)
     end
   end
@@ -217,7 +248,7 @@ RSpec.describe Einvoice::ECPay::Provider do
   describe "#allowance and #void_allowance" do
     let(:allowance_input) do
       {
-        invoice_number: issued.invoice_number,
+        invoice: issued.reference,
         allowance_id: "AL_1",
         items: [{ description: "咖啡拿鐵", quantity: 1, unit_price: 100, amount: 100 }],
         amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
@@ -227,7 +258,8 @@ RSpec.describe Einvoice::ECPay::Provider do
 
     it "defaults to notifying nobody" do
       provider.allowance(allowance_input)
-      expect(ecpay.payload).to include("AllowanceNotify" => "N", "AllowanceAmount" => 100)
+      expect(ecpay.payload).to include("AllowanceNotify" => "N", "AllowanceAmount" => 100,
+                                       "InvoiceDate" => issued.invoice_datetime.strftime("%Y-%m-%d"))
     end
 
     it "passes notification settings through provider options" do
@@ -244,21 +276,25 @@ RSpec.describe Einvoice::ECPay::Provider do
       allowance = provider.allowance(allowance_input)
       expect(allowance.allowance_number).not_to be_empty
       expect(allowance.invoice_number).to eq(issued.invoice_number)
+      expect(allowance.reference.invoice_number).to eq(issued.invoice_number)
 
-      provider.void_allowance(invoice_number: issued.invoice_number,
-                              allowance_number: allowance.allowance_number)
+      provider.void_allowance(allowance: allowance.reference)
 
       # With the allowance reversed the invoice is back to a plain issued state.
-      expect(provider.query(order_id: "ORDER_1").status).to eq(Einvoice::InvoiceStatus::ISSUED)
+      expect(provider.query(invoice: issued.reference).status).to eq(Einvoice::InvoiceStatus::ISSUED)
+    end
+
+    it "needs the invoice number to void an allowance" do
+      expect { provider.void_allowance(allowance: "2026081500000001") }
+        .to raise_error(Einvoice::ValidationError, /allowance.invoice_number/)
+      expect(ecpay.requests).to be_empty
     end
 
     it "flags voiding the same 折讓單 twice" do
       allowance = provider.allowance(allowance_input)
-      void_input = { invoice_number: issued.invoice_number,
-                     allowance_number: allowance.allowance_number }
-      provider.void_allowance(void_input)
+      provider.void_allowance(allowance: allowance.reference)
 
-      expect { provider.void_allowance(void_input) }
+      expect { provider.void_allowance(allowance: allowance.reference) }
         .to raise_error(Einvoice::ConflictError) { |e|
           expect(e.reason).to eq(Einvoice::Reason::ALREADY_VOIDED)
         }
@@ -266,8 +302,8 @@ RSpec.describe Einvoice::ECPay::Provider do
 
     it "raises NotFoundError for an unknown 折讓單" do
       expect do
-        provider.void_allowance(invoice_number: issued.invoice_number,
-                                allowance_number: "9999999999999999")
+        provider.void_allowance(allowance: { allowance_number: "9999999999999999",
+                                             invoice_number: issued.invoice_number })
       end.to raise_error(Einvoice::NotFoundError)
     end
   end

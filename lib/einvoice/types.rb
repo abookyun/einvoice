@@ -120,15 +120,49 @@ module Einvoice
     end
   end
 
+  # --- References ---
+
+  # The facts about an existing invoice that providers ask for when they void,
+  # credit or query it. Results of issue and query return one as #reference, so
+  # a caller passes it on and does not have to know what each provider needs.
+  # Every field is optional. An adapter that needs a missing field may query the
+  # provider for it, or raises ValidationError naming the field.
+  #
+  # +invoice_datetime+ is a Time in UTC+8. +buyer_ubn+ is nil for a consumer.
+  InvoiceReference = Data.define(:number, :invoice_datetime, :random_code, :order_id, :total_amount,
+                                 :buyer_ubn) do
+    def initialize(number: nil, invoice_datetime: nil, random_code: nil, order_id: nil,
+                   total_amount: nil, buyer_ubn: nil)
+      super
+    end
+  end
+
+  # The facts about an existing allowance. +allowance_date+ is a Date.
+  AllowanceReference = Data.define(:allowance_number, :allowance_date, :invoice_number) do
+    def initialize(allowance_number:, allowance_date: nil, invoice_number: nil)
+      super
+    end
+  end
+
+  # --- Issue results ---
+
   # +invoice_datetime+ is a Time in UTC+8 (MIG InvoiceDate and InvoiceTime).
+  # +buyer_ubn+ is nil for a consumer.
   IssueInvoiceResult = Data.define(
-    :invoice_number, :invoice_datetime, :random_code, :order_id, :total_amount, :status, :raw
-  )
+    :invoice_number, :invoice_datetime, :random_code, :order_id, :total_amount, :buyer_ubn, :status, :raw
+  ) do
+    def reference
+      InvoiceReference.new(number: invoice_number, invoice_datetime: invoice_datetime,
+                           random_code: random_code, order_id: order_id,
+                           total_amount: total_amount, buyer_ubn: buyer_ubn)
+    end
+  end
 
   # --- Void (作廢) ---
 
-  VoidInvoiceInput = Data.define(:invoice_number, :reason, :date, :provider_options) do
-    def initialize(invoice_number:, reason:, date: nil, provider_options: nil)
+  # +invoice+ is an InvoiceReference (Input also takes a plain number).
+  VoidInvoiceInput = Data.define(:invoice, :reason, :provider_options) do
+    def initialize(invoice:, reason:, provider_options: nil)
       super
     end
   end
@@ -143,17 +177,23 @@ module Einvoice
 
   # --- Allowance (折讓) and its cancellation (折讓作廢) ---
 
-  AllowanceInput = Data.define(:invoice_number, :allowance_id, :items, :amount, :date, :provider_options) do
-    def initialize(invoice_number:, allowance_id:, items:, amount:, date: nil, provider_options: nil)
+  AllowanceInput = Data.define(:invoice, :allowance_id, :items, :amount, :provider_options) do
+    def initialize(invoice:, allowance_id:, items:, amount:, provider_options: nil)
       super
     end
   end
 
   # +allowance_date+ is a Date (MIG AllowanceDate has no time).
-  AllowanceResult = Data.define(:allowance_number, :invoice_number, :allowance_date, :total_amount, :raw)
+  AllowanceResult = Data.define(:allowance_number, :invoice_number, :allowance_date, :total_amount, :raw) do
+    def reference
+      AllowanceReference.new(allowance_number: allowance_number, allowance_date: allowance_date,
+                             invoice_number: invoice_number)
+    end
+  end
 
-  VoidAllowanceInput = Data.define(:invoice_number, :allowance_number, :reason, :provider_options) do
-    def initialize(invoice_number:, allowance_number:, reason: nil, provider_options: nil)
+  # +allowance+ is an AllowanceReference (Input also takes a plain number).
+  VoidAllowanceInput = Data.define(:allowance, :reason, :provider_options) do
+    def initialize(allowance:, reason: nil, provider_options: nil)
       super
     end
   end
@@ -166,14 +206,22 @@ module Einvoice
 
   # --- Query (查詢) ---
 
-  # Query by invoice number, or by your order id — at least one required.
-  QueryInvoiceInput = Data.define(:invoice_number, :order_id, :provider_options) do
-    def initialize(invoice_number: nil, order_id: nil, provider_options: nil)
+  # +invoice+ is an InvoiceReference with a number or an order id. A reference
+  # with only an order id (and what the provider needs with it) finds an invoice
+  # without its number. That needs QUERY_BY_ORDER_ID.
+  QueryInvoiceInput = Data.define(:invoice, :provider_options) do
+    def initialize(invoice:, provider_options: nil)
       super
     end
   end
 
   QueryInvoiceResult = Data.define(
     :invoice_number, :invoice_datetime, :random_code, :order_id, :status, :amount, :buyer, :items, :raw
-  )
+  ) do
+    def reference
+      InvoiceReference.new(number: invoice_number, invoice_datetime: invoice_datetime,
+                           random_code: random_code, order_id: order_id,
+                           total_amount: amount&.total_amount, buyer_ubn: buyer&.ubn)
+    end
+  end
 end

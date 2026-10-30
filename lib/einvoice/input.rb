@@ -68,9 +68,8 @@ module Einvoice
 
       h = hash!(input, "input", provider)
       VoidInvoiceInput.new(
-        invoice_number: fetch!(h, :invoice_number, provider),
+        invoice: invoice_reference!(h[:invoice], provider, need_number: true),
         reason: reason!(fetch!(h, :reason, provider), provider),
-        date: h[:date],
         provider_options: h[:provider_options]
       )
     end
@@ -80,11 +79,10 @@ module Einvoice
 
       h = hash!(input, "input", provider)
       AllowanceInput.new(
-        invoice_number: fetch!(h, :invoice_number, provider),
+        invoice: invoice_reference!(h[:invoice], provider, need_number: true),
         allowance_id: fetch!(h, :allowance_id, provider),
         items: build_items(h[:items], provider),
         amount: build_amount(h[:amount], provider),
-        date: h[:date],
         provider_options: h[:provider_options]
       )
     end
@@ -94,8 +92,7 @@ module Einvoice
 
       h = hash!(input, "input", provider)
       VoidAllowanceInput.new(
-        invoice_number: fetch!(h, :invoice_number, provider),
-        allowance_number: fetch!(h, :allowance_number, provider),
+        allowance: allowance_reference!(h[:allowance], provider),
         reason: reason!(blank?(h[:reason]) ? DEFAULT_VOID_ALLOWANCE_REASON : h[:reason], provider),
         provider_options: h[:provider_options]
       )
@@ -105,14 +102,61 @@ module Einvoice
       return input if input.is_a?(QueryInvoiceInput)
 
       h = hash!(input, "input", provider)
-      if blank?(h[:invoice_number]) && blank?(h[:order_id])
-        fail!("query requires invoice_number or order_id", provider)
+      invoice = invoice_reference!(h[:invoice], provider, need_number: false)
+      if blank?(invoice.number) && blank?(invoice.order_id)
+        fail!("query needs invoice.number or invoice.order_id", provider)
       end
-      QueryInvoiceInput.new(
-        invoice_number: h[:invoice_number],
-        order_id: h[:order_id],
-        provider_options: h[:provider_options]
+      QueryInvoiceInput.new(invoice: invoice, provider_options: h[:provider_options])
+    end
+
+    # --- references ------------------------------------------------------------
+
+    # An InvoiceReference, a Hash of its fields, or a plain invoice number.
+    def invoice_reference!(value, provider, need_number:)
+      fail!("invoice is required", provider) if blank?(value)
+
+      reference = case value
+                  when InvoiceReference then value
+                  when String then InvoiceReference.new(number: value)
+                  else build_invoice_reference(hash!(value, "invoice", provider), provider)
+                  end
+      fail!("invoice.number is required", provider) if need_number && blank?(reference.number)
+      reference
+    end
+
+    def build_invoice_reference(h, provider)
+      ubn = blank?(h[:buyer_ubn]) ? nil : h[:buyer_ubn].to_s
+      fail!("invoice.buyer_ubn must be 8 digits, got #{ubn.inspect}", provider) if ubn && !ubn.match?(UBN_FORMAT)
+
+      InvoiceReference.new(
+        number: presence(h[:number]),
+        invoice_datetime: h[:invoice_datetime] &&
+          Taipei.time(h[:invoice_datetime], field: "invoice.invoice_datetime", provider: provider),
+        random_code: presence(h[:random_code]),
+        order_id: presence(h[:order_id]),
+        total_amount: h[:total_amount] && Number.integer!(h[:total_amount], field: "invoice.total_amount",
+                                                                             provider: provider),
+        buyer_ubn: ubn
       )
+    end
+
+    # An AllowanceReference, a Hash of its fields, or a plain allowance number.
+    def allowance_reference!(value, provider)
+      fail!("allowance is required", provider) if blank?(value)
+      return value if value.is_a?(AllowanceReference)
+      return AllowanceReference.new(allowance_number: value) if value.is_a?(String)
+
+      h = hash!(value, "allowance", provider)
+      AllowanceReference.new(
+        allowance_number: fetch!(h, :allowance_number, provider),
+        allowance_date: h[:allowance_date] &&
+          Taipei.date(h[:allowance_date], field: "allowance.allowance_date", provider: provider),
+        invoice_number: presence(h[:invoice_number])
+      )
+    end
+
+    def presence(value)
+      blank?(value) ? nil : value
     end
 
     # --- builders --------------------------------------------------------------

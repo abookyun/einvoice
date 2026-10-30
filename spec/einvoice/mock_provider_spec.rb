@@ -27,9 +27,9 @@ RSpec.describe Einvoice::MockProvider do
   describe "#fail_next" do
     it "makes exactly the next operation raise the injected error, then clears" do
       provider.fail_next(Einvoice::NetworkError.new("boom", provider: "mock"))
-      expect { provider.query({ order_id: "whatever" }) }.to raise_error(Einvoice::NetworkError)
+      expect { provider.query({ invoice: { order_id: "whatever" } }) }.to raise_error(Einvoice::NetworkError)
       # cleared: the next call behaves normally (NotFound, not Network)
-      expect { provider.query({ order_id: "whatever" }) }.to raise_error(Einvoice::NotFoundError)
+      expect { provider.query({ invoice: { order_id: "whatever" } }) }.to raise_error(Einvoice::NotFoundError)
     end
   end
 
@@ -43,36 +43,49 @@ RSpec.describe Einvoice::MockProvider do
       })
     end
 
+    it "returns references that carry the original document" do
+      expect(issued.reference).to eq(Einvoice::InvoiceReference.new(
+                                       number: issued.invoice_number, invoice_datetime: issued.invoice_datetime,
+                                       random_code: issued.random_code, order_id: "O1", total_amount: 100
+                                     ))
+      found = provider.query({ invoice: issued.invoice_number })
+      expect(found.reference).to eq(issued.reference)
+    end
+
+    it "refuses a query without a number unless it declares QUERY_BY_ORDER_ID" do
+      plain = described_class.new(capabilities: Einvoice::Capability::ALL - [Einvoice::Capability::QUERY_BY_ORDER_ID])
+      expect { plain.query({ invoice: { order_id: "O1" } }) }.to raise_error(Einvoice::UnsupportedError)
+    end
+
     it "names and types its dates as the MIG does" do
       expect(issued.invoice_datetime.utc_offset).to eq(8 * 3600)
       allowance = provider.allowance({
-        invoice_number: issued.invoice_number, allowance_id: "A1",
+        invoice: issued.reference, allowance_id: "A1",
         items: [{ description: "x", quantity: 1, unit_price: 100, amount: 100 }],
         amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
       })
       expect(allowance.allowance_date).to be_a(Date)
-      cancelled = provider.void_allowance({ invoice_number: issued.invoice_number,
-                                            allowance_number: allowance.allowance_number })
+      cancelled = provider.void_allowance({ allowance: allowance.reference })
       expect(cancelled.cancel_datetime.utc_offset).to eq(8 * 3600)
-      voided = provider.void({ invoice_number: issued.invoice_number, reason: "x" })
+      voided = provider.void({ invoice: issued.reference, reason: "x" })
       expect(voided.cancel_datetime.utc_offset).to eq(8 * 3600)
     end
 
     it "reflects an allowance in a subsequent query" do
       provider.allowance({
-        invoice_number: issued.invoice_number, allowance_id: "A1",
+        invoice: issued.reference, allowance_id: "A1",
         items: [{ description: "x", quantity: 1, unit_price: 100, amount: 100 }],
         amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
       })
-      expect(provider.query({ invoice_number: issued.invoice_number }).status)
+      expect(provider.query({ invoice: issued.reference }).status)
         .to eq(Einvoice::InvoiceStatus::ALLOWANCE)
     end
 
     it "refuses to credit a voided invoice" do
-      provider.void({ invoice_number: issued.invoice_number, reason: "x" })
+      provider.void({ invoice: issued.reference, reason: "x" })
       expect do
         provider.allowance({
-          invoice_number: issued.invoice_number, allowance_id: "A1",
+          invoice: issued.reference, allowance_id: "A1",
           items: [{ description: "x", quantity: 1, unit_price: 100, amount: 100 }],
           amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
         })
@@ -95,9 +108,9 @@ RSpec.describe Einvoice::MockProvider do
 
     it "reports a second void as already voided" do
       issued = issue!
-      provider.void(invoice_number: issued.invoice_number, reason: "x")
+      provider.void({ invoice: issued.reference, reason: "x" })
 
-      expect { provider.void(invoice_number: issued.invoice_number, reason: "x") }
+      expect { provider.void({ invoice: issued.reference, reason: "x" }) }
         .to raise_error(Einvoice::ConflictError) { |error|
           expect(error.reason).to eq(Einvoice::Reason::ALREADY_VOIDED)
         }
@@ -105,10 +118,10 @@ RSpec.describe Einvoice::MockProvider do
 
     it "reports crediting a voided invoice as blocked, not as idempotent success" do
       issued = issue!
-      provider.void(invoice_number: issued.invoice_number, reason: "x")
+      provider.void({ invoice: issued.reference, reason: "x" })
 
       expect do
-        provider.allowance(invoice_number: issued.invoice_number, allowance_id: "AL_1",
+        provider.allowance(invoice: issued.reference, allowance_id: "AL_1",
                            items: [{ description: "商品", quantity: 1, unit_price: 50,
                                      amount: 50 }],
                            amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 })
@@ -120,7 +133,7 @@ RSpec.describe Einvoice::MockProvider do
     end
 
     it "tags every failure with the provider name" do
-      expect { provider.query(invoice_number: "NOPE00000000") }
+      expect { provider.query({ invoice: "NOPE00000000" }) }
         .to raise_error(Einvoice::NotFoundError) { |error|
           expect(error.provider).to eq("mock")
         }

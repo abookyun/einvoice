@@ -38,12 +38,17 @@ module Einvoice
     IP_BLOCKED                = :ip_blocked
     ACCOUNT_SUSPENDED         = :account_suspended
     STALE_TIMESTAMP           = :stale_timestamp
+    # The adapter queried the provider on its own, to fill a field the call did
+    # not give, and that query failed. +cause+ holds the error of the query.
+    # A provider error: the invoice of the call may well exist.
+    LOOKUP_FAILED             = :lookup_failed
 
     ALL = [
       DUPLICATE_ORDER, VOID_BLOCKED_BY_ALLOWANCE, ALLOWANCE_BLOCKED_BY_VOID,
       ALREADY_VOIDED, DUPLICATE_ALLOWANCE,
       PAST_DEADLINE, CARRIER_NOT_REGISTERED, RATE_LIMITED, CREDENTIALS_INVALID,
-      NOT_ENROLLED, CONTRACT_EXPIRED, IP_BLOCKED, ACCOUNT_SUSPENDED, STALE_TIMESTAMP
+      NOT_ENROLLED, CONTRACT_EXPIRED, IP_BLOCKED, ACCOUNT_SUSPENDED, STALE_TIMESTAMP,
+      LOOKUP_FAILED
     ].freeze
   end
 

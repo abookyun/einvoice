@@ -53,6 +53,7 @@ module Einvoice
         random_code: format("%04d", (@seq * 7) % 10_000),
         order_id: parsed.order_id,
         total_amount: parsed.amount.total_amount,
+        buyer_ubn: parsed.buyer&.ubn,
         status: InvoiceStatus::ISSUED,
         raw: { mock: true }
       )
@@ -64,19 +65,19 @@ module Einvoice
     def void(input)
       check_failure!
       parsed = Input.void(input, provider: name)
-      stored = require_invoice(parsed.invoice_number)
+      stored = require_invoice(parsed.invoice.number)
       fail!(ConflictError, "Invoice already voided", Reason::ALREADY_VOIDED) if
         stored[:status] == InvoiceStatus::VOIDED
 
       stored[:status] = InvoiceStatus::VOIDED
-      VoidInvoiceResult.new(invoice_number: parsed.invoice_number, status: InvoiceStatus::VOIDED,
+      VoidInvoiceResult.new(invoice_number: parsed.invoice.number, status: InvoiceStatus::VOIDED,
                             cancel_datetime: Taipei.now, raw: { mock: true })
     end
 
     def allowance(input)
       check_failure!
       parsed = Input.allowance(input, provider: name)
-      stored = require_invoice(parsed.invoice_number)
+      stored = require_invoice(parsed.invoice.number)
       # A voided invoice has nothing left to credit. Deliberately not
       # ALREADY_VOIDED: that one means "already in the state you asked for, treat
       # as success", which here would record a refund that never happened.
@@ -89,7 +90,7 @@ module Einvoice
       @allowances << allowance_number
       AllowanceResult.new(
         allowance_number: allowance_number,
-        invoice_number: parsed.invoice_number,
+        invoice_number: parsed.invoice.number,
         allowance_date: Taipei.today,
         total_amount: parsed.amount.total_amount,
         raw: { mock: true }
@@ -99,18 +100,20 @@ module Einvoice
     def void_allowance(input)
       check_failure!
       parsed = Input.void_allowance(input, provider: name)
-      fail!(NotFoundError, "Allowance not found") unless
-        @allowances.include?(parsed.allowance_number)
+      allowance_number = parsed.allowance.allowance_number
+      fail!(NotFoundError, "Allowance not found") unless @allowances.include?(allowance_number)
 
-      @allowances.delete(parsed.allowance_number)
-      VoidAllowanceResult.new(allowance_number: parsed.allowance_number, cancel_datetime: Taipei.now,
+      @allowances.delete(allowance_number)
+      VoidAllowanceResult.new(allowance_number: allowance_number, cancel_datetime: Taipei.now,
                               raw: { mock: true })
     end
 
     def query(input)
       check_failure!
       parsed = Input.query(input, provider: name)
-      invoice_number = parsed.invoice_number || (parsed.order_id && @by_order_id[parsed.order_id])
+      reference = parsed.invoice
+      assert_supports!(Capability::QUERY_BY_ORDER_ID) if reference.number.nil?
+      invoice_number = reference.number || @by_order_id[reference.order_id]
       stored = invoice_number && @invoices[invoice_number]
       fail!(NotFoundError, "Invoice not found") unless stored
 

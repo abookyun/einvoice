@@ -47,11 +47,13 @@ result = provider.issue(
 result.invoice_number   # => "MK10000000"
 result.status           # => :issued
 
-invoice = provider.query(order_id: "ORDER_1")
+invoice = provider.query(invoice: result.reference)
 invoice.status          # => :issued
 
-provider.void(invoice_number: result.invoice_number, reason: "客戶取消")
+provider.void(invoice: result.reference, reason: "客戶取消")
 ```
+
+`result.reference` is an `InvoiceReference`. It holds the facts about the invoice that providers ask for when you void, credit or query it later: the number, `invoice_datetime`, `random_code`, `order_id`, `total_amount` and `buyer_ubn`. Store them with your order, and pass a reference (or a Hash of its fields) as `invoice:`. A plain invoice number also works, but a provider that needs more raises `ValidationError` and names the field. To find an invoice without its number, query `invoice: { order_id: "ORDER_1" }` on a provider that declares `QUERY_BY_ORDER_ID`. `void_allowance` takes `allowance:`, an `AllowanceReference` from `AllowanceResult#reference`.
 
 Inputs accept plain hashes (string or symbol keys) — enum fields take the canonical symbol (`:taxable`) or a wire-style string (`"TAXABLE"`). They are validated and coerced into immutable value objects before anything hits the network; a malformed request raises `Einvoice::ValidationError` locally.
 
@@ -69,7 +71,7 @@ Every failure is an `Einvoice::Error` subclass carrying a stable `#code`, the pr
 
 ```ruby
 begin
-  provider.void(invoice_number: "AB12345678", reason: "customer cancelled")
+  provider.void(invoice: invoice.reference, reason: "customer cancelled")
 rescue Einvoice::ConflictError => e
   e.reason   # => :already_voided  (idempotent — treat as success)
 rescue Einvoice::Error => e
@@ -111,7 +113,8 @@ A few things worth knowing:
 
 - **Paper vs. electronic is derived.** An invoice with a carrier or a donation is electronic (`Print=0`); anything else prints, and ECPay then requires a buyer name and address.
 - **Mixed tax rates are derived too.** Items that disagree on `tax_type` produce a 混合稅率 (TaxType 9) invoice; you don't ask for it explicitly.
-- **Void and allowance need the invoice's issue date**, which the unified input has no field for. It defaults to today (Asia/Taipei) — for an older invoice pass `provider_options: { invoice_date: "2026-08-01" }`, or query by `order_id`.
+- **Void, allowance and a query by number need the invoice's issue date.** It comes from `invoice.invoice_datetime`. If the reference has an `order_id` instead, the adapter looks the date up first. A failed lookup raises `ProviderError` with `reason: :lookup_failed`. A plain number is not enough.
+- **Void allowance needs the invoice number**, so pass the `AllowanceReference`, not only the allowance number.
 - **No foreign currency.** ECPay's B2C API has no such field, so a non-TWD `currency` raises `UnsupportedError` rather than being filed as TWD.
 - **Carrier validation**: `validate_mobile_barcode("/ABC1234")`, `validate_love_code("168001")`, `love_code_organ_name("168001")` — these ask ECPay, so they need this adapter and its credentials. For 愛心碼 there is also `Einvoice::MOF::DonationCodes` (below), which asks 財政部 directly and needs neither.
 - **Anything else**: ECPay has ~25 further B2C endpoints (延遲開立, 字軌設定, 列印, 通知 …). Reach them through `provider.raw(path, payload)`, which applies the envelope, encryption and error mapping for you.

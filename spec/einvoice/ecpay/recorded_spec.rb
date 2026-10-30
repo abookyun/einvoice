@@ -55,7 +55,7 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
        vcr: { cassette_name: "ecpay/query_by_order_id" } do
       order = order_id("qorder")
       issued = provider.issue(issue_input(order))
-      found = provider.query(order_id: order)
+      found = provider.query(invoice: { order_id: order })
 
       expect(found).to be_a(Einvoice::QueryInvoiceResult)
       expect(found.invoice_number).to eq(issued.invoice_number)
@@ -69,7 +69,7 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
        vcr: { cassette_name: "ecpay/query_amounts" } do
       order = order_id("qamt")
       provider.issue(issue_input(order))
-      found = provider.query(order_id: order)
+      found = provider.query(invoice: { order_id: order })
 
       expect(found.amount).to be_a(Einvoice::AmountSummary)
       expect(found.amount.total_amount).to eq(100)
@@ -84,7 +84,7 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
        vcr: { cassette_name: "ecpay/query_items" } do
       order = order_id("qitems")
       provider.issue(issue_input(order))
-      item = provider.query(order_id: order).items.first
+      item = provider.query(invoice: { order_id: order }).items.first
 
       expect(item).to be_a(Einvoice::InvoiceItem)
       expect(item.description).to eq("整合測試商品")
@@ -97,7 +97,8 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
     it "pairs an invoice number with its issue date",
        vcr: { cassette_name: "ecpay/query_by_invoice_number" } do
       issued = provider.issue(issue_input(order_id("qnum")))
-      found = provider.query(invoice_number: issued.invoice_number)
+      found = provider.query(invoice: { number: issued.invoice_number,
+                                         invoice_datetime: issued.invoice_datetime })
 
       expect(found.invoice_number).to eq(issued.invoice_number)
     end
@@ -108,11 +109,11 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
       order = order_id("void")
       issued = provider.issue(issue_input(order))
 
-      result = provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢")
+      result = provider.void(invoice: issued.reference, reason: "整合測試作廢")
       expect(result).to be_a(Einvoice::VoidInvoiceResult)
       expect(result.status).to eq(Einvoice::InvoiceStatus::VOIDED)
 
-      expect(provider.query(order_id: order).status).to eq(Einvoice::InvoiceStatus::VOIDED)
+      expect(provider.query(invoice: { order_id: order }).status).to eq(Einvoice::InvoiceStatus::VOIDED)
     end
   end
 
@@ -122,7 +123,7 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
       issued = provider.issue(issue_input(order))
 
       allowance = provider.allowance(
-        invoice_number: issued.invoice_number,
+        invoice: issued.reference,
         allowance_id: "AL_#{order}",
         items: [{ description: "整合測試商品", quantity: 1, unit_price: 50, amount: 50 }],
         amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 }
@@ -133,18 +134,17 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
       expect(allowance.allowance_date).to be_a(Date)
 
       # A partly credited invoice reads as ALLOWANCE, not ISSUED.
-      expect(provider.query(order_id: order).status).to eq(Einvoice::InvoiceStatus::ALLOWANCE)
+      expect(provider.query(invoice: { order_id: order }).status).to eq(Einvoice::InvoiceStatus::ALLOWANCE)
 
       # And it cannot be voided until the 折讓單 is reversed — the whole reason
       # :void_blocked_by_allowance exists.
-      expect { provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢") }
+      expect { provider.void(invoice: issued.reference, reason: "整合測試作廢") }
         .to raise_error(Einvoice::ConflictError) { |error|
           expect(error.reason).to eq(Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE)
           expect(error.raw_code).to eq("5070450")
         }
 
-      reversed = provider.void_allowance(invoice_number: issued.invoice_number,
-                                         allowance_number: allowance.allowance_number)
+      reversed = provider.void_allowance(allowance: allowance.reference)
       expect(reversed).to be_a(Einvoice::VoidAllowanceResult)
       expect(reversed.allowance_number).to eq(allowance.allowance_number)
     end
@@ -157,11 +157,11 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
     it "is refused as a conflict, not a field error" do
       order = order_id("voidalw")
       issued = provider.issue(issue_input(order))
-      provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢")
+      provider.void(invoice: issued.reference, reason: "整合測試作廢")
 
       expect do
         provider.allowance(
-          invoice_number: issued.invoice_number, allowance_id: "AL_#{order}",
+          invoice: issued.reference, allowance_id: "AL_#{order}",
           items: [{ description: "整合測試商品", quantity: 1, unit_price: 50, amount: 50 }],
           amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 }
         )
@@ -179,7 +179,7 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
       provider.issue(issue_input(order, buyer: { ubn: "53538851", name: "測試股份有限公司",
                                                  email: "test@example.com" }))
 
-      expect(provider.query(order_id: order).buyer.ubn).to eq("53538851")
+      expect(provider.query(invoice: { order_id: order }).buyer.ubn).to eq("53538851")
     end
   end
 
@@ -203,9 +203,9 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
     it "maps a second void to an already-voided conflict",
        vcr: { cassette_name: "ecpay/already_voided" } do
       issued = provider.issue(issue_input(order_id("revoid")))
-      provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢")
+      provider.void(invoice: issued.reference, reason: "整合測試作廢")
 
-      expect { provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢") }
+      expect { provider.void(invoice: issued.reference, reason: "整合測試作廢") }
         .to raise_error(Einvoice::ConflictError) { |error|
           expect(error.reason).to eq(Einvoice::Reason::ALREADY_VOIDED)
           expect(error.raw_code).to eq("5070453")
@@ -214,7 +214,7 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
 
     it "maps an unknown invoice to not found",
        vcr: { cassette_name: "ecpay/unknown_invoice" } do
-      expect { provider.query(invoice_number: "ZZ00000000") }
+      expect { provider.query(invoice: { number: "ZZ00000000", invoice_datetime: Time.now }) }
         .to raise_error(Einvoice::NotFoundError) { |error|
           expect(error.raw_code).to eq("2")
           expect(error.raw_message).to include("查無發票資料")
@@ -224,8 +224,8 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
     it "maps an unknown 折讓單 to not found",
        vcr: { cassette_name: "ecpay/unknown_allowance" } do
       expect do
-        provider.void_allowance(invoice_number: "ZZ00000000",
-                                allowance_number: "9999999999999999")
+        provider.void_allowance(allowance: { allowance_number: "9999999999999999",
+                                             invoice_number: "ZZ00000000" })
       end.to raise_error(Einvoice::NotFoundError) { |error|
         expect(error.raw_code).to eq("2000039")
       }

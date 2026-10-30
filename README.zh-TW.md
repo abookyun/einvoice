@@ -49,11 +49,13 @@ result = provider.issue(
 result.invoice_number   # => "MK10000000"
 result.status           # => :issued
 
-invoice = provider.query(order_id: "ORDER_1")
+invoice = provider.query(invoice: result.reference)
 invoice.status          # => :issued
 
-provider.void(invoice_number: result.invoice_number, reason: "客戶取消")
+provider.void(invoice: result.reference, reason: "客戶取消")
 ```
+
+`result.reference` 是一個 `InvoiceReference`。它記錄之後作廢、折讓或查詢這張發票時，加值中心會要的資料：號碼、`invoice_datetime`、`random_code`、`order_id`、`total_amount` 和 `buyer_ubn`。請把它們和訂單一起存起來，之後用 `invoice:` 傳入 reference（或包含這些欄位的 Hash）。也可以只傳發票號碼，但如果加值中心需要更多資料，會丟出 `ValidationError` 並說明缺少哪個欄位。沒有發票號碼時，可以在宣告 `QUERY_BY_ORDER_ID` 的加值中心用 `invoice: { order_id: "ORDER_1" }` 查詢。`void_allowance` 收 `allowance:`，也就是 `AllowanceResult#reference` 回傳的 `AllowanceReference`。
 
 輸入可以直接傳一般的 Hash，key 用字串或 symbol 都可以。列舉欄位可以傳標準的 symbol（`:taxable`），也可以傳傳輸格式的字串（`"TAXABLE"`）。在送出任何網路請求之前，輸入會先經過檢查，並轉換成不可變的 value object。格式錯誤的請求會在本地端丟出 `Einvoice::ValidationError`。
 
@@ -78,7 +80,7 @@ provider.void(invoice_number: result.invoice_number, reason: "客戶取消")
 
 ```ruby
 begin
-  provider.void(invoice_number: "AB12345678", reason: "customer cancelled")
+  provider.void(invoice: invoice.reference, reason: "customer cancelled")
 rescue Einvoice::ConflictError => e
   e.reason   # => :already_voided  (idempotent — treat as success)
 rescue Einvoice::Error => e
@@ -120,7 +122,8 @@ provider = Einvoice::ECPay::Provider.new(**Einvoice::ECPay::SANDBOX)
 
 - **紙本或電子由 adapter 判斷。** 有載具或捐贈的發票是電子發票（`Print=0`），其他的都會列印。列印時 ECPay 要求買方名稱和地址。
 - **混合稅率也由 adapter 判斷。** 如果品項的 `tax_type` 不一致，就會開成混合稅率（TaxType 9）發票，不用另外指定。
-- **作廢和折讓需要發票的開立日期**，但 unified 輸入沒有這個欄位。預設是今天（Asia/Taipei）。如果是較早開立的發票，請傳 `provider_options: { invoice_date: "2026-08-01" }`，或改用 `order_id` 查詢。
+- **作廢、折讓、用號碼查詢都需要發票的開立日期**，從 `invoice.invoice_datetime` 取得。如果 reference 沒有日期但有 `order_id`，adapter 會先查詢補上；查詢失敗時丟出 `ProviderError`，`reason` 是 `:lookup_failed`。只有號碼是不夠的。
+- **作廢折讓需要發票號碼**，所以請傳 `AllowanceReference`，不要只傳折讓單號。
 - **不支援外幣。** ECPay 的 B2C API 沒有外幣欄位，所以 `currency` 不是 TWD 時會丟出 `UnsupportedError`，不會被當成 TWD 開立。
 - **載具驗證**：`validate_mobile_barcode("/ABC1234")`、`validate_love_code("168001")`、`love_code_organ_name("168001")`。這些方法會詢問 ECPay，所以需要這個 adapter 和它的帳號。捐贈碼（愛心碼）另外可以用下面的 `Einvoice::MOF::DonationCodes`，它直接詢問財政部，不需要 adapter，也不需要帳號。
 - **其他功能**：ECPay 另外有大約 25 個 B2C endpoint（延遲開立、字軌設定、列印、通知……）。請用 `provider.raw(path, payload)` 呼叫。它會處理封包、加密和錯誤對應。

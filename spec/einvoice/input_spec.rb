@@ -125,29 +125,73 @@ RSpec.describe Einvoice::Input do
   end
 
   describe ".query" do
-    it "requires at least one of invoice_number / order_id" do
-      expect { described_class.query({}) }.to raise_error(Einvoice::ValidationError)
-      expect(described_class.query({ "order_id" => "O1" }).order_id).to eq("O1")
+    it "needs a number or an order id in the reference" do
+      expect { described_class.query({}) }.to raise_error(Einvoice::ValidationError, /invoice is required/)
+      expect { described_class.query({ "invoice" => { "random_code" => "1234" } }) }
+        .to raise_error(Einvoice::ValidationError, /invoice.number or invoice.order_id/)
+      expect(described_class.query({ "invoice" => { "order_id" => "O1" } }).invoice.order_id).to eq("O1")
     end
   end
 
   describe ".void" do
-    it "requires invoice_number and reason" do
-      expect { described_class.void({ "invoice_number" => "JU1" }) }
+    it "requires invoice and reason" do
+      expect { described_class.void({ "invoice" => "JU1" }) }
         .to raise_error(Einvoice::ValidationError, /reason/)
-      expect(described_class.void({ "invoice_number" => "JU1", "reason" => "x" }).reason).to eq("x")
+      expect { described_class.void({ "reason" => "x" }) }
+        .to raise_error(Einvoice::ValidationError, /invoice is required/)
+      expect(described_class.void({ "invoice" => "JU1", "reason" => "x" }).reason).to eq("x")
     end
 
     it "limits the reason to 20 characters" do
-      expect { described_class.void({ "invoice_number" => "JU1", "reason" => "x" * 21 }) }
+      expect { described_class.void({ "invoice" => "JU1", "reason" => "x" * 21 }) }
         .to raise_error(Einvoice::ValidationError, /reason must be 20 characters or fewer/)
     end
   end
 
   describe ".void_allowance" do
     it "fills the reason the MIG suggests" do
-      input = described_class.void_allowance({ "invoice_number" => "JU1", "allowance_number" => "A1" })
+      input = described_class.void_allowance({ "allowance" => "A1" })
       expect(input.reason).to eq("作廢折讓")
+    end
+  end
+
+  describe "references" do
+    it "takes a plain number, a hash or a reference" do
+      expect(described_class.void({ invoice: "JU1", reason: "x" }).invoice)
+        .to eq(Einvoice::InvoiceReference.new(number: "JU1"))
+      reference = Einvoice::InvoiceReference.new(number: "JU2", order_id: "O2")
+      expect(described_class.void({ invoice: reference, reason: "x" }).invoice).to be(reference)
+    end
+
+    it "reads the fields of a hash" do
+      invoice = described_class.void({
+        invoice: { "number" => "JU1", "invoice_datetime" => Date.new(2026, 8, 1), "random_code" => "1234",
+                   "order_id" => "O1", "total_amount" => "100", "buyer_ubn" => "53538851" },
+        reason: "x"
+      }).invoice
+      expect(invoice.invoice_datetime.strftime("%F %T %:z")).to eq("2026-08-01 00:00:00 +08:00")
+      expect(invoice.total_amount).to eq(100)
+      expect(invoice.buyer_ubn).to eq("53538851")
+    end
+
+    it "checks the fields of a hash" do
+      expect { described_class.void({ invoice: { number: "JU1", buyer_ubn: "1" }, reason: "x" }) }
+        .to raise_error(Einvoice::ValidationError, /invoice.buyer_ubn must be 8 digits/)
+      expect { described_class.void({ invoice: { number: "JU1", invoice_datetime: "2026-08-01" }, reason: "x" }) }
+        .to raise_error(Einvoice::ValidationError, /invoice.invoice_datetime must be a Time/)
+      expect { described_class.void({ invoice: { order_id: "O1" }, reason: "x" }) }
+        .to raise_error(Einvoice::ValidationError, /invoice.number is required/)
+    end
+
+    it "takes an allowance as a plain number, a hash or a reference" do
+      expect(described_class.void_allowance({ allowance: "A1" }).allowance.allowance_number).to eq("A1")
+      allowance = described_class.void_allowance({
+        allowance: { allowance_number: "A1", allowance_date: Time.utc(2026, 7, 31, 16), invoice_number: "JU1" }
+      }).allowance
+      expect(allowance).to eq(Einvoice::AllowanceReference.new(allowance_number: "A1",
+                                                               allowance_date: Date.new(2026, 8, 1),
+                                                               invoice_number: "JU1"))
+      expect { described_class.void_allowance({}) }.to raise_error(Einvoice::ValidationError, /allowance is required/)
     end
   end
 
@@ -171,7 +215,7 @@ RSpec.describe Einvoice::Input do
     end
 
     it "rejects an empty reason on a void" do
-      expect { described_class.void({ "invoice_number" => "JU1", "reason" => "" }) }
+      expect { described_class.void({ "invoice" => "JU1", "reason" => "" }) }
         .to raise_error(Einvoice::ValidationError, /reason is required/)
     end
 

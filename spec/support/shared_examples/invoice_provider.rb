@@ -55,7 +55,7 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
   describe "#query" do
     it "finds an issued invoice by its number" do
       issued = provider.issue(issue_payload(order_id: "ORDER_Q"))
-      found = provider.query({ invoice_number: issued.invoice_number })
+      found = provider.query({ invoice: issued.reference })
       expect(found).to be_a(Einvoice::QueryInvoiceResult)
       expect(found.invoice_number).to eq(issued.invoice_number)
       expect(found.amount.total_amount).to eq(100)
@@ -64,12 +64,13 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
     it "finds an issued invoice by order id when supported" do
       skip "no QUERY_BY_ORDER_ID" unless provider.supports?(Einvoice::Capability::QUERY_BY_ORDER_ID)
       provider.issue(issue_payload(order_id: "ORDER_BYID"))
-      found = provider.query({ order_id: "ORDER_BYID" })
+      found = provider.query({ invoice: { order_id: "ORDER_BYID" } })
       expect(found.order_id).to eq("ORDER_BYID")
     end
 
     it "raises NotFoundError for an unknown invoice" do
-      expect { provider.query({ invoice_number: unknown_invoice_number }) }
+      unknown = { number: unknown_invoice_number, invoice_datetime: Einvoice::Taipei.now }
+      expect { provider.query({ invoice: unknown }) }
         .to raise_error(Einvoice::NotFoundError)
     end
   end
@@ -77,7 +78,7 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
   describe "#void" do
     it "transitions the invoice to VOIDED" do
       issued = provider.issue(issue_payload(order_id: "ORDER_V"))
-      result = provider.void({ invoice_number: issued.invoice_number, reason: "客戶取消" })
+      result = provider.void({ invoice: issued.reference, reason: "客戶取消" })
       expect(result).to be_a(Einvoice::VoidInvoiceResult)
       expect(result.status).to eq(Einvoice::InvoiceStatus::VOIDED)
     end
@@ -113,9 +114,9 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       skip "no VOID" unless provider.supports?(Einvoice::Capability::VOID)
 
       issued = provider.issue(issue_payload(order_id: "ORDER_VV"))
-      provider.void({ invoice_number: issued.invoice_number, reason: "客戶取消" })
+      provider.void({ invoice: issued.reference, reason: "客戶取消" })
 
-      expect { provider.void({ invoice_number: issued.invoice_number, reason: "客戶取消" }) }
+      expect { provider.void({ invoice: issued.reference, reason: "客戶取消" }) }
         .to raise_error(Einvoice::ConflictError)
     end
 
@@ -123,11 +124,11 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       skip "no ALLOWANCE" unless provider.supports?(Einvoice::Capability::ALLOWANCE)
 
       issued = provider.issue(issue_payload(order_id: "ORDER_AV"))
-      provider.void({ invoice_number: issued.invoice_number, reason: "客戶取消" })
+      provider.void({ invoice: issued.reference, reason: "客戶取消" })
 
       expect do
         provider.allowance({
-          invoice_number: issued.invoice_number,
+          invoice: issued.reference,
           allowance_id: "AL_AV",
           items: [{ description: "商品一", quantity: 1, unit_price: 100, amount: 100 }],
           amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
@@ -140,7 +141,7 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
     it "credits an invoice and then cancels the allowance" do
       issued = provider.issue(issue_payload(order_id: "ORDER_AL"))
       allowance = provider.allowance({
-        invoice_number: issued.invoice_number,
+        invoice: issued.reference,
         allowance_id: "AL_1",
         items: [{ description: "商品一", quantity: 1, unit_price: 100, amount: 100 }],
         amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
@@ -148,10 +149,7 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       expect(allowance).to be_a(Einvoice::AllowanceResult)
       expect(allowance.allowance_number).to be_a(String)
 
-      cancelled = provider.void_allowance({
-        invoice_number: issued.invoice_number,
-        allowance_number: allowance.allowance_number
-      })
+      cancelled = provider.void_allowance({ allowance: allowance.reference })
       expect(cancelled).to be_a(Einvoice::VoidAllowanceResult)
       expect(cancelled.allowance_number).to eq(allowance.allowance_number)
     end
@@ -163,8 +161,8 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
 
       issued = provider.issue(issue_payload(order_id: "ORDER_UA"))
       expect do
-        provider.void_allowance({ invoice_number: issued.invoice_number,
-                                  allowance_number: unknown_allowance_number })
+        provider.void_allowance({ allowance: { allowance_number: unknown_allowance_number,
+                                               invoice_number: issued.invoice_number } })
       end.to raise_error(Einvoice::NotFoundError)
     end
   end

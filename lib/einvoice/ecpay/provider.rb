@@ -78,27 +78,26 @@ module Einvoice
           random_code: result["RandomNumber"].to_s,
           order_id: parsed.order_id,
           total_amount: parsed.amount.total_amount,
+          buyer_ubn: parsed.buyer&.ubn,
           status: InvoiceStatus::ISSUED,
           raw: result
         )
       end
 
-      # 作廢發票. ECPay keys the void on the invoice's own issue date, which the
-      # unified input does not carry — it defaults to today (Asia/Taipei). For an
-      # older invoice pass <tt>provider_options: { invoice_date: "2026-08-01" }</tt>.
+      # 作廢發票. ECPay keys the void on the invoice's issue date, so the reference
+      # needs invoice_datetime, or an order_id to look it up (see invoice_date).
       #
       # An invoice with a live 折讓 cannot be voided (+:void_blocked_by_allowance+);
       # void the allowance first.
       def void(input)
         parsed = Input.void(input, provider: name)
-        options = Payload.string_keys(parsed.provider_options)
 
         result = @client.request("/B2CInvoice/Invalid", {
-                                   "InvoiceNo" => parsed.invoice_number,
-                                   "InvoiceDate" => options["invoice_date"] || taipei_date(parsed.date),
+                                   "InvoiceNo" => parsed.invoice.number,
+                                   "InvoiceDate" => invoice_date(parsed.invoice, "void"),
                                    "Reason" => parsed.reason
                                  })
-        VoidInvoiceResult.new(invoice_number: parsed.invoice_number,
+        VoidInvoiceResult.new(invoice_number: parsed.invoice.number,
                               status: InvoiceStatus::VOIDED, raw: result)
       end
 
@@ -111,8 +110,8 @@ module Einvoice
         options = Payload.string_keys(parsed.provider_options)
 
         result = @client.request("/B2CInvoice/Allowance", {
-                                   "InvoiceNo" => parsed.invoice_number,
-                                   "InvoiceDate" => options["invoice_date"] || taipei_date(parsed.date),
+                                   "InvoiceNo" => parsed.invoice.number,
+                                   "InvoiceDate" => invoice_date(parsed.invoice, "allowance"),
                                    "AllowanceNotify" => options["allowance_notify"] || "N",
                                    "CustomerName" => options["customer_name"],
                                    "NotifyMail" => options["notify_mail"],
@@ -124,43 +123,48 @@ module Einvoice
 
         AllowanceResult.new(
           allowance_number: result["IA_Allow_No"].to_s,
-          invoice_number: result["IA_Invoice_No"] || parsed.invoice_number,
+          invoice_number: result["IA_Invoice_No"] || parsed.invoice.number,
           allowance_date: parse_time(result["IA_Date"])&.to_date,
           total_amount: parsed.amount.total_amount,
           raw: result
         )
       end
 
-      # 作廢折讓. Voids one 折讓單, not the invoice.
+      # 作廢折讓. Voids one 折讓單, not the invoice. ECPay needs the invoice number
+      # too, so a plain allowance number is not enough.
       def void_allowance(input)
         parsed = Input.void_allowance(input, provider: name)
-        reason = parsed.reason
+        allowance = parsed.allowance
+        if allowance.invoice_number.nil?
+          raise ValidationError.new("void_allowance needs allowance.invoice_number", provider: name)
+        end
 
         result = @client.request("/B2CInvoice/AllowanceInvalid", {
-                                   "InvoiceNo" => parsed.invoice_number,
-                                   "AllowanceNo" => parsed.allowance_number,
-                                   "Reason" => reason
+                                   "InvoiceNo" => allowance.invoice_number,
+                                   "AllowanceNo" => allowance.allowance_number,
+                                   "Reason" => parsed.reason
                                  })
-        VoidAllowanceResult.new(allowance_number: parsed.allowance_number, raw: result)
+        VoidAllowanceResult.new(allowance_number: allowance.allowance_number, raw: result)
       end
 
-      # 查詢發票. Looks up by 自訂編號 when given an +order_id+, otherwise by invoice
-      # number — which ECPay pairs with the issue date, defaulting to today
-      # (Asia/Taipei). For an older invoice either query by +order_id+ or pass
-      # <tt>provider_options: { invoice_date: "2026-08-01" }</tt>.
+      # 查詢發票. By 自訂編號 when the reference has an order_id. Otherwise by
+      # invoice number, which ECPay pairs with the issue date.
       def query(input)
-        parsed = Input.query(input, provider: name)
-        options = Payload.string_keys(parsed.provider_options)
-        order_id = parsed.order_id || options["relate_number"]
+        reference = Input.query(input, provider: name).invoice
+        if reference.order_id
+          assert_supports!(Capability::QUERY_BY_ORDER_ID)
+          return query_by_order_id(reference.order_id)
+        end
 
-        data = if order_id
-                 { "RelateNumber" => order_id }
-               else
-                 { "InvoiceNo" => parsed.invoice_number,
-                   "InvoiceDate" => options["invoice_date"] || taipei_date }
-               end
-        result = @client.request("/B2CInvoice/GetIssue", data)
-        build_query_result(result, parsed)
+        if reference.invoice_datetime.nil?
+          raise ValidationError.new("query by number needs invoice.invoice_datetime", provider: name)
+        end
+
+        result = @client.request("/B2CInvoice/GetIssue", {
+                                   "InvoiceNo" => reference.number,
+                                   "InvoiceDate" => format_date(reference.invoice_datetime)
+                                 })
+        build_query_result(result, reference)
       end
 
       # 手機條碼驗證 — whether a 手機條碼 is registered with the tax authority.
@@ -200,15 +204,15 @@ module Einvoice
         assert_supports!(Capability::FOREIGN_CURRENCY)
       end
 
-      def build_query_result(result, parsed)
+      def build_query_result(result, reference)
         total = result["IIS_Sales_Amount"].to_i
         tax = result["IIS_Tax_Amount"].to_i
 
         QueryInvoiceResult.new(
-          invoice_number: result["IIS_Number"] || parsed.invoice_number.to_s,
+          invoice_number: result["IIS_Number"] || reference.number.to_s,
           invoice_datetime: parse_time(result["IIS_Create_Date"]),
           random_code: result["IIS_Random_Number"].to_s,
-          order_id: result["IIS_Relate_Number"] || parsed.order_id,
+          order_id: result["IIS_Relate_Number"] || reference.order_id,
           status: derive_status(result),
           amount: AmountSummary.new(sales_amount: total - tax, tax_amount: tax,
                                     total_amount: total),
@@ -277,12 +281,35 @@ module Einvoice
         Time.new(year.to_i, month.to_i, day.to_i, hour.to_i, minute.to_i, second.to_i, "+08:00")
       end
 
-      # ECPay dates are Taipei-local. A string is taken as already-formatted and
-      # passed through.
-      def taipei_date(date = nil)
-        return date if date.is_a?(String)
+      def query_by_order_id(order_id)
+        result = @client.request("/B2CInvoice/GetIssue", { "RelateNumber" => order_id })
+        build_query_result(result, InvoiceReference.new(order_id: order_id))
+      end
 
-        (date ? Taipei.date(date, provider: name) : Taipei.today).strftime("%Y-%m-%d")
+      # The issue date that Invalid, Allowance and GetIssue ask for. Taken from the
+      # reference, else looked up by order id. A failed lookup is the provider's
+      # error, not the invoice's: a NotFoundError would read as "the invoice of
+      # this call does not exist".
+      def invoice_date(reference, operation)
+        return format_date(reference.invoice_datetime) if reference.invoice_datetime
+
+        if reference.order_id.nil?
+          raise ValidationError.new("#{operation} needs invoice.invoice_datetime, or invoice.order_id to look it up",
+                                    provider: name)
+        end
+
+        found = begin
+          query_by_order_id(reference.order_id)
+        rescue Error => e
+          raise ProviderError.new("#{operation} needs invoice.invoice_datetime; looking it up by order id failed: " \
+                                  "#{e.message}", provider: name, reason: Reason::LOOKUP_FAILED, cause: e)
+        end
+        format_date(found.invoice_datetime)
+      end
+
+      # ECPay dates are Taipei-local.
+      def format_date(time)
+        Taipei.date(time, provider: name).strftime("%Y-%m-%d")
       end
     end
   end

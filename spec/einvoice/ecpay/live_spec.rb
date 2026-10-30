@@ -52,19 +52,20 @@ RSpec.describe "ECPay live stage API", :live do
     expect(issued.random_code).to match(/\A\d{4}\z/)
     expect(issued.status).to eq(Einvoice::InvoiceStatus::ISSUED)
 
-    found = provider.query(order_id: order)
+    found = provider.query(invoice: { order_id: order })
     expect(found.invoice_number).to eq(issued.invoice_number)
     expect(found.order_id).to eq(order)
     expect(found.amount.total_amount).to eq(100)
     expect(found.items.first.description).to eq("整合測試商品")
     expect(found.status).to eq(Einvoice::InvoiceStatus::ISSUED)
 
-    by_number = provider.query(invoice_number: issued.invoice_number)
+    by_number = provider.query(invoice: { number: issued.invoice_number,
+                                             invoice_datetime: issued.invoice_datetime })
     expect(by_number.invoice_number).to eq(issued.invoice_number)
 
-    voided = provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢")
+    voided = provider.void(invoice: issued.reference, reason: "整合測試作廢")
     expect(voided.status).to eq(Einvoice::InvoiceStatus::VOIDED)
-    expect(provider.query(order_id: order).status).to eq(Einvoice::InvoiceStatus::VOIDED)
+    expect(provider.query(invoice: { order_id: order }).status).to eq(Einvoice::InvoiceStatus::VOIDED)
   end
 
   it "credits an invoice and reverses the allowance" do
@@ -72,25 +73,24 @@ RSpec.describe "ECPay live stage API", :live do
     issued = provider.issue(issue_input(order))
 
     allowance = provider.allowance(
-      invoice_number: issued.invoice_number,
+      invoice: issued.reference,
       allowance_id: "AL_#{order}",
       items: [{ description: "整合測試商品", quantity: 1, unit_price: 50, amount: 50 }],
       amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 }
     )
     expect(allowance.allowance_number).not_to be_empty
     expect(allowance.invoice_number).to eq(issued.invoice_number)
-    expect(provider.query(order_id: order).status).to eq(Einvoice::InvoiceStatus::ALLOWANCE)
+    expect(provider.query(invoice: { order_id: order }).status).to eq(Einvoice::InvoiceStatus::ALLOWANCE)
 
     # A credited invoice cannot be voided until its allowances are reversed —
     # the case the :void_blocked_by_allowance reason exists for.
-    expect { provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢") }
+    expect { provider.void(invoice: issued.reference, reason: "整合測試作廢") }
       .to raise_error(Einvoice::ConflictError) { |error|
         expect(error.reason).to eq(Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE)
       }
 
-    provider.void_allowance(invoice_number: issued.invoice_number,
-                            allowance_number: allowance.allowance_number)
-    expect(provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢").status)
+    provider.void_allowance(allowance: allowance.reference)
+    expect(provider.void(invoice: issued.reference, reason: "整合測試作廢").status)
       .to eq(Einvoice::InvoiceStatus::VOIDED)
   end
 
@@ -109,9 +109,9 @@ RSpec.describe "ECPay live stage API", :live do
     it "maps a second void to an already-voided conflict" do
       order = order_id
       issued = provider.issue(issue_input(order))
-      provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢")
+      provider.void(invoice: issued.reference, reason: "整合測試作廢")
 
-      expect { provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢") }
+      expect { provider.void(invoice: issued.reference, reason: "整合測試作廢") }
         .to raise_error(Einvoice::ConflictError) { |error|
           expect(error.reason).to eq(Einvoice::Reason::ALREADY_VOIDED)
         }
@@ -120,11 +120,11 @@ RSpec.describe "ECPay live stage API", :live do
     it "maps crediting a voided invoice to a conflict" do
       order = order_id
       issued = provider.issue(issue_input(order))
-      provider.void(invoice_number: issued.invoice_number, reason: "整合測試作廢")
+      provider.void(invoice: issued.reference, reason: "整合測試作廢")
 
       expect do
         provider.allowance(
-          invoice_number: issued.invoice_number, allowance_id: "AL_#{order}",
+          invoice: issued.reference, allowance_id: "AL_#{order}",
           items: [{ description: "整合測試商品", quantity: 1, unit_price: 50, amount: 50 }],
           amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 }
         )
@@ -135,14 +135,14 @@ RSpec.describe "ECPay live stage API", :live do
     end
 
     it "maps an unknown invoice to not found" do
-      expect { provider.query(invoice_number: "ZZ00000000") }
+      expect { provider.query(invoice: { number: "ZZ00000000", invoice_datetime: Time.now }) }
         .to raise_error(Einvoice::NotFoundError)
     end
 
     it "maps an unknown 折讓單 to not found" do
       expect do
-        provider.void_allowance(invoice_number: "ZZ00000000",
-                                allowance_number: "9999999999999999")
+        provider.void_allowance(allowance: { allowance_number: "9999999999999999",
+                                             invoice_number: "ZZ00000000" })
       end.to raise_error(Einvoice::NotFoundError)
     end
 
@@ -190,6 +190,6 @@ RSpec.describe "ECPay live stage API", :live do
                                                  email: "test@example.com" }))
 
     expect(issued.invoice_number).to match(/\A[A-Z]{2}\d{8}\z/)
-    expect(provider.query(order_id: order).buyer.ubn).to eq("53538851")
+    expect(provider.query(invoice: { order_id: order }).buyer.ubn).to eq("53538851")
   end
 end
