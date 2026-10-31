@@ -44,6 +44,15 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       expect(result.status).to eq(Einvoice::InvoiceStatus::ISSUED)
       expect(result.order_id).to eq("ORDER_A")
       expect(result.total_amount).to eq(100)
+      expect(result.random_code).to match(/\A\d{4}\z/)
+      expect(result.invoice_datetime).to be_a(Time)
+      expect(result.reference.number).to eq(result.invoice_number)
+    end
+
+    it "refuses a second invoice for the same order id" do
+      provider.issue(issue_payload(order_id: "ORDER_DUP"))
+      expect { provider.issue(issue_payload(order_id: "ORDER_DUP")) }
+        .to raise_error(Einvoice::ConflictError) { |error| expect(error.provider).to eq(provider.name) }
     end
 
     it "raises a ValidationError (never a raw error) on invalid input" do
@@ -81,6 +90,9 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       result = provider.void({ invoice: issued.reference, reason: "客戶取消" })
       expect(result).to be_a(Einvoice::VoidInvoiceResult)
       expect(result.status).to eq(Einvoice::InvoiceStatus::VOIDED)
+      # nil is allowed: a provider may not be able to tell.
+      expect(provider.query({ invoice: issued.reference }).status)
+        .to eq(Einvoice::InvoiceStatus::VOIDED).or be_nil
     end
   end
 
@@ -103,6 +115,37 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
 
       result = provider.issue(issue_payload(order_id: "ORDER_FX2", currency: "USD"))
       expect(result).to be_a(Einvoice::IssueInvoiceResult)
+    end
+
+    b2b = { buyer: { ubn: "53538851", name: "測試股份有限公司", email: "b@x.com" } }
+    mixed = {
+      items: [{ description: "商品一", quantity: 1, unit_price: 50, amount: 50, tax_type: "TAXABLE" },
+              { description: "商品二", quantity: 1, unit_price: 50, amount: 50, tax_type: "TAX_FREE" }]
+    }
+    {
+      Einvoice::Capability::B2B => ->(spec) { spec.provider.issue(spec.issue_payload(order_id: "ORDER_B2B", **b2b)) },
+      Einvoice::Capability::MIXED_TAX => lambda { |spec|
+        spec.provider.issue(spec.issue_payload(order_id: "ORDER_MIX", **mixed))
+      },
+      Einvoice::Capability::QUERY_BY_ORDER_ID => lambda { |spec|
+        spec.provider.issue(spec.issue_payload(order_id: "ORDER_QBO"))
+        spec.provider.query({ invoice: { order_id: "ORDER_QBO" } })
+      },
+      Einvoice::Capability::CARRIER_VALIDATION => lambda { |spec|
+        spec.provider.validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })
+      }
+    }.each do |capability, call|
+      it "refuses #{capability} unless it declares it" do
+        skip "declares #{capability}" if provider.supports?(capability)
+
+        expect { call.call(self) }.to raise_error(Einvoice::UnsupportedError)
+      end
+
+      it "does #{capability} when it declares it" do
+        skip "no #{capability}" unless provider.supports?(capability)
+
+        expect { call.call(self) }.not_to raise_error
+      end
     end
   end
 
@@ -148,6 +191,9 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       })
       expect(allowance).to be_a(Einvoice::AllowanceResult)
       expect(allowance.allowance_number).to be_a(String)
+      expect(allowance.allowance_date).to be_a(Date)
+      expect(provider.query({ invoice: issued.reference }).status)
+        .to eq(Einvoice::InvoiceStatus::ALLOWANCE).or be_nil
 
       cancelled = provider.void_allowance({ allowance: allowance.reference })
       expect(cancelled).to be_a(Einvoice::VoidAllowanceResult)

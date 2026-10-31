@@ -45,6 +45,9 @@ module Einvoice
       check_failure!
       parsed = Input.issue(input, provider: name)
       assert_currency_supported!(parsed.currency)
+      assert_supports!(Capability::B2B) if parsed.resolved_category == InvoiceCategory::B2B
+      assert_supports!(Capability::MIXED_TAX) if parsed.items.map { |i| i.tax_type || parsed.tax_type }.uniq.size > 1
+      fail!(ConflictError, "Order id already issued", Reason::DUPLICATE_ORDER) if @by_order_id.key?(parsed.order_id)
 
       invoice_number = next_invoice_number
       result = IssueInvoiceResult.new(

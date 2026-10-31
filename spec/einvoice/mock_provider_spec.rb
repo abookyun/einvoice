@@ -7,6 +7,18 @@ RSpec.describe Einvoice::MockProvider do
 
   it_behaves_like "an invoice provider"
 
+  # The same contract with only the five operations, so the "refuses unless it
+  # declares it" side of each capability runs too.
+  context "with only the five operations" do
+    subject(:provider) do
+      described_class.new(capabilities: [Einvoice::Capability::ISSUE, Einvoice::Capability::VOID,
+                                         Einvoice::Capability::ALLOWANCE, Einvoice::Capability::VOID_ALLOWANCE,
+                                         Einvoice::Capability::QUERY])
+    end
+
+    it_behaves_like "an invoice provider"
+  end
+
   it "declares every capability by default" do
     expect(provider.capabilities).to eq(Set.new(Einvoice::Capability::ALL))
   end
@@ -27,11 +39,6 @@ RSpec.describe Einvoice::MockProvider do
   describe "#validate_carrier" do
     it "accepts a well-formed carrier" do
       expect(provider.validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })).to be(true)
-    end
-
-    it "refuses unless it declares CARRIER_VALIDATION" do
-      plain = described_class.new(capabilities: Einvoice::Capability::ALL - [Einvoice::Capability::CARRIER_VALIDATION])
-      expect { plain.validate_carrier({ type: "MEMBER" }) }.to raise_error(Einvoice::UnsupportedError)
     end
 
     it "needs a carrier" do
@@ -65,11 +72,6 @@ RSpec.describe Einvoice::MockProvider do
                                      ))
       found = provider.query({ invoice: issued.invoice_number })
       expect(found.reference).to eq(issued.reference)
-    end
-
-    it "refuses a query without a number unless it declares QUERY_BY_ORDER_ID" do
-      plain = described_class.new(capabilities: Einvoice::Capability::ALL - [Einvoice::Capability::QUERY_BY_ORDER_ID])
-      expect { plain.query({ invoice: { order_id: "O1" } }) }.to raise_error(Einvoice::UnsupportedError)
     end
 
     it "names and types its dates as the MIG does" do
