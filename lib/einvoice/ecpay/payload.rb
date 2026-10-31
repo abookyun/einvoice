@@ -174,6 +174,18 @@ module Einvoice
           data["Items"].any? { |item| item["ItemTaxType"] == "2" }
       end
 
+      # The sum of ItemAmount has to equal AllowanceAmount [doc 7901].
+      def check_allowance!(data)
+        total = data["Items"].sum { |item| item["ItemAmount"].to_r }
+        return if total.round == data["AllowanceAmount"]
+
+        raise ValidationError.new(
+          "Invalid ECPay allowance payload — AllowanceAmount (#{data['AllowanceAmount']}) must equal " \
+          "the item total (#{total.round})",
+          provider: Client::PROVIDER
+        )
+      end
+
       def string_keys(hash)
         return {} unless hash.is_a?(Hash)
 

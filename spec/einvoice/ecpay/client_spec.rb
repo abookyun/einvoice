@@ -80,7 +80,7 @@ RSpec.describe Einvoice::ECPay::Client do
                                          ))
 
       expect { client.request("/B2CInvoice/Issue", {}) }
-        .to raise_error(Einvoice::ValidationError) { |error|
+        .to raise_error(Einvoice::AuthError) { |error|
           expect(error.reason).to eq(Einvoice::Reason::STALE_TIMESTAMP)
         }
     end
@@ -96,6 +96,16 @@ RSpec.describe Einvoice::ECPay::Client do
 
       expect { client.request("/B2CInvoice/Issue", {}) }
         .to raise_error(Einvoice::ProviderError, /non-JSON response \(HTTP 200\)/)
+    end
+
+    it "reads HTTP 403 as a rate limit the caller can wait out" do
+      stub_request(:post, url).to_return(status: 403, body: "Forbidden")
+
+      expect { client.request("/B2CInvoice/Issue", {}) }
+        .to raise_error(Einvoice::NetworkError) { |error|
+          expect(error.reason).to eq(Einvoice::Reason::RATE_LIMITED)
+          expect(error.raw_code).to eq("403")
+        }
     end
 
     it "reports a gateway page with HTTP 5xx as a network error" do

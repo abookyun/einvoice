@@ -83,9 +83,19 @@ module Einvoice
         http.read_timeout = @timeout
 
         response = http.request(post_request(uri, body))
+        check_rate_limit!(response)
         parse_json(response)
       rescue *Error::NETWORK_ERRORS => e
         raise NetworkError.new("ECPay request failed: #{e.message}", provider: PROVIDER, cause: e)
+      end
+
+      # ECPay answers HTTP 403 when a merchant calls too often, and asks it to wait
+      # 30 minutes. The caller can retry later.
+      def check_rate_limit!(response)
+        return unless response.code.to_i == 403
+
+        raise NetworkError.new("ECPay returned HTTP 403: too many calls, wait 30 minutes",
+                               provider: PROVIDER, reason: Reason::RATE_LIMITED, raw_code: response.code)
       end
 
       def post_request(uri, body)

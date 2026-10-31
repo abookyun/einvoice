@@ -68,7 +68,8 @@ module Einvoice
       # 開立發票.
       def issue(input)
         parsed = Input.issue(input, provider: name)
-        assert_twd!(parsed.currency)
+        assert_currency_supported!(parsed.currency)
+        assert_rate_supported!(parsed)
         data = Payload.issue(parsed, validate: @validate_payload)
         result = @client.request("/B2CInvoice/Issue", data)
 
@@ -109,17 +110,19 @@ module Einvoice
         parsed = Input.allowance(input, provider: name)
         options = Payload.string_keys(parsed.provider_options)
 
-        result = @client.request("/B2CInvoice/Allowance", {
-                                   "InvoiceNo" => parsed.invoice.number,
-                                   "InvoiceDate" => invoice_date(parsed.invoice, "allowance"),
-                                   "AllowanceNotify" => options["allowance_notify"] || "N",
-                                   "CustomerName" => options["customer_name"],
-                                   "NotifyMail" => options["notify_mail"],
-                                   "NotifyPhone" => options["notify_phone"],
-                                   "AllowanceAmount" => parsed.amount.total_amount,
-                                   "Reason" => options["reason"],
-                                   "Items" => Payload.items(parsed.items)
-                                 }.compact)
+        data = {
+          "InvoiceNo" => parsed.invoice.number,
+          "AllowanceNotify" => options["allowance_notify"] || "N",
+          "CustomerName" => options["customer_name"],
+          "NotifyMail" => options["notify_mail"],
+          "NotifyPhone" => options["notify_phone"],
+          "AllowanceAmount" => parsed.amount.total_amount,
+          "Reason" => options["reason"],
+          "Items" => Payload.items(parsed.items)
+        }.compact
+        Payload.check_allowance!(data) if @validate_payload
+        data["InvoiceDate"] = invoice_date(parsed.invoice, "allowance")
+        result = @client.request("/B2CInvoice/Allowance", data)
 
         AllowanceResult.new(
           allowance_number: result["IA_Allow_No"].to_s,
@@ -196,12 +199,12 @@ module Einvoice
 
       private
 
-      # ECPay's B2C API files everything in TWD and has no foreign-currency field,
-      # so refuse rather than silently dropping the annotation.
-      def assert_twd!(currency)
-        return if currency.nil? || currency == "TWD"
+      # ECPay fixes the rate by TaxType. A taxable invoice is always 5%.
+      def assert_rate_supported!(parsed)
+        return unless parsed.tax_type == TaxType::TAXABLE && parsed.tax_rate != Rational(5, 100)
 
-        assert_supports!(Capability::FOREIGN_CURRENCY)
+        raise UnsupportedError.new("ECPay taxes a taxable invoice at 0.05 only, got #{parsed.tax_rate.to_f}",
+                                   provider: name)
       end
 
       def build_query_result(result, reference)
@@ -251,6 +254,8 @@ module Einvoice
       # the remaining creditable amount falling below the sales total once a 折讓
       # exists.
       def derive_status(result)
+        # 註銷 (cancelled) has no unified status.
+        return nil if result["IIS_Issue_Status"].to_s == "0"
         return InvoiceStatus::VOIDED if result["IIS_Invalid_Status"].to_s == "1"
 
         sales = result["IIS_Sales_Amount"].to_i

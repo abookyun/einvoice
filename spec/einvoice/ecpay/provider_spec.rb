@@ -94,6 +94,12 @@ RSpec.describe Einvoice::ECPay::Provider do
         .to raise_error(Einvoice::UnsupportedError, /foreign_currency/)
     end
 
+    it "refuses a taxable rate other than 5%" do
+      expect { provider.issue(issue_input(tax_rate: 0.01)) }
+        .to raise_error(Einvoice::UnsupportedError, /0.05 only/)
+      expect(ecpay.requests).to be_empty
+    end
+
     it "never reaches the network when the input is invalid" do
       expect { provider.issue(issue_input(items: [])) }.to raise_error(Einvoice::ValidationError)
       expect(ecpay.requests).to be_empty
@@ -152,6 +158,13 @@ RSpec.describe Einvoice::ECPay::Provider do
 
       expect(provider.query(invoice: issued.reference).status)
         .to eq(Einvoice::InvoiceStatus::ALLOWANCE)
+    end
+
+    it "reads a cancelled (註銷) invoice as status nil" do
+      issued = provider.issue(issue_input)
+      ecpay.cancel!(issued.invoice_number)
+
+      expect(provider.query(invoice: issued.reference).status).to be_nil
     end
 
     it "drops ECPay's zero placeholder for a B2C buyer's 統一編號" do
@@ -282,6 +295,18 @@ RSpec.describe Einvoice::ECPay::Provider do
 
       # With the allowance reversed the invoice is back to a plain issued state.
       expect(provider.query(invoice: issued.reference).status).to eq(Einvoice::InvoiceStatus::ISSUED)
+    end
+
+    it "checks the item total against the allowance amount before sending" do
+      bad = Einvoice::AllowanceInput.new(
+        invoice: issued.reference, allowance_id: "AL_1",
+        items: [Einvoice::InvoiceItem.new(description: "x", quantity: 1, unit_price: 90, amount: 90)],
+        amount: Einvoice::AmountSummary.new(sales_amount: 95, tax_amount: 5, total_amount: 100)
+      )
+      issued
+      expect { provider.allowance(bad) }
+        .to raise_error(Einvoice::ValidationError, /AllowanceAmount \(100\) must equal the item total \(90\)/)
+      expect(ecpay.path).to eq("/B2CInvoice/Issue")
     end
 
     it "needs the invoice number to void an allowance" do

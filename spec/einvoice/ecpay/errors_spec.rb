@@ -7,13 +7,27 @@ RSpec.describe Einvoice::ECPay::Errors do
         .to eq([:auth, Einvoice::Reason::CREDENTIALS_INVALID])
     end
 
-    it "reads a rejected timestamp as a stale clock the caller can fix" do
+    # 104 and 115 follow the shared wire fixtures.
+    it "reads a rejected timestamp as an auth error with a stale clock" do
       expect(described_class.classify_transport(104))
-        .to eq([:validation, Einvoice::Reason::STALE_TIMESTAMP])
+        .to eq([:auth, Einvoice::Reason::STALE_TIMESTAMP])
+    end
+
+    it "reads a merchant without B2C or B2B as not enrolled" do
+      expect(described_class.classify_transport(115))
+        .to eq([:auth, Einvoice::Reason::NOT_ENROLLED])
     end
 
     it "falls back to a provider error for anything else" do
       expect(described_class.classify_transport(999)).to eq([:provider, nil])
+    end
+  end
+
+  describe ".classify, codes from the shared fixtures" do
+    it "maps them by code" do
+      expect(described_class.classify(4_000_001)).to eq([:not_found, nil])
+      expect(described_class.classify(1_100_040)).to eq([:number_exhausted, nil])
+      expect(described_class.classify(5_070_250)).to eq([:conflict, nil])
     end
   end
 

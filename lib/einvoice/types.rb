@@ -215,6 +215,8 @@ module Einvoice
     end
   end
 
+  # +status+ is nil when the provider's status has no InvoiceStatus, for
+  # example a cancelled (註銷) invoice.
   QueryInvoiceResult = Data.define(
     :invoice_number, :invoice_datetime, :random_code, :order_id, :status, :amount, :buyer, :items, :raw
   ) do

@@ -22,6 +22,11 @@ class FakeECPay
 
   attr_reader :requests
 
+  # 註銷 has no endpoint in the adapter, so a spec marks an invoice by hand.
+  def cancel!(number)
+    @invoices.fetch(number)["cancelled"] = true
+  end
+
   def initialize
     @invoices = {}
     @by_relate = {}
@@ -118,6 +123,7 @@ class FakeECPay
             "IIS_Sales_Amount" => invoice["sales"],
             "IIS_Create_Date" => invoice["issued_at"],
             "IIS_Random_Number" => invoice["random"],
+            "IIS_Issue_Status" => invoice["cancelled"] ? "0" : "1",
             "IIS_Invalid_Status" => invoice["voided"] ? "1" : "0",
             "IIS_Remain_Allowance_Amt" => invoice["remaining"],
             "Items" => Array(stored["Items"]).map { |item| queried_item(item) })
