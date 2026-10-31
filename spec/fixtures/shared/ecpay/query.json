@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "provider": "ecpay",
+  "cases": [
+    {
+      "name": "query by orderId: posts exactly MerchantID + RelateNumber",
+      "operation": "query",
+      "input": { "orderId": "ORDER_1" },
+      "expect": {
+        "endpoint": "/B2CInvoice/GetIssue",
+        "data": {
+          "MerchantID": "2000132",
+          "RelateNumber": "ORDER_1"
+        },
+        "dataExact": true
+      }
+    },
+    {
+      "name": "query by invoiceNumber: posts InvoiceNo + InvoiceDate (情境二)",
+      "operation": "query",
+      "input": {
+        "invoiceNumber": "JU11082062",
+        "providerOptions": { "invoiceDate": "2026-06-17" }
+      },
+      "expect": {
+        "endpoint": "/B2CInvoice/GetIssue",
+        "data": {
+          "InvoiceNo": "JU11082062",
+          "InvoiceDate": "2026-06-17"
+        }
+      }
+    }
+  ]
+}
