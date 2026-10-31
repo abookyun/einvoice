@@ -151,6 +151,8 @@ module Einvoice
   IssueInvoiceResult = Data.define(
     :invoice_number, :invoice_datetime, :random_code, :order_id, :total_amount, :buyer_ubn, :status, :raw
   ) do
+    include Redaction::Raw
+
     def reference
       InvoiceReference.new(number: invoice_number, invoice_datetime: invoice_datetime,
                            random_code: random_code, order_id: order_id,
@@ -170,6 +172,8 @@ module Einvoice
   # +cancel_datetime+ is a Time in UTC+8 (MIG CancelDate and CancelTime), or nil
   # when the provider does not return it.
   VoidInvoiceResult = Data.define(:invoice_number, :status, :cancel_datetime, :raw) do
+    include Redaction::Raw
+
     def initialize(invoice_number:, status:, raw:, cancel_datetime: nil)
       super
     end
@@ -185,6 +189,8 @@ module Einvoice
 
   # +allowance_date+ is a Date (MIG AllowanceDate has no time).
   AllowanceResult = Data.define(:allowance_number, :invoice_number, :allowance_date, :total_amount, :raw) do
+    include Redaction::Raw
+
     def reference
       AllowanceReference.new(allowance_number: allowance_number, allowance_date: allowance_date,
                              invoice_number: invoice_number)
@@ -199,6 +205,8 @@ module Einvoice
   end
 
   VoidAllowanceResult = Data.define(:allowance_number, :cancel_datetime, :raw) do
+    include Redaction::Raw
+
     def initialize(allowance_number:, raw:, cancel_datetime: nil)
       super
     end
@@ -220,6 +228,8 @@ module Einvoice
   QueryInvoiceResult = Data.define(
     :invoice_number, :invoice_datetime, :random_code, :order_id, :status, :amount, :buyer, :items, :raw
   ) do
+    include Redaction::Raw
+
     def reference
       InvoiceReference.new(number: invoice_number, invoice_datetime: invoice_datetime,
                            random_code: random_code, order_id: order_id,

@@ -2,6 +2,7 @@
 
 require "einvoice/version"
 require "einvoice/error"
+require "einvoice/redaction"
 require "einvoice/taipei"
 require "einvoice/number"
 require "einvoice/capability"

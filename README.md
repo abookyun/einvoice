@@ -79,6 +79,11 @@ rescue Einvoice::Error => e
 end
 ```
 
+### Credentials and buyer data
+
+- `inspect`, `to_s` and `pp` show results with `raw=[FILTERED]`, because `raw` is the provider's response and holds the buyer's data. Read `#raw` directly when you need it. An adapter's client shows its keys as `[FILTERED]`.
+- `base_url` has to use https. Only localhost may use http, for tests.
+
 ### Capabilities
 
 A provider declares what it supports; feature-detect instead of discovering a gap when a request fails.

@@ -42,7 +42,7 @@ module Einvoice
       MAX_PAGES = 100
 
       def initialize(base_url: BASE_URL, timeout: 30)
-        @base_url = base_url
+        @base_url = Redaction.base_url!(base_url, provider: PROVIDER)
         @timeout = timeout
       end
 
