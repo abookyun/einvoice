@@ -126,7 +126,7 @@ provider = Einvoice::ECPay::Provider.new(**Einvoice::ECPay::SANDBOX)
 - **作廢折讓需要發票號碼**，所以請傳 `AllowanceReference`，不要只傳折讓單號。
 - **不支援外幣。** ECPay 的 B2C API 沒有外幣欄位，所以 `currency` 不是 TWD 時會丟出 `UnsupportedError`，不會被當成 TWD 開立。
 - **應稅發票固定是 5%。** ECPay 依課稅別決定稅率，所以其他的 `tax_rate` 會丟出 `UnsupportedError`。
-- **載具驗證**：`validate_mobile_barcode("/ABC1234")`、`validate_love_code("168001")`、`love_code_organ_name("168001")`。這些方法會詢問 ECPay，所以需要這個 adapter 和它的帳號。捐贈碼（愛心碼）另外可以用下面的 `Einvoice::MOF::DonationCodes`，它直接詢問財政部，不需要 adapter，也不需要帳號。
+- **載具驗證**：`validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })`（`CARRIER_VALIDATION` 對應的 `Provider` 方法；ECPay 只能檢查手機條碼）、`validate_love_code("168001")`、`love_code_organ_name("168001")`。這些方法會詢問 ECPay，所以需要這個 adapter 和它的帳號。捐贈碼（愛心碼）另外可以用下面的 `Einvoice::MOF::DonationCodes`，它直接詢問財政部，不需要 adapter，也不需要帳號。
 - **其他功能**：ECPay 另外有大約 25 個 B2C endpoint（延遲開立、字軌設定、列印、通知……）。請用 `provider.raw(path, payload)` 呼叫。它會處理封包、加密和錯誤對應。
 
 ## 財政部查詢

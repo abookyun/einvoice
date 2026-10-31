@@ -130,6 +130,14 @@ module Einvoice
       )
     end
 
+    # Every well-formed carrier counts as registered.
+    def validate_carrier(carrier)
+      check_failure!
+      assert_supports!(Capability::CARRIER_VALIDATION)
+      Input.carrier(carrier, provider: name)
+      true
+    end
+
     private
 
     def check_failure!

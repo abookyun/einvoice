@@ -175,7 +175,7 @@ RSpec.describe "ECPay live stage API", :live do
 
   describe "carrier validation" do
     it "confirms a registered 手機條碼" do
-      expect(provider.validate_mobile_barcode("/ABC1234")).to be(true)
+      expect(provider.validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })).to be(true)
     end
 
     it "resolves the organisation behind a 愛心碼" do

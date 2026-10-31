@@ -24,6 +24,21 @@ RSpec.describe Einvoice::MockProvider do
     end
   end
 
+  describe "#validate_carrier" do
+    it "accepts a well-formed carrier" do
+      expect(provider.validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })).to be(true)
+    end
+
+    it "refuses unless it declares CARRIER_VALIDATION" do
+      plain = described_class.new(capabilities: Einvoice::Capability::ALL - [Einvoice::Capability::CARRIER_VALIDATION])
+      expect { plain.validate_carrier({ type: "MEMBER" }) }.to raise_error(Einvoice::UnsupportedError)
+    end
+
+    it "needs a carrier" do
+      expect { provider.validate_carrier(nil) }.to raise_error(Einvoice::ValidationError, /carrier is required/)
+    end
+  end
+
   describe "#fail_next" do
     it "makes exactly the next operation raise the injected error, then clears" do
       provider.fail_next(Einvoice::NetworkError.new("boom", provider: "mock"))

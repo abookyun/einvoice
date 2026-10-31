@@ -335,18 +335,24 @@ RSpec.describe Einvoice::ECPay::Provider do
 
   describe "carrier validation" do
     it "confirms a registered 手機條碼" do
-      expect(provider.validate_mobile_barcode("/ABC1234")).to be(true)
+      expect(provider.validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })).to be(true)
       expect(ecpay.payload).to eq("MerchantID" => "2000132", "BarCode" => "/ABC1234")
     end
 
     it "reports an unregistered 手機條碼" do
-      expect(provider.validate_mobile_barcode("/ZZZ9999")).to be(false)
+      expect(provider.validate_carrier(Einvoice::Carrier.new(type: :mobile_barcode, code: "/ZZZ9999")))
+        .to be(false)
     end
 
     it "rejects a malformed 手機條碼 without asking ECPay" do
-      expect { provider.validate_mobile_barcode("ABC1234") }
-        .to raise_error(Einvoice::ValidationError, /Invalid mobile barcode/)
+      expect { provider.validate_carrier({ type: "MOBILE_BARCODE", code: "ABC1234" }) }
+        .to raise_error(Einvoice::ValidationError, /carrier code for mobile_barcode/)
       expect(ecpay.requests).to be_empty
+    end
+
+    it "cannot check a citizen certificate" do
+      expect { provider.validate_carrier({ type: "CITIZEN_CERTIFICATE", code: "AB12345678901234" }) }
+        .to raise_error(Einvoice::UnsupportedError, /mobile barcode only/)
     end
 
     it "resolves the organisation behind a 愛心碼" do

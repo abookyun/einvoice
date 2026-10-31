@@ -170,13 +170,14 @@ module Einvoice
         build_query_result(result, reference)
       end
 
-      # 手機條碼驗證 — whether a 手機條碼 is registered with the tax authority.
-      def validate_mobile_barcode(barcode)
-        if @validate_payload && !barcode.to_s.match?(%r{\A/[0-9A-Z.+-]{7}\z})
-          raise ValidationError.new("Invalid mobile barcode: #{barcode.inspect}", provider: name)
+      # Whether a carrier is registered. ECPay can check a 手機條碼 only.
+      def validate_carrier(carrier)
+        parsed = Input.carrier(carrier, provider: name)
+        unless parsed.type == CarrierType::MOBILE_BARCODE
+          raise UnsupportedError.new("ECPay can check a mobile barcode only, not #{parsed.type}", provider: name)
         end
 
-        @client.request("/B2CInvoice/CheckBarcode", { "BarCode" => barcode })["IsExist"] == "Y"
+        @client.request("/B2CInvoice/CheckBarcode", { "BarCode" => parsed.code })["IsExist"] == "Y"
       end
 
       # 愛心碼驗證 — whether a donation code is registered.

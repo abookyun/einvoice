@@ -109,6 +109,13 @@ module Einvoice
       QueryInvoiceInput.new(invoice: invoice, provider_options: h[:provider_options])
     end
 
+    # A carrier on its own, for Provider#validate_carrier.
+    def carrier(input, provider: nil)
+      fail!("carrier is required", provider) if input.nil?
+
+      build_carrier(input, provider)
+    end
+
     # --- references ------------------------------------------------------------
 
     # An InvoiceReference, a Hash of its fields, or a plain invoice number.
