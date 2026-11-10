@@ -57,6 +57,8 @@ RSpec.describe Einvoice::Redaction do
         .to raise_error(Einvoice::ValidationError, /must not contain a user or password/) { |e|
           expect(e.message).not_to include("secret")
         }
+      expect { check("https://user:secret@exa mple") }
+        .to raise_error(Einvoice::ValidationError, /not a valid URL/) { |e| expect(e.message).not_to include("secret") }
     end
 
     it "refuses a value that is not a URL" do

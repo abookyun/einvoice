@@ -39,7 +39,8 @@ module Einvoice
       raise ValidationError.new("base_url must use https (http is allowed for localhost only), got #{url}",
                                 provider: provider)
     rescue URI::InvalidURIError
-      raise ValidationError.new("base_url is not a valid URL: #{url}", provider: provider)
+      # Not the URL itself: a malformed one may still hold a password.
+      raise ValidationError.new("base_url is not a valid URL", provider: provider)
     end
   end
 end
