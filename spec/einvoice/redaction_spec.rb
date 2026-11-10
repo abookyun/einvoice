@@ -51,6 +51,14 @@ RSpec.describe Einvoice::Redaction do
         .to raise_error(Einvoice::ValidationError, /base_url must use https/)
     end
 
+    # inspect prints the base URL, so a user and password in it would leak.
+    it "refuses a URL with a user or password" do
+      expect { check("https://user:secret@einvoice.example") }
+        .to raise_error(Einvoice::ValidationError, /must not contain a user or password/) { |e|
+          expect(e.message).not_to include("secret")
+        }
+    end
+
     it "refuses a value that is not a URL" do
       expect { check("https://") }.to raise_error(Einvoice::ValidationError, /must use https/)
       expect { check("http://exa mple") }.to raise_error(Einvoice::ValidationError, /not a valid URL/)

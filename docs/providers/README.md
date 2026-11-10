@@ -104,7 +104,7 @@ The caller's `AmountSummary` is checked against the breakdown. It never tells th
 - `QUERY_BY_ORDER_ID` means the provider can find an invoice from data that the caller knows, without the invoice number. The caller passes an `InvoiceReference` with `order_id`, and `total_amount` if the provider needs it.
 - `CARRIER_VALIDATION` means the adapter implements `Provider#validate_carrier`.
 
-**Connection.** `base_url` must use https. Only localhost may use http.
+**Connection.** `base_url` must use https. Only localhost may use http. It must not carry a user or password, because `inspect` shows it.
 
 ## Sources and trust
 

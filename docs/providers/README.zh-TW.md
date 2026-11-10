@@ -106,7 +106,7 @@ core 依品項算出稅額，也就是 input 的 `#tax_breakdown`。只有 core 
 - `QUERY_BY_ORDER_ID` 表示加值中心可以只靠呼叫端知道的資料找到發票，不需要發票號碼。呼叫端傳一個帶有 `order_id` 的 `InvoiceReference`；加值中心需要時，再加上 `total_amount`。
 - `CARRIER_VALIDATION` 表示 adapter 實作了 `Provider#validate_carrier`。
 
-**連線。** `base_url` 一定要用 https，只有 localhost 可以用 http。
+**連線。** `base_url` 一定要用 https，只有 localhost 可以用 http。也不能帶帳號或密碼，因為 `inspect` 會顯示它。
 
 ## 來源與可信度
 
