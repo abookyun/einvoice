@@ -38,6 +38,12 @@ module Einvoice
       end
     end
 
+    # An Integer when the value is whole, else a Float, so an amount serializes
+    # as 95 or 47.5 and not as a Rational.
+    def plain(value)
+      value.denominator == 1 ? value.to_i : value.to_f
+    end
+
     def invalid!(message, provider)
       raise ValidationError.new(message, provider: provider || "einvoice")
     end

@@ -126,7 +126,7 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
         invoice: issued.reference,
         allowance_id: "AL_#{order}",
         items: [{ description: "整合測試商品", quantity: 1, unit_price: 50, amount: 50 }],
-        amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 }
+        amount: { sales_amount: 48, tax_amount: 2, total_amount: 50 }, price_mode: "TAX_INCLUSIVE"
       )
       expect(allowance).to be_a(Einvoice::AllowanceResult)
       expect(allowance.allowance_number).not_to be_empty
@@ -163,7 +163,7 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
         provider.allowance(
           invoice: issued.reference, allowance_id: "AL_#{order}",
           items: [{ description: "整合測試商品", quantity: 1, unit_price: 50, amount: 50 }],
-          amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 }
+          amount: { sales_amount: 48, tax_amount: 2, total_amount: 50 }, price_mode: "TAX_INCLUSIVE"
         )
       end.to raise_error(Einvoice::ConflictError) { |error|
         expect(error.reason).to eq(Einvoice::Reason::ALLOWANCE_BLOCKED_BY_VOID)
@@ -177,7 +177,8 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
     it "issues against a 統一編號 and reads it back" do
       order = order_id("b2b")
       provider.issue(issue_input(order, buyer: { ubn: "53538851", name: "測試股份有限公司",
-                                                 email: "test@example.com" }))
+                                                 email: "test@example.com" },
+                                 amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }))
 
       expect(provider.query(invoice: { order_id: order }).buyer.ubn).to eq("53538851")
     end
@@ -250,13 +251,13 @@ RSpec.describe "Einvoice::ECPay::Provider against recorded ECPay responses" do
 
     it "surfaces an amount ECPay rejects as a validation error",
        vcr: { cassette_name: "ecpay/amount_mismatch" } do
-      # Local validation off, so this is ECPay rejecting it rather than us.
-      lax = Einvoice::ECPay::Provider.new(**Einvoice::ECPay::SANDBOX, validate_payload: false)
+      # The core rejects this amount before any adapter runs, so the payload is
+      # built here and sent through #raw, to see ECPay's own answer.
+      parsed = Einvoice::Input.issue(issue_input(order_id("amt")))
+      bad = parsed.with(amount: Einvoice::AmountSummary.new(sales_amount: 999, tax_amount: 0, total_amount: 999))
+      data = Einvoice::ECPay::Payload.issue(bad, validate: false)
 
-      expect do
-        lax.issue(issue_input(order_id("amt"),
-                              amount: { sales_amount: 999, tax_amount: 0, total_amount: 999 }))
-      end.to raise_error(Einvoice::ValidationError) { |error|
+      expect { provider.raw("/B2CInvoice/Issue", data) }.to raise_error(Einvoice::ValidationError) { |error|
         expect(error.raw_code).to eq("5000022")
         expect(error.raw_message).to include("金額")
       }

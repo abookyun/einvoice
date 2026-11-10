@@ -9,8 +9,10 @@ require "date"
 # The fixture inputs use the TypeScript input shape. #to_ruby turns each one
 # into the Ruby input. The Ruby shape is different on purpose: the original
 # invoice is an InvoiceReference, not invoiceNumber with
-# providerOptions.invoiceDate. Only the input is translated. The wire data and
-# the error classes are compared as they are.
+# providerOptions.invoiceDate. The amounts differ too: the TypeScript inputs
+# give tax 0 with the tax inside the total, and the Ruby core wants the tax
+# apart for a B2B invoice (F0401) and for an allowance (G0401). Only the input is
+# translated. The wire data and the error classes are compared as they are.
 RSpec.describe "ECPay against the shared fixtures" do
   dir = File.expand_path("../../fixtures/shared/ecpay", __dir__)
   load_cases = ->(name) { JSON.parse(File.read(File.join(dir, "#{name}.json")))["cases"] }
@@ -33,17 +35,26 @@ RSpec.describe "ECPay against the shared fixtures" do
       "invoice_datetime" => options.delete("invoice_date")&.then { |date| Date.parse(date) } }.compact
   end
 
+  # A tax-included total with the 5% tax split out.
+  def split_tax(amount)
+    total = amount["total_amount"]
+    tax = (Rational(total * 5, 105)).round
+    { "sales_amount" => total - tax, "tax_amount" => tax, "total_amount" => total }
+  end
+
   def to_ruby(operation, fixture_input)
     input = snake(fixture_input)
     options = input.delete("provider_options") || {}
     case operation
     when "issue"
+      input["amount"] = split_tax(input["amount"]) if input.dig("buyer", "ubn")
       input.merge("provider_options" => options)
     when "void"
       { "invoice" => invoice_reference(input, options), "reason" => input["reason"], "provider_options" => options }
     when "allowance"
       { "invoice" => invoice_reference(input, options), "allowance_id" => input["allowance_id"],
-        "items" => input["items"], "amount" => input["amount"], "provider_options" => options }
+        "items" => input["items"], "amount" => split_tax(input["amount"]), "price_mode" => "TAX_INCLUSIVE",
+        "tax_type" => "TAXABLE", "tax_rate" => 0.05, "provider_options" => options }
     when "voidAllowance"
       { "allowance" => { "allowance_number" => input["allowance_number"], "invoice_number" => input["invoice_number"] },
         "reason" => input["reason"] }.compact

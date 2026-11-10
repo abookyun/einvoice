@@ -52,7 +52,7 @@
 
 | Reference | 欄位 |
 | --- | --- |
-| `InvoiceReference` | `number`、`invoice_datetime`、`random_code`、`order_id`、`total_amount`、`buyer_ubn`（消費者為 `nil`） |
+| `InvoiceReference` | `number`、`invoice_datetime`、`random_code`、`order_id`、`total_amount`、`buyer_ubn`（消費者為 `nil`）、`tax_type`（品項稅別不同時為 `:mixed`）、`tax_rate` |
 | `AllowanceReference` | `allowance_number`、`allowance_date`、`invoice_number` |
 
 加值中心需要某個欄位、呼叫端卻沒有給時，adapter 可以向加值中心查詢補上。補不到就丟出 `ValidationError`，並說明缺少哪個欄位。adapter 絕不用猜的值補上。查詢本身失敗時，見下方的錯誤。
@@ -65,15 +65,24 @@
 | `allowance_date` | `Date` | `AllowanceDate` |
 | `cancel_datetime` | `Time`，UTC+8。加值中心沒有回傳時為 `nil` | `CancelDate` 和 `CancelTime` |
 
-**金額。** 發票照 F0401。買方是消費者時，`sales_amount` 含稅，`tax_amount` 為 `0`。買方是營業人時，`sales_amount` 不含稅，`tax_amount` 是稅額。折讓照 G0401：金額不含稅。如果呼叫端給的 `tax_amount` 是 `0`，由 core 從應稅品項拆出稅額，四捨五入，尾差放在最後一個應稅品項。只有 core 計算稅額，adapter 使用它的結果。
+**金額。** 開立和折讓用同一種方式描述品項：`price_mode` 說明品項金額是否含稅，`tax_type` 是整張的稅別（品項可以有自己的），`tax_rate` 是應稅品項的稅率。折讓的 `tax_type` 和 `tax_rate` 從 input 取得，沒有時從發票的 reference 取得，沒有預設值。原發票是混合稅時，每個折讓品項都必須帶自己的 `tax_type`。
+
+core 依品項算出稅額，也就是 input 的 `#tax_breakdown`。只有 core 計算稅額，adapter 從明細讀取需要的值：
+
+- 每一列有 `net_amount`、`tax`、`gross_amount`，以及 `net_unit_price` 和 `gross_unit_price`。每一列的稅額是整數，四捨五入，尾差放在最後一個應稅列。單價由品項的 `unit_price` 算出，四捨五入到 7 位小數，所以「單價 × 數量」和該列金額可能差一點，差距來自該列稅額的四捨五入。各家 note 寫明它的 API 容許多少差距。
+- 合計有 `sales_amount`（未稅）、`taxable_amount`、`zero_rated_amount`、`tax_free_amount`、`tax_amount` 和 `total_amount`。稅額是 `round(應稅銷售額 × tax_rate)`。
+- 零稅率和免稅的品項稅額為 `0`。
+
+呼叫端給的 `AmountSummary` 拿來和明細核對，不會用來指示 core 怎麼算，core 也不會改動呼叫端的品項。發票照 F0401：買方是消費者時，`sales_amount` 含稅，`tax_amount` 為 `0`；買方是營業人時，`tax_amount` 必須等於明細的稅額。折讓照 G0401：`sales_amount` 不含稅，`tax_amount` 是明細的稅額。
 
 **稅率。** `tax_rate` 是小數，例如 `0.05`。core 只接受 MIG 的稅率：`0`、`0.01`、`0.02`、`0.05`、`0.15`、`0.25` `[mig 表 4-18]`。應稅的預設值是 `0.05`，零稅率和免稅是 `0`。加值中心無法送出某個稅率時，adapter 丟出 `UnsupportedError`。
 
-**Input 檢查。** adapter 執行前，core 會先檢查：
+**Input 檢查。** adapter 執行前，core 會先檢查。
 
-- `ubn` 是 8 位數字。B2B 發票一定要有。如果呼叫端指定了 `category`，必須和 `ubn` 一致。
+- `ubn` 是 8 位數字，也就是企業的統一編號。MIG 表 4-7 允許 8 到 10 位的 BAN，但 9 位和 10 位的形式不用在這裡的買方。B2B 發票一定要有 `ubn`。如果呼叫端指定了 `category`，必須和 `ubn` 一致。
 - 總計是整數，而且不能是負數。品項的數量、單價、金額是數字，最多 7 位小數。
-- 手機條碼是 `/` 加 7 個字元。自然人憑證是 2 個英文字母加 14 個數字。
+- 金額和品項一致，規則見上面的「金額」。
+- 手機條碼是 `/` 加 7 個字元。自然人憑證是 2 個英文字母加 14 個數字。這些格式來自 ECPay 和 ezPay 的文件，MIG 只列出載具類別。
 - 作廢原因是 1 到 20 個字元。作廢折讓的原因可以不給，沒給時 core 補上 `作廢折讓`。
 - 捐贈和載具可以同時給，MIG 允許這樣做。
 

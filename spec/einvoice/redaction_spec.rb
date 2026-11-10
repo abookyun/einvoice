@@ -8,7 +8,8 @@ RSpec.describe Einvoice::Redaction do
     let(:result) do
       Einvoice::QueryInvoiceResult.new(
         invoice_number: "AB12345678", invoice_datetime: nil, random_code: "1234", order_id: "O1",
-        status: :issued, amount: nil, buyer: nil, items: [], raw: { "IIS_Customer_Name" => "王小明" }
+        status: :issued, amount: nil, buyer: nil, items: [], tax_type: nil, tax_rate: nil,
+        raw: { "IIS_Customer_Name" => "王小明" }
       )
     end
 

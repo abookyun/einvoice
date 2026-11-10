@@ -68,7 +68,8 @@ RSpec.describe Einvoice::MockProvider do
     it "returns references that carry the original document" do
       expect(issued.reference).to eq(Einvoice::InvoiceReference.new(
                                        number: issued.invoice_number, invoice_datetime: issued.invoice_datetime,
-                                       random_code: issued.random_code, order_id: "O1", total_amount: 100
+                                       random_code: issued.random_code, order_id: "O1", total_amount: 100,
+                                       tax_type: Einvoice::TaxType::TAXABLE, tax_rate: Rational(5, 100)
                                      ))
       found = provider.query({ invoice: issued.invoice_number })
       expect(found.reference).to eq(issued.reference)
@@ -79,7 +80,7 @@ RSpec.describe Einvoice::MockProvider do
       allowance = provider.allowance({
         invoice: issued.reference, allowance_id: "A1",
         items: [{ description: "x", quantity: 1, unit_price: 100, amount: 100 }],
-        amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
+        amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }, price_mode: "TAX_INCLUSIVE"
       })
       expect(allowance.allowance_date).to be_a(Date)
       cancelled = provider.void_allowance({ allowance: allowance.reference })
@@ -92,7 +93,7 @@ RSpec.describe Einvoice::MockProvider do
       provider.allowance({
         invoice: issued.reference, allowance_id: "A1",
         items: [{ description: "x", quantity: 1, unit_price: 100, amount: 100 }],
-        amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
+        amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }, price_mode: "TAX_INCLUSIVE"
       })
       expect(provider.query({ invoice: issued.reference }).status)
         .to eq(Einvoice::InvoiceStatus::ALLOWANCE)
@@ -104,7 +105,7 @@ RSpec.describe Einvoice::MockProvider do
         provider.allowance({
           invoice: issued.reference, allowance_id: "A1",
           items: [{ description: "x", quantity: 1, unit_price: 100, amount: 100 }],
-          amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
+          amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }, price_mode: "TAX_INCLUSIVE"
         })
       end.to raise_error(Einvoice::ConflictError)
     end
@@ -141,7 +142,7 @@ RSpec.describe Einvoice::MockProvider do
         provider.allowance(invoice: issued.reference, allowance_id: "AL_1",
                            items: [{ description: "商品", quantity: 1, unit_price: 50,
                                      amount: 50 }],
-                           amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 })
+                           amount: { sales_amount: 48, tax_amount: 2, total_amount: 50 }, price_mode: "TAX_INCLUSIVE")
       end.to raise_error(Einvoice::ConflictError) { |error|
         # Not ALREADY_VOIDED: no credit was recorded, so "treat as success" —
         # what that reason instructs — would invent a refund.

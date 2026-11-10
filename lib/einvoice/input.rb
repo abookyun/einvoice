@@ -32,6 +32,8 @@ module Einvoice
       TaxType::ZERO_RATED => 0r,
       TaxType::TAX_FREE => 0r
     }.freeze
+    # A reference or an allowance can describe a mixed-tax invoice.
+    REFERENCE_TAX_TYPES = (TaxType::ALL + [TaxType::MIXED]).freeze
 
     module_function
 
@@ -42,16 +44,16 @@ module Einvoice
       items = build_items(h[:items], provider)
       amount = build_amount(h[:amount], provider)
       buyer = build_buyer(h[:buyer], provider)
-      tax_type = enum!(h[:tax_type], TaxType, :tax_type, provider)
-      category = h[:category] && enum!(h[:category], InvoiceCategory, :category, provider)
+      tax_type = enum!(h[:tax_type], TaxType::ALL, :tax_type, provider)
+      category = h[:category] && enum!(h[:category], InvoiceCategory::ALL, :category, provider)
       check_category!(category, buyer, provider)
-      IssueInvoiceInput.new(
+      parsed = IssueInvoiceInput.new(
         order_id: fetch!(h, :order_id, provider),
         buyer: buyer,
         items: items,
         amount: amount,
         tax_type: tax_type,
-        price_mode: enum!(h[:price_mode], PriceMode, :price_mode, provider),
+        price_mode: enum!(h[:price_mode], PriceMode::ALL, :price_mode, provider),
         tax_rate: tax_rate!(h[:tax_rate], tax_type, provider),
         category: category,
         carrier: build_carrier(h[:carrier], provider),
@@ -61,6 +63,8 @@ module Einvoice
         exchange_rate: h[:exchange_rate],
         provider_options: h[:provider_options]
       )
+      check_issue_amount!(parsed, provider)
+      parsed
     end
 
     def void(input, provider: nil)
@@ -74,17 +78,33 @@ module Einvoice
       )
     end
 
+    # The tax type and rate come from the input, else from the invoice
+    # reference. There is no default: an allowance taxed at the wrong rate is a
+    # wrong filing. A zero-rated or tax-free allowance has rate 0.
     def allowance(input, provider: nil)
       return input if input.is_a?(AllowanceInput)
 
       h = hash!(input, "input", provider)
-      AllowanceInput.new(
-        invoice: invoice_reference!(h[:invoice], provider, need_number: true),
+      invoice = invoice_reference!(h[:invoice], provider, need_number: true)
+      tax_type = h[:tax_type] ? enum!(h[:tax_type], REFERENCE_TAX_TYPES, :tax_type, provider) : invoice.tax_type
+      fail!("tax_type is required, or invoice.tax_type in the reference", provider) if tax_type.nil?
+
+      tax_rate = h[:tax_rate].nil? ? invoice.tax_rate : mig_rate!(h[:tax_rate], "tax_rate", provider)
+      tax_rate ||= 0r if [TaxType::ZERO_RATED, TaxType::TAX_FREE].include?(tax_type)
+      fail!("tax_rate is required, or invoice.tax_rate in the reference", provider) if tax_rate.nil?
+
+      parsed = AllowanceInput.new(
+        invoice: invoice,
         allowance_id: fetch!(h, :allowance_id, provider),
         items: build_items(h[:items], provider),
         amount: build_amount(h[:amount], provider),
+        price_mode: enum!(h[:price_mode], PriceMode::ALL, :price_mode, provider),
+        tax_type: tax_type,
+        tax_rate: tax_rate,
         provider_options: h[:provider_options]
       )
+      check_allowance_amount!(parsed, provider)
+      parsed
     end
 
     def void_allowance(input, provider: nil)
@@ -116,6 +136,45 @@ module Einvoice
       build_carrier(input, provider)
     end
 
+    # --- amounts ---------------------------------------------------------------
+
+    # The items decide the totals. An invoice follows F0401: for a consumer the
+    # tax is inside sales_amount and tax_amount is 0, for a business it is apart.
+    # Either way the tax is round(taxable sales × tax_rate), so the same input
+    # gets the same tax at every provider.
+    def check_issue_amount!(input, provider)
+      breakdown = input.tax_breakdown(provider: provider)
+      amount = input.amount
+      check_total!(amount, breakdown, provider)
+      if input.resolved_category == InvoiceCategory::B2B
+        check_tax!(amount, breakdown, input.tax_rate, provider)
+      elsif !amount.tax_amount.zero?
+        fail!("a B2C invoice has tax_amount 0 and the tax inside sales_amount (F0401), got tax_amount " \
+              "#{amount.tax_amount}", provider)
+      end
+    end
+
+    # An allowance follows G0401: sales_amount excludes tax.
+    def check_allowance_amount!(input, provider)
+      breakdown = input.tax_breakdown(provider: provider)
+      check_total!(input.amount, breakdown, provider)
+      check_tax!(input.amount, breakdown, input.tax_rate, provider)
+    end
+
+    def check_total!(amount, breakdown, provider)
+      return if amount.total_amount == breakdown.total_amount
+
+      fail!("total_amount is #{amount.total_amount}, but the items add up to #{breakdown.total_amount} " \
+            "with tax", provider)
+    end
+
+    def check_tax!(amount, breakdown, rate, provider)
+      return if amount.tax_amount == breakdown.tax_amount
+
+      fail!("tax_amount is #{amount.tax_amount}, but the tax of the items is #{breakdown.tax_amount} " \
+            "(taxable #{breakdown.taxable_amount} at #{Number.plain(rate.to_r)})", provider)
+    end
+
     # --- references ------------------------------------------------------------
 
     # An InvoiceReference, a Hash of its fields, or a plain invoice number.
@@ -143,7 +202,9 @@ module Einvoice
         order_id: presence(h[:order_id]),
         total_amount: h[:total_amount] && Number.integer!(h[:total_amount], field: "invoice.total_amount",
                                                                              provider: provider),
-        buyer_ubn: ubn
+        buyer_ubn: ubn,
+        tax_type: h[:tax_type] && enum!(h[:tax_type], REFERENCE_TAX_TYPES, :"invoice.tax_type", provider),
+        tax_rate: h[:tax_rate].nil? ? nil : mig_rate!(h[:tax_rate], "invoice.tax_rate", provider)
       )
     end
 
@@ -185,7 +246,7 @@ module Einvoice
       return value if value.is_a?(Carrier)
 
       h = hash!(value, "carrier", provider)
-      type = enum!(h[:type], CarrierType, :carrier_type, provider)
+      type = enum!(h[:type], CarrierType::ALL, :carrier_type, provider)
       format = CARRIER_FORMATS[type]
       if format && !h[:code].to_s.match?(format)
         fail!("carrier code for #{type} must match #{format.source}, got #{h[:code].inspect}", provider)
@@ -240,7 +301,7 @@ module Einvoice
           unit_price: fetch!(h, :unit_price, provider),
           amount: fetch!(h, :amount, provider),
           unit: h[:unit],
-          tax_type: h[:tax_type] && enum!(h[:tax_type], TaxType, :tax_type, provider),
+          tax_type: h[:tax_type] && enum!(h[:tax_type], TaxType::ALL, :tax_type, provider),
           remark: h[:remark]
         )
       end
@@ -263,9 +324,13 @@ module Einvoice
     def tax_rate!(value, tax_type, provider)
       return DEFAULT_TAX_RATES[tax_type] if value.nil?
 
-      rate = Number.decimal!(value, field: "tax_rate", provider: provider)
+      mig_rate!(value, "tax_rate", provider)
+    end
+
+    def mig_rate!(value, field, provider)
+      rate = Number.decimal!(value, field: field, provider: provider)
       unless TAX_RATES.include?(rate)
-        fail!("tax_rate must be one of the MIG rates (0, 0.01, 0.02, 0.05, 0.15, 0.25), got #{value.inspect}",
+        fail!("#{field} must be one of the MIG rates (0, 0.01, 0.02, 0.05, 0.15, 0.25), got #{value.inspect}",
               provider)
       end
       rate
@@ -279,11 +344,11 @@ module Einvoice
 
     # --- helpers ---------------------------------------------------------------
 
-    def enum!(value, mod, field, provider)
-      return value if mod::ALL.include?(value)
+    def enum!(value, allowed, field, provider)
+      return value if allowed.include?(value)
 
       symbol = value.is_a?(String) ? value.downcase.to_sym : nil
-      return symbol if symbol && mod::ALL.include?(symbol)
+      return symbol if symbol && allowed.include?(symbol)
 
       fail!("invalid #{field}: #{value.inspect}", provider)
     end

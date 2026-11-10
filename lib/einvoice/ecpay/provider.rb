@@ -31,6 +31,8 @@ module Einvoice
 
       # ECPay ItemTaxType → unified 課稅別, for reading a queried invoice back.
       TAX_CODE_TO_TYPE = Payload::TAX_TYPE.invert.freeze
+      # The only rate ECPay applies to a taxable line.
+      TAXABLE_RATE = Rational(5, 100)
 
       attr_reader :capabilities, :client
 
@@ -80,6 +82,8 @@ module Einvoice
           order_id: parsed.order_id,
           total_amount: parsed.amount.total_amount,
           buyer_ubn: parsed.buyer&.ubn,
+          tax_type: TaxType.of(parsed.items, parsed.tax_type),
+          tax_rate: parsed.tax_rate,
           status: InvoiceStatus::ISSUED,
           raw: result
         )
@@ -108,6 +112,7 @@ module Einvoice
       # have ECPay tell the buyer (S 簡訊 / E 信箱 / A 兩者 / N 不通知).
       def allowance(input)
         parsed = Input.allowance(input, provider: name)
+        assert_rate_supported!(parsed)
         options = Payload.string_keys(parsed.provider_options)
 
         data = {
@@ -118,7 +123,7 @@ module Einvoice
           "NotifyPhone" => options["notify_phone"],
           "AllowanceAmount" => parsed.amount.total_amount,
           "Reason" => options["reason"],
-          "Items" => Payload.items(parsed.items)
+          "Items" => Payload.allowance_items(parsed)
         }.compact
         Payload.check_allowance!(data) if @validate_payload
         data["InvoiceDate"] = invoice_date(parsed.invoice, "allowance")
@@ -200,9 +205,10 @@ module Einvoice
 
       private
 
-      # ECPay fixes the rate by TaxType. A taxable invoice is always 5%.
+      # ECPay fixes the rate by TaxType. A taxable line is always 5%.
       def assert_rate_supported!(parsed)
-        return unless parsed.tax_type == TaxType::TAXABLE && parsed.tax_rate != Rational(5, 100)
+        taxable = parsed.items.any? { |item| (item.tax_type || parsed.tax_type) == TaxType::TAXABLE }
+        return unless taxable && parsed.tax_rate != TAXABLE_RATE
 
         raise UnsupportedError.new("ECPay taxes a taxable invoice at 0.05 only, got #{parsed.tax_rate.to_f}",
                                    provider: name)
@@ -211,6 +217,8 @@ module Einvoice
       def build_query_result(result, reference)
         total = result["IIS_Sales_Amount"].to_i
         tax = result["IIS_Tax_Amount"].to_i
+        items = build_items(result["Items"])
+        tax_type = items.empty? ? nil : TaxType.of(items, nil)
 
         QueryInvoiceResult.new(
           invoice_number: result["IIS_Number"] || reference.number.to_s,
@@ -221,9 +229,19 @@ module Einvoice
           amount: AmountSummary.new(sales_amount: total - tax, tax_amount: tax,
                                     total_amount: total),
           buyer: build_buyer(result),
-          items: build_items(result["Items"]),
+          items: items,
+          tax_type: tax_type,
+          tax_rate: query_rate(tax_type),
           raw: result
         )
+      end
+
+      # ECPay taxes taxable lines at 5% only. A special-tax rate is not returned.
+      def query_rate(tax_type)
+        case tax_type
+        when TaxType::TAXABLE, TaxType::MIXED then TAXABLE_RATE
+        when TaxType::ZERO_RATED, TaxType::TAX_FREE then 0r
+        end
       end
 
       def build_buyer(result)

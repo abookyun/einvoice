@@ -72,16 +72,43 @@ RSpec.describe Einvoice::Input do
       e.message
     end
 
+    # F0401 for a business buyer: the tax is apart from the sales amount.
+    let(:b2b_amount) { { "sales_amount" => 95, "tax_amount" => 5, "total_amount" => 100 } }
+
     it "requires an 8-digit buyer ubn" do
       expect(error_for { issue(buyer: { "ubn" => "abc" }) }).to match(/buyer ubn must be 8 digits/)
-      expect(issue(buyer: { "ubn" => 53_538_851 }).buyer.ubn).to eq("53538851")
+      expect(issue(buyer: { "ubn" => 53_538_851 }, amount: b2b_amount).buyer.ubn).to eq("53538851")
     end
 
     it "makes the category agree with the buyer ubn" do
       expect(error_for { issue(category: "B2B") }).to match(/B2B invoice needs buyer.ubn/)
       expect(error_for { issue(category: "B2C", buyer: { "ubn" => "53538851" }) })
         .to match(/B2C invoice cannot carry buyer.ubn/)
-      expect(issue(category: "B2B", buyer: { "ubn" => "53538851" }).category).to eq(:b2b)
+      expect(issue(category: "B2B", buyer: { "ubn" => "53538851" }, amount: b2b_amount).category).to eq(:b2b)
+    end
+
+    it "checks the total against the items" do
+      expect(error_for { issue(amount: { "sales_amount" => 90, "tax_amount" => 0, "total_amount" => 90 }) })
+        .to match(/total_amount is 90, but the items add up to 100 with tax/)
+      expect(issue(price_mode: "TAX_EXCLUSIVE", amount: { "sales_amount" => 105, "tax_amount" => 0,
+                                                          "total_amount" => 105 }).amount.total_amount).to eq(105)
+    end
+
+    # The same tax at every provider: round(taxable sales × tax_rate) for a
+    # business, and 0 for a consumer, whose tax is inside sales_amount.
+    it "checks the tax against the items" do
+      business = { buyer: { "ubn" => "53538851" } }
+      amount = ->(sales, tax) { { "sales_amount" => sales, "tax_amount" => tax, "total_amount" => sales + tax } }
+      expect(error_for { issue(**business, amount: amount.call(100, 0)) })
+        .to match(/tax_amount is 0, but the tax of the items is 5 \(taxable 95 at 0.05\)/)
+      expect(error_for { issue(**business, amount: amount.call(96, 4)) })
+        .to match(/tax_amount is 4, but the tax of the items is 5/)
+      expect(error_for { issue(amount: b2b_amount) }).to match(/a B2C invoice has tax_amount 0/)
+
+      mixed = [{ "description" => "a", "quantity" => 1, "unit_price" => 100, "amount" => 100 },
+               { "description" => "b", "quantity" => 1, "unit_price" => 50, "amount" => 50, "tax_type" => "TAX_FREE" }]
+      input = issue(**business, items: mixed, amount: amount.call(145, 5))
+      expect(input.tax_breakdown).to have_attributes(taxable_amount: 95, tax_free_amount: 50, tax_amount: 5)
     end
 
     it "rejects negative totals" do
@@ -114,7 +141,7 @@ RSpec.describe Einvoice::Input do
     it "defaults tax_rate by tax type" do
       expect(issue.tax_rate).to eq(Rational(5, 100))
       expect(issue(tax_type: "ZERO_RATED").tax_rate).to eq(0)
-      expect(issue(tax_type: "SPECIAL").tax_rate).to be_nil
+      expect(error_for { issue(tax_type: "SPECIAL") }).to match(/tax_rate is required for a special line/)
     end
 
     it "accepts only the MIG tax rates, as decimals" do
@@ -145,6 +172,99 @@ RSpec.describe Einvoice::Input do
     it "limits the reason to 20 characters" do
       expect { described_class.void({ "invoice" => "JU1", "reason" => "x" * 21 }) }
         .to raise_error(Einvoice::ValidationError, /reason must be 20 characters or fewer/)
+    end
+  end
+
+  describe ".allowance" do
+    let(:taxable) { Einvoice::InvoiceReference.new(number: "JU1", tax_type: :taxable, tax_rate: Rational(5, 100)) }
+
+    def allowance(items, amount, invoice: taxable, price_mode: "TAX_INCLUSIVE", **rest)
+      described_class.allowance({ invoice: invoice, allowance_id: "A1", items: items, amount: amount,
+                                  price_mode: price_mode, **rest })
+    end
+
+    def item(amount, **rest)
+      { description: "x", quantity: 1, unit_price: amount, amount: amount }.merge(rest)
+    end
+
+    def taxes(input)
+      input.tax_breakdown.lines.map { |line| [line.net_amount, line.tax] }
+    end
+
+    it "splits the tax out of tax-included items, and leaves the items as given" do
+      input = allowance([item(100)], { sales_amount: 95, tax_amount: 5, total_amount: 100 })
+      line = input.tax_breakdown.lines.first
+      expect(line).to have_attributes(net_amount: 95, tax: 5, gross_amount: 100, net_unit_price: 95.2380952,
+                                      gross_unit_price: 100)
+      expect(input.items.first).to have_attributes(amount: 100, unit_price: 100)
+    end
+
+    it "puts the rounding remainder on the last taxable line" do
+      input = allowance([item(10), item(10), item(10)], { sales_amount: 29, tax_amount: 1, total_amount: 30 })
+      expect(taxes(input)).to eq([[10, 0], [10, 0], [9, 1]])
+    end
+
+    it "adds the tax to tax-excluded items" do
+      input = allowance([item(95), item(48)], { sales_amount: 143, tax_amount: 7, total_amount: 150 },
+                        price_mode: "TAX_EXCLUSIVE")
+      expect(taxes(input)).to eq([[95, 5], [48, 2]])
+      expect(input.tax_breakdown.lines.first.gross_unit_price).to eq(99.75)
+    end
+
+    it "keeps a fractional amount as a Float" do
+      input = allowance([item(10.5)], { sales_amount: 10, tax_amount: 1, total_amount: 11 })
+      expect(taxes(input)).to eq([[9.5, 1]])
+    end
+
+    # A zero-rated invoice, such as an export, has no tax to split out. The core
+    # used to read tax_amount 0 as "split the 5% out" and filed 952 + 48.
+    it "takes no tax from a zero-rated or tax-free invoice" do
+      export = Einvoice::InvoiceReference.new(number: "JU1", tax_type: :zero_rated, tax_rate: 0)
+      input = allowance([item(1000)], { sales_amount: 1000, tax_amount: 0, total_amount: 1000 }, invoice: export)
+      expect(taxes(input)).to eq([[1000, 0]])
+      expect { allowance([item(1000)], { sales_amount: 952, tax_amount: 48, total_amount: 1000 }, invoice: export) }
+        .to raise_error(Einvoice::ValidationError, /tax_amount is 48, but the tax of the items is 0/)
+
+      free = allowance([item(100)], { sales_amount: 100, tax_amount: 0, total_amount: 100 },
+                       invoice: "JU1", tax_type: "TAX_FREE")
+      expect(free.tax_rate).to eq(0)
+    end
+
+    it "needs every item's tax type when the invoice has mixed tax" do
+      mixed = Einvoice::InvoiceReference.new(number: "JU1", tax_type: :mixed, tax_rate: Rational(5, 100))
+      amount = { sales_amount: 148, tax_amount: 2, total_amount: 150 }
+      expect { allowance([item(100), item(50)], amount, invoice: mixed) }
+        .to raise_error(Einvoice::ValidationError, /items\[0\].tax_type is required when the invoice has mixed tax/)
+
+      input = allowance([item(100, tax_type: "TAX_FREE"), item(50, tax_type: "TAXABLE")],
+                        { sales_amount: 148, tax_amount: 2, total_amount: 150 }, invoice: mixed)
+      expect(taxes(input)).to eq([[100, 0], [48, 2]])
+      expect(input.tax_breakdown).to have_attributes(taxable_amount: 48, tax_free_amount: 100)
+    end
+
+    it "takes the tax type and rate from the input before the reference, and has no default" do
+      input = allowance([item(100)], { sales_amount: 99, tax_amount: 1, total_amount: 100 }, tax_rate: 0.01)
+      expect(input.tax_rate).to eq(Rational(1, 100))
+
+      expect { allowance([item(100)], { sales_amount: 95, tax_amount: 5, total_amount: 100 }, invoice: "JU1") }
+        .to raise_error(Einvoice::ValidationError, /tax_type is required, or invoice.tax_type in the reference/)
+      expect do
+        allowance([item(100)], { sales_amount: 95, tax_amount: 5, total_amount: 100 }, invoice: "JU1",
+                                                                                       tax_type: "TAXABLE")
+      end.to raise_error(Einvoice::ValidationError, /tax_rate is required, or invoice.tax_rate/)
+    end
+
+    it "checks the amount against the items, as G0401 has it" do
+      expect { allowance([item(90)], { sales_amount: 95, tax_amount: 5, total_amount: 100 }) }
+        .to raise_error(Einvoice::ValidationError, /total_amount is 100, but the items add up to 90/)
+      # Tax 0 with tax-included items was the old way to ask for a split.
+      expect { allowance([item(100)], { sales_amount: 100, tax_amount: 0, total_amount: 100 }) }
+        .to raise_error(Einvoice::ValidationError, /tax_amount is 0, but the tax of the items is 5/)
+      # Untaxed items cannot carry tax: this used to give sales 100, tax 0, total 105.
+      expect do
+        allowance([item(100, tax_type: "TAX_FREE")], { sales_amount: 100, tax_amount: 5, total_amount: 105 },
+                  price_mode: "TAX_EXCLUSIVE")
+      end.to raise_error(Einvoice::ValidationError, /total_amount is 105, but the items add up to 100/)
     end
   end
 
@@ -188,7 +308,7 @@ RSpec.describe Einvoice::Input do
     it "reads a stored reference back unchanged" do
       invoice = Einvoice::InvoiceReference.new(
         number: "JU1", invoice_datetime: Time.utc(2026, 7, 31, 16, 30, Rational(1, 4)), random_code: "0123",
-        order_id: "O1", total_amount: 100, buyer_ubn: "53538851"
+        order_id: "O1", total_amount: 100, buyer_ubn: "53538851", tax_type: :mixed, tax_rate: Rational(5, 100)
       )
       allowance = Einvoice::AllowanceReference.new(allowance_number: "A1", allowance_date: Date.new(2026, 8, 1),
                                                    invoice_number: "JU1")

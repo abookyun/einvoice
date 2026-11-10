@@ -13,6 +13,9 @@ RSpec.describe Einvoice::ECPay::Payload do
     }.merge(overrides), provider: "ecpay")
   end
 
+  # A 統編 invoice keeps the tax apart from the sales amount (F0401).
+  let(:b2b_amount) { { sales_amount: 95, tax_amount: 5, total_amount: 100 } }
+
   def build(validate: true, **overrides)
     described_class.issue(parse(overrides), validate: validate)
   end
@@ -59,7 +62,7 @@ RSpec.describe Einvoice::ECPay::Payload do
     end
 
     it "maps 特種稅額 to InvType 08" do
-      expect(build(tax_type: "SPECIAL")).to include("TaxType" => "4", "InvType" => "08")
+      expect(build(tax_type: "SPECIAL", tax_rate: 0.15)).to include("TaxType" => "4", "InvType" => "08")
     end
 
     # 混合稅率 is not something the caller asks for — it is implied by items that
@@ -114,13 +117,15 @@ RSpec.describe Einvoice::ECPay::Payload do
     end
 
     it "marks tax-exclusive pricing" do
-      expect(build(price_mode: "TAX_EXCLUSIVE")).to include("vat" => "0")
+      expect(build(price_mode: "TAX_EXCLUSIVE", amount: { sales_amount: 105, tax_amount: 0, total_amount: 105 }))
+        .to include("vat" => "0")
     end
 
-    # ECPay rejects this as 5000022; catching it locally saves a round trip and
-    # gives a message naming both numbers.
+    # ECPay rejects this as 5000022. Input rejects it first, so this rule only
+    # sees an input that was changed after Input checked it.
     it "rejects a total that disagrees with the items" do
-      expect { build(amount: { sales_amount: 1, tax_amount: 0, total_amount: 1 }) }
+      expect { described_class.issue(parse.with(amount: Einvoice::AmountSummary.new(sales_amount: 1, tax_amount: 0,
+                                                                                    total_amount: 1))) }
         .to raise_error(Einvoice::ValidationError, /SalesAmount \(1\) must equal the item total \(100\)/)
     end
 
@@ -128,14 +133,14 @@ RSpec.describe Einvoice::ECPay::Payload do
     # equality check would reject requests the API accepts.
     it "leaves the total alone for tax-exclusive pricing" do
       payload = build(price_mode: "TAX_EXCLUSIVE",
-                      amount: { sales_amount: 100, tax_amount: 5, total_amount: 105 })
+                      amount: { sales_amount: 105, tax_amount: 0, total_amount: 105 })
       expect(payload).to include("SalesAmount" => 105)
     end
   end
 
   describe "buyers and carriers" do
     it "sends a 統一編號 as the B2B identifier" do
-      expect(build(buyer: { ubn: "53538851", name: "測試公司" }))
+      expect(build(buyer: { ubn: "53538851", name: "測試公司" }, amount: b2b_amount))
         .to include("CustomerIdentifier" => "53538851")
     end
 
@@ -151,7 +156,10 @@ RSpec.describe Einvoice::ECPay::Payload do
     # A 統編 invoice has to be either printed or stored in a carrier; ECPay
     # answers 5000028 otherwise.
     it "requires a carrier for an unprinted B2B invoice" do
-      expect { build(carrier: nil, buyer: { ubn: "53538851", name: "測試公司" }, donation: { npoban: "168001" }) }
+      expect do
+        build(carrier: nil, buyer: { ubn: "53538851", name: "測試公司" }, amount: b2b_amount,
+              donation: { npoban: "168001" })
+      end
         .to raise_error(Einvoice::ValidationError, /non-printed B2B invoice must use a carrier/)
     end
 
@@ -163,11 +171,12 @@ RSpec.describe Einvoice::ECPay::Payload do
         .to include("CarrierType" => "3", "CarrierNum" => "/ABC1234")
     end
 
-    # Input rejects a malformed 愛心碼 first, so reaching this rule takes a
-    # Donation value object, which Input passes through untouched. Worth keeping
-    # both: the adapter is what talks to ECPay, and 5000007 is its answer.
+    # Input rejects a malformed 愛心碼 first, so this rule only sees an input
+    # changed after Input checked it. Worth keeping both: the adapter is what
+    # talks to ECPay, and 5000007 is its answer.
     it "requires a love code when donating, even if the code bypassed Input" do
-      expect { build(carrier: nil, donation: Einvoice::Donation.new(npoban: "abc")) }
+      changed = parse(carrier: nil).with(donation: Einvoice::Donation.new(npoban: "abc"))
+      expect { described_class.issue(changed) }
         .to raise_error(Einvoice::ValidationError, /LoveCode .* is required when donating/)
     end
   end
@@ -214,7 +223,8 @@ RSpec.describe Einvoice::ECPay::Payload do
   end
 
   it "can be built without validation for a rule ECPay has since relaxed" do
-    expect(build(validate: false, amount: { sales_amount: 1, tax_amount: 0, total_amount: 1 }))
+    changed = parse.with(amount: Einvoice::AmountSummary.new(sales_amount: 1, tax_amount: 0, total_amount: 1))
+    expect(described_class.issue(changed, validate: false))
       .to include("SalesAmount" => 1)
   end
 end

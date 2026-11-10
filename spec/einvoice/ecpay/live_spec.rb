@@ -76,7 +76,7 @@ RSpec.describe "ECPay live stage API", :live do
       invoice: issued.reference,
       allowance_id: "AL_#{order}",
       items: [{ description: "整合測試商品", quantity: 1, unit_price: 50, amount: 50 }],
-      amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 }
+      amount: { sales_amount: 48, tax_amount: 2, total_amount: 50 }, price_mode: "TAX_INCLUSIVE"
     )
     expect(allowance.allowance_number).not_to be_empty
     expect(allowance.invoice_number).to eq(issued.invoice_number)
@@ -126,7 +126,7 @@ RSpec.describe "ECPay live stage API", :live do
         provider.allowance(
           invoice: issued.reference, allowance_id: "AL_#{order}",
           items: [{ description: "整合測試商品", quantity: 1, unit_price: 50, amount: 50 }],
-          amount: { sales_amount: 50, tax_amount: 0, total_amount: 50 }
+          amount: { sales_amount: 48, tax_amount: 2, total_amount: 50 }, price_mode: "TAX_INCLUSIVE"
         )
       end.to raise_error(Einvoice::ConflictError) { |error|
         expect(error.reason).to eq(Einvoice::Reason::ALLOWANCE_BLOCKED_BY_VOID)
@@ -161,15 +161,13 @@ RSpec.describe "ECPay live stage API", :live do
     end
 
     it "rejects an amount that disagrees with the items" do
-      # Sent with local validation off, so it is ECPay rejecting it, not us.
-      lax = Einvoice::ECPay::Provider.new(**Einvoice::ECPay::SANDBOX,
-                                          mode: Einvoice::ProviderMode::TEST,
-                                          validate_payload: false)
+      # The core rejects this amount before any adapter runs, so the payload is
+      # built here and sent through #raw, to see ECPay's own answer.
+      parsed = Einvoice::Input.issue(issue_input(order_id))
+      bad = parsed.with(amount: Einvoice::AmountSummary.new(sales_amount: 999, tax_amount: 0, total_amount: 999))
+      data = Einvoice::ECPay::Payload.issue(bad, validate: false)
 
-      expect do
-        lax.issue(issue_input(order_id,
-                              amount: { sales_amount: 999, tax_amount: 0, total_amount: 999 }))
-      end.to raise_error(Einvoice::ValidationError, /金額/)
+      expect { provider.raw("/B2CInvoice/Issue", data) }.to raise_error(Einvoice::ValidationError, /金額/)
     end
   end
 
@@ -187,7 +185,8 @@ RSpec.describe "ECPay live stage API", :live do
     order = order_id
     issued = provider.issue(issue_input(order,
                                         buyer: { ubn: "53538851", name: "測試股份有限公司",
-                                                 email: "test@example.com" }))
+                                                 email: "test@example.com" },
+                                        amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }))
 
     expect(issued.invoice_number).to match(/\A[A-Z]{2}\d{8}\z/)
     expect(provider.query(invoice: { order_id: order }).buyer.ubn).to eq("53538851")

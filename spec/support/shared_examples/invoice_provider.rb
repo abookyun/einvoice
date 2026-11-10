@@ -46,7 +46,8 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       expect(result.total_amount).to eq(100)
       expect(result.random_code).to match(/\A\d{4}\z/)
       expect(result.invoice_datetime).to be_a(Time)
-      expect(result.reference.number).to eq(result.invoice_number)
+      expect(result.reference).to have_attributes(number: result.invoice_number, tax_type: Einvoice::TaxType::TAXABLE,
+                                                  tax_rate: Rational(5, 100))
     end
 
     it "refuses a second invoice for the same order id" do
@@ -117,7 +118,8 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       expect(result).to be_a(Einvoice::IssueInvoiceResult)
     end
 
-    b2b = { buyer: { ubn: "53538851", name: "測試股份有限公司", email: "b@x.com" } }
+    b2b = { buyer: { ubn: "53538851", name: "測試股份有限公司", email: "b@x.com" },
+            amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 } }
     mixed = {
       items: [{ description: "商品一", quantity: 1, unit_price: 50, amount: 50, tax_type: "TAXABLE" },
               { description: "商品二", quantity: 1, unit_price: 50, amount: 50, tax_type: "TAX_FREE" }]
@@ -174,7 +176,8 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
           invoice: issued.reference,
           allowance_id: "AL_AV",
           items: [{ description: "商品一", quantity: 1, unit_price: 100, amount: 100 }],
-          amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
+          amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 },
+          price_mode: "TAX_INCLUSIVE"
         })
       end.to raise_error(Einvoice::ConflictError)
     end
@@ -187,7 +190,8 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
         invoice: issued.reference,
         allowance_id: "AL_1",
         items: [{ description: "商品一", quantity: 1, unit_price: 100, amount: 100 }],
-        amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
+        amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 },
+        price_mode: "TAX_INCLUSIVE"
       })
       expect(allowance).to be_a(Einvoice::AllowanceResult)
       expect(allowance.allowance_number).to be_a(String)

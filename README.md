@@ -53,17 +53,38 @@ invoice.status          # => :issued
 provider.void(invoice: result.reference, reason: "客戶取消")
 ```
 
-`result.reference` is an `InvoiceReference`. It holds the facts about the invoice that providers ask for when you void, credit or query it later: the number, `invoice_datetime`, `random_code`, `order_id`, `total_amount` and `buyer_ubn`. Store `result.reference.to_h` with your order. It holds JSON-safe values only (`invoice_datetime` is an ISO 8601 string in UTC+8), so it survives a JSON column. Pass it back as it is as `invoice:`, or pass the reference itself. A stored time has to carry its offset: `"2026-08-01 10:00"` is refused rather than read in the wrong zone, and a plain `"2026-08-01"` is that day in Taipei. A plain invoice number also works, but a provider that needs more raises `ValidationError` and names the field. To find an invoice without its number, query `invoice: { order_id: "ORDER_1" }` on a provider that declares `QUERY_BY_ORDER_ID`. `void_allowance` takes `allowance:`, an `AllowanceReference` from `AllowanceResult#reference`.
+`result.reference` is an `InvoiceReference`. It holds the facts about the invoice that providers ask for when you void, credit or query it later: the number, `invoice_datetime`, `random_code`, `order_id`, `total_amount`, `buyer_ubn`, and its `tax_type` and `tax_rate`. Store `result.reference.to_h` with your order. It holds JSON-safe values only (`invoice_datetime` is an ISO 8601 string in UTC+8), so it survives a JSON column. Pass it back as it is as `invoice:`, or pass the reference itself. A stored time has to carry its offset: `"2026-08-01 10:00"` is refused rather than read in the wrong zone, and a plain `"2026-08-01"` is that day in Taipei. A plain invoice number also works, but a provider that needs more raises `ValidationError` and names the field. To find an invoice without its number, query `invoice: { order_id: "ORDER_1" }` on a provider that declares `QUERY_BY_ORDER_ID`. `void_allowance` takes `allowance:`, an `AllowanceReference` from `AllowanceResult#reference`.
 
 Inputs accept plain hashes (string or symbol keys) — enum fields take the canonical symbol (`:taxable`) or a wire-style string (`"TAXABLE"`). They are validated and coerced into immutable value objects before anything hits the network; a malformed request raises `Einvoice::ValidationError` locally.
 
-The checks follow the MIG:
+The checks:
 
-- A buyer `ubn` is 8 digits. A B2B invoice needs one, and an explicit `category` has to agree with it.
+- A buyer `ubn` is 8 digits, a company's 統一編號. (MIG 表 4-7 allows a BAN of 8 to 10 digits; the 9- and 10-digit forms are not used for a buyer.) A B2B invoice needs one, and an explicit `category` has to agree with it.
 - Totals are whole numbers and not negative. Item quantity, price and amount are numbers with at most 7 decimal places.
-- A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits.
-- `tax_rate` is a decimal, such as `0.05`, and has to be a MIG rate. It defaults to `0.05` for taxable sales and `0` for zero-rated or tax-free sales.
+- A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits. These formats come from the providers' docs; the MIG lists the carrier types only.
+- `tax_rate` is a decimal, such as `0.05`, and has to be a MIG rate. On an issue it defaults to `0.05` for taxable sales and `0` for zero-rated or tax-free sales. A special-tax invoice needs it.
+- The amounts agree with the items (below).
 - A void reason is at most 20 characters. A void allowance reason defaults to `作廢折讓`.
+
+### Amounts and tax
+
+The core computes the tax from the items. `price_mode` says if the item amounts include tax, `tax_type` is the type of the whole invoice (an item can have its own), and `tax_rate` is the rate. The result is `input.tax_breakdown`: the net amount, tax and gross amount of each line, and the MIG totals. Adapters read it and do not compute tax themselves. The core never changes your items.
+
+Your `amount` is checked against it. An invoice follows F0401: for a consumer the tax is inside `sales_amount` and `tax_amount` is `0`. For a business buyer `tax_amount` is `round(taxable sales × tax_rate)`:
+
+```ruby
+amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }  # 100 with tax, to a business
+```
+
+An allowance follows G0401: `sales_amount` excludes tax, for a consumer too. It takes `tax_type` and `tax_rate` from the invoice reference, so pass `issued.reference`, or give them yourself. There is no default, so a zero-rated invoice is never credited with 5% tax. When the invoice has mixed tax, give every item its `tax_type`.
+
+```ruby
+provider.allowance(
+  invoice: issued.reference, allowance_id: "AL_1", price_mode: "TAX_INCLUSIVE",
+  items: [{ description: "退貨", quantity: 1, unit_price: 100, amount: 100 }],
+  amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }
+)
+```
 
 ### Errors
 

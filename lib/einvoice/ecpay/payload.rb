@@ -91,13 +91,21 @@ module Einvoice
         end
       end
 
+      # The +Items+ of an Allowance. ECPay wants tax-included prices and amounts,
+      # which the core's breakdown has.
+      def allowance_items(parsed)
+        lines = parsed.tax_breakdown(provider: Client::PROVIDER).lines
+        items(parsed.items, parsed.tax_type).zip(lines).map do |row, line|
+          row.merge("ItemPrice" => line.gross_unit_price, "ItemTaxType" => TAX_TYPE.fetch(line.tax_type),
+                    "ItemAmount" => line.gross_amount)
+        end
+      end
+
       # An invoice whose items disagree on 課稅別 is a 混合稅率 (9) invoice; otherwise
       # the invoice-level tax type stands.
       def tax_type(parsed)
-        kinds = parsed.items.map { |item| item.tax_type || parsed.tax_type }.uniq
-        return MIXED_TAX_CODE if kinds.size > 1
-
-        TAX_TYPE.fetch(kinds.first || parsed.tax_type)
+        type = TaxType.of(parsed.items, parsed.tax_type)
+        type == TaxType::MIXED ? MIXED_TAX_CODE : TAX_TYPE.fetch(type)
       end
 
       # Field rules for a built payload. Each was checked against the live API; the

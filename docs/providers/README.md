@@ -50,7 +50,7 @@ Section 4 of every note maps the provider onto these rules. The core types follo
 
 | Reference | Fields |
 | --- | --- |
-| `InvoiceReference` | `number`, `invoice_datetime`, `random_code`, `order_id`, `total_amount`, `buyer_ubn` (`nil` for a consumer) |
+| `InvoiceReference` | `number`, `invoice_datetime`, `random_code`, `order_id`, `total_amount`, `buyer_ubn` (`nil` for a consumer), `tax_type` (`:mixed` when the items differ), `tax_rate` |
 | `AllowanceReference` | `allowance_number`, `allowance_date`, `invoice_number` |
 
 When a provider needs a field that the caller did not give, the adapter may query the provider for it. If it cannot, it raises `ValidationError` and names the field. It never fills in a guess. If the query itself fails, see the errors below.
@@ -63,15 +63,24 @@ When a provider needs a field that the caller did not give, the adapter may quer
 | `allowance_date` | `Date` | `AllowanceDate` |
 | `cancel_datetime` | `Time`, UTC+8. `nil` when the provider does not return it | `CancelDate` and `CancelTime` |
 
-**Amounts.** An invoice follows F0401. For a consumer, `sales_amount` includes tax and `tax_amount` is `0`. For a business buyer, `sales_amount` excludes tax and `tax_amount` holds the tax. An allowance follows G0401: its amounts exclude tax. If the caller gives `tax_amount` `0`, the core splits the tax out of the taxable items. It rounds half up and puts the remainder on the last taxable item. Only the core computes tax. Adapters use its result.
+**Amounts.** Issue and allowance describe their items the same way: `price_mode` says if the item amounts include tax, `tax_type` is the type of the whole document (an item can have its own), and `tax_rate` is the rate of the taxed lines. An allowance takes `tax_type` and `tax_rate` from the input, else from the invoice reference. There is no default. When the invoice has mixed tax, every allowance item needs its own `tax_type`.
+
+The core computes the tax from the items, as `#tax_breakdown` on the input. Only the core computes tax, and adapters read the values they need from the breakdown:
+
+- Each line has `net_amount`, `tax` and `gross_amount`, and `net_unit_price` and `gross_unit_price`. Line taxes are whole TWD. Each is rounded half up, and the remainder goes on the last taxed line. The unit prices come from the item's `unit_price`, rounded to 7 decimal places, so `unit price × quantity` can differ from the line amount by the rounding of the line tax. The provider note says how much difference its API allows.
+- The totals are `sales_amount` (without tax), `taxable_amount`, `zero_rated_amount`, `tax_free_amount`, `tax_amount` and `total_amount`. The tax is `round(taxable sales × tax_rate)`.
+- Zero-rated and tax-free lines have tax `0`.
+
+The caller's `AmountSummary` is checked against the breakdown. It never tells the core what to compute, and the core never changes the caller's items. An invoice follows F0401: for a consumer, `sales_amount` includes tax and `tax_amount` is `0`, and for a business buyer, `tax_amount` has to be the breakdown's tax. An allowance follows G0401: `sales_amount` excludes tax and `tax_amount` is the breakdown's tax.
 
 **Tax rate.** `tax_rate` is a decimal, for example `0.05`. The core accepts the MIG rates only: `0`, `0.01`, `0.02`, `0.05`, `0.15` and `0.25` `[mig 表 4-18]`. The default is `0.05` for taxable sales and `0` for zero-rated or tax-free sales. When a provider cannot send a rate, the adapter raises `UnsupportedError`.
 
-**Input checks.** The core checks these before an adapter runs:
+**Input checks.** The core checks these before an adapter runs.
 
-- `ubn` is 8 digits. A B2B invoice needs one. If the caller sets `category`, it must agree with `ubn`.
+- `ubn` is 8 digits: a company's 統一編號. MIG 表 4-7 allows a BAN of 8 to 10 digits, but the 9- and 10-digit forms are not used for a buyer here. A B2B invoice needs a `ubn`. If the caller sets `category`, it must agree with `ubn`.
 - Totals are integers and not negative. Item quantity, price and amount are numbers with at most 7 decimals.
-- A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits.
+- The amounts agree with the items, as described above.
+- A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits. These formats come from the ECPay and ezPay docs: the MIG lists the carrier types only.
 - A void reason is 1 to 20 characters. A void allowance reason is optional. The core fills `作廢折讓` when it is missing.
 - A donation and a carrier can both be set. The MIG allows it.
 

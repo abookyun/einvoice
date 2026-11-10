@@ -83,7 +83,8 @@ RSpec.describe Einvoice::ECPay::Provider do
     end
 
     it "carries a 統一編號 as a B2B invoice" do
-      provider.issue(issue_input(buyer: { ubn: "53538851", name: "測試公司", email: "b@x.com" }))
+      provider.issue(issue_input(buyer: { ubn: "53538851", name: "測試公司", email: "b@x.com" },
+                                 amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }))
 
       expect(ecpay.payload).to include("CustomerIdentifier" => "53538851",
                                        "CustomerName" => "測試公司")
@@ -154,7 +155,7 @@ RSpec.describe Einvoice::ECPay::Provider do
       provider.allowance(invoice: issued.reference, allowance_id: "AL_1",
                          items: [{ description: "咖啡拿鐵", quantity: 1, unit_price: 40,
                                    amount: 40 }],
-                         amount: { sales_amount: 40, tax_amount: 0, total_amount: 40 })
+                         amount: { sales_amount: 38, tax_amount: 2, total_amount: 40 }, price_mode: "TAX_INCLUSIVE")
 
       expect(provider.query(invoice: issued.reference).status)
         .to eq(Einvoice::InvoiceStatus::ALLOWANCE)
@@ -238,7 +239,7 @@ RSpec.describe Einvoice::ECPay::Provider do
       provider.allowance(invoice: issued.reference, allowance_id: "AL_1",
                          items: [{ description: "咖啡拿鐵", quantity: 1, unit_price: 40,
                                    amount: 40 }],
-                         amount: { sales_amount: 40, tax_amount: 0, total_amount: 40 })
+                         amount: { sales_amount: 38, tax_amount: 2, total_amount: 40 }, price_mode: "TAX_INCLUSIVE")
 
       expect { provider.void(invoice: issued.reference, reason: "客戶取消") }
         .to raise_error(Einvoice::ConflictError) { |e|
@@ -264,7 +265,7 @@ RSpec.describe Einvoice::ECPay::Provider do
         invoice: issued.reference,
         allowance_id: "AL_1",
         items: [{ description: "咖啡拿鐵", quantity: 1, unit_price: 100, amount: 100 }],
-        amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }
+        amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }, price_mode: "TAX_INCLUSIVE"
       }
     end
     let(:issued) { provider.issue(issue_input) }
@@ -285,6 +286,29 @@ RSpec.describe Einvoice::ECPay::Provider do
                                        "NotifyMail" => "buyer@example.com")
     end
 
+    it "sends tax-included item prices and amounts, as ECPay wants" do
+      provider.allowance(allowance_input)
+      expect(ecpay.payload["Items"].first).to include("ItemAmount" => 100, "ItemPrice" => 100)
+    end
+
+    # ECPay allows ItemPrice × ItemCount to differ from ItemAmount by 1. Here
+    # 2 × 26.25 = 52.5 against 53, because the line tax is rounded.
+    it "adds the tax to tax-excluded prices and amounts" do
+      provider.allowance(allowance_input.merge(
+                           price_mode: "TAX_EXCLUSIVE",
+                           items: [{ description: "咖啡拿鐵", quantity: 2, unit_price: 25, amount: 50 }],
+                           amount: { sales_amount: 50, tax_amount: 3, total_amount: 53 }
+                         ))
+      expect(ecpay.payload["Items"].first).to include("ItemCount" => 2, "ItemPrice" => 26.25, "ItemAmount" => 53)
+    end
+
+    it "refuses an allowance taxed at a rate ECPay does not have" do
+      at_one_percent = allowance_input.merge(tax_rate: 0.01,
+                                             amount: { sales_amount: 99, tax_amount: 1, total_amount: 100 })
+      expect { provider.allowance(at_one_percent) }
+        .to raise_error(Einvoice::UnsupportedError, /0.05 only/)
+    end
+
     it "returns the 折讓單號 and restores the credit when voided" do
       allowance = provider.allowance(allowance_input)
       expect(allowance.allowance_number).not_to be_empty
@@ -295,18 +319,6 @@ RSpec.describe Einvoice::ECPay::Provider do
 
       # With the allowance reversed the invoice is back to a plain issued state.
       expect(provider.query(invoice: issued.reference).status).to eq(Einvoice::InvoiceStatus::ISSUED)
-    end
-
-    it "checks the item total against the allowance amount before sending" do
-      bad = Einvoice::AllowanceInput.new(
-        invoice: issued.reference, allowance_id: "AL_1",
-        items: [Einvoice::InvoiceItem.new(description: "x", quantity: 1, unit_price: 90, amount: 90)],
-        amount: Einvoice::AmountSummary.new(sales_amount: 95, tax_amount: 5, total_amount: 100)
-      )
-      issued
-      expect { provider.allowance(bad) }
-        .to raise_error(Einvoice::ValidationError, /AllowanceAmount \(100\) must equal the item total \(90\)/)
-      expect(ecpay.path).to eq("/B2CInvoice/Issue")
     end
 
     it "needs the invoice number to void an allowance" do
@@ -398,14 +410,13 @@ RSpec.describe Einvoice::ECPay::Provider do
         .to raise_error(Einvoice::ValidationError, /Unknown ECPay mode/)
     end
 
-    it "can skip local payload validation for a field ECPay accepts but we reject" do
+    # The flag covers ECPay's own rules only. The core's checks always run.
+    it "can skip ECPay's own payload rules, for one ECPay has since relaxed" do
       lax = described_class.new(**Einvoice::ECPay::SANDBOX, base_url: FakeECPay::BASE_URL,
                                 validate_payload: false)
-      lax.issue(issue_input(amount: { sales_amount: 1, tax_amount: 0, total_amount: 1 },
-                            items: [{ description: "x", quantity: 1, unit_price: 100,
-                                      amount: 100 }]))
+      lax.issue(issue_input(order_id: "X" * 51))
 
-      expect(ecpay.payload).to include("SalesAmount" => 1)
+      expect(ecpay.payload).to include("RelateNumber" => "X" * 51)
     end
   end
 end

@@ -20,6 +20,20 @@ module Einvoice
     TAX_FREE   = :tax_free     # 免稅
     SPECIAL    = :special      # 特種稅額
     ALL = [TAXABLE, ZERO_RATED, TAX_FREE, SPECIAL].freeze
+    # Not a MIG tax type, and an issue input does not take it. It describes an
+    # existing invoice whose items have different tax types, on a reference or
+    # an allowance. Each allowance item then has to carry its own tax_type.
+    MIXED = :mixed
+    # Taxes that add tax to a line. ZERO_RATED and TAX_FREE lines have tax 0.
+    TAXED = [TAXABLE, SPECIAL].freeze
+
+    module_function
+
+    # The tax type of a whole invoice: the one its items share, else MIXED.
+    def of(items, invoice_tax_type)
+      kinds = items.map { |item| item.tax_type || invoice_tax_type }.uniq
+      kinds.size > 1 ? MIXED : kinds.first || invoice_tax_type
+    end
   end
 
   # Invoice category. Derived from whether the buyer has a 統一編號:
@@ -92,6 +106,9 @@ module Einvoice
   Donation::CODE_FORMAT = /\A\d{3,7}\z/
 
   # A single invoice line. +tax_type+ is required only on mixed-tax invoices.
+  # +unit_price+ and +amount+ include tax or not as the input's +price_mode+
+  # says. The core never changes them: the tax of each line is in the input's
+  # #tax_breakdown.
   InvoiceItem = Data.define(:description, :quantity, :unit_price, :amount, :unit, :tax_type, :remark) do
     def initialize(description:, quantity:, unit_price:, amount:, unit: nil, tax_type: nil, remark: nil)
       super
@@ -118,6 +135,12 @@ module Einvoice
     def resolved_category
       category || (buyer&.business? ? InvoiceCategory::B2B : InvoiceCategory::B2C)
     end
+
+    # The tax of every line and the MIG totals, computed by the core. See
+    # {TaxBreakdown}.
+    def tax_breakdown(provider: nil)
+      TaxSplit.breakdown(items, tax_type: tax_type, tax_rate: tax_rate, price_mode: price_mode, provider: provider)
+    end
   end
 
   # --- References ---
@@ -129,20 +152,23 @@ module Einvoice
   # provider for it, or raises ValidationError naming the field.
   #
   # +invoice_datetime+ is a Time in UTC+8. +buyer_ubn+ is nil for a consumer.
+  # +tax_type+ and +tax_rate+ are the invoice's, so an allowance can take them
+  # from here. +tax_type+ is MIXED when the items differ.
   #
   # A reference is stored between calls, often for days. #to_h is that stored
   # form: JSON-safe values only, with +invoice_datetime+ as an ISO 8601 string in
   # UTC+8. Pass the Hash back as +invoice:+, as it is or after a JSON round
   # trip, and Input reads the same reference.
   InvoiceReference = Data.define(:number, :invoice_datetime, :random_code, :order_id, :total_amount,
-                                 :buyer_ubn) do
+                                 :buyer_ubn, :tax_type, :tax_rate) do
     def initialize(number: nil, invoice_datetime: nil, random_code: nil, order_id: nil,
-                   total_amount: nil, buyer_ubn: nil)
+                   total_amount: nil, buyer_ubn: nil, tax_type: nil, tax_rate: nil)
       super
     end
 
     def to_h
-      super.merge(invoice_datetime: invoice_datetime && Taipei.iso8601(invoice_datetime)).compact
+      super.merge(invoice_datetime: invoice_datetime && Taipei.iso8601(invoice_datetime),
+                  tax_type: tax_type&.to_s, tax_rate: tax_rate && Number.plain(tax_rate.to_r)).compact
     end
   end
 
@@ -161,16 +187,19 @@ module Einvoice
   # --- Issue results ---
 
   # +invoice_datetime+ is a Time in UTC+8 (MIG InvoiceDate and InvoiceTime).
-  # +buyer_ubn+ is nil for a consumer.
+  # +buyer_ubn+ is nil for a consumer. +tax_type+ is TaxType.of the input, so
+  # MIXED for a mixed-tax invoice, and +tax_rate+ is the input's rate.
   IssueInvoiceResult = Data.define(
-    :invoice_number, :invoice_datetime, :random_code, :order_id, :total_amount, :buyer_ubn, :status, :raw
+    :invoice_number, :invoice_datetime, :random_code, :order_id, :total_amount, :buyer_ubn, :tax_type,
+    :tax_rate, :status, :raw
   ) do
     include Redaction::Raw
 
     def reference
       InvoiceReference.new(number: invoice_number, invoice_datetime: invoice_datetime,
                            random_code: random_code, order_id: order_id,
-                           total_amount: total_amount, buyer_ubn: buyer_ubn)
+                           total_amount: total_amount, buyer_ubn: buyer_ubn,
+                           tax_type: tax_type, tax_rate: tax_rate)
     end
   end
 
@@ -195,9 +224,21 @@ module Einvoice
 
   # --- Allowance (折讓) and its cancellation (折讓作廢) ---
 
-  AllowanceInput = Data.define(:invoice, :allowance_id, :items, :amount, :provider_options) do
-    def initialize(invoice:, allowance_id:, items:, amount:, provider_options: nil)
+  # +price_mode+ says if the item amounts include tax. +tax_type+ and
+  # +tax_rate+ come from the input, else from the invoice reference. With a
+  # MIXED tax type, every item carries its own tax_type.
+  #
+  # +amount+ follows G0401: +sales_amount+ excludes tax. Input checks it
+  # against #tax_breakdown, which holds the tax of each line.
+  AllowanceInput = Data.define(:invoice, :allowance_id, :items, :amount, :price_mode, :tax_type, :tax_rate,
+                               :provider_options) do
+    def initialize(invoice:, allowance_id:, items:, amount:, price_mode:, tax_type:, tax_rate:,
+                   provider_options: nil)
       super
+    end
+
+    def tax_breakdown(provider: nil)
+      TaxSplit.breakdown(items, tax_type: tax_type, tax_rate: tax_rate, price_mode: price_mode, provider: provider)
     end
   end
 
@@ -239,15 +280,19 @@ module Einvoice
 
   # +status+ is nil when the provider's status has no InvoiceStatus, for
   # example a cancelled (註銷) invoice.
+  #
+  # +tax_type+ and +tax_rate+ are nil when the provider does not say.
   QueryInvoiceResult = Data.define(
-    :invoice_number, :invoice_datetime, :random_code, :order_id, :status, :amount, :buyer, :items, :raw
+    :invoice_number, :invoice_datetime, :random_code, :order_id, :status, :amount, :buyer, :items, :tax_type,
+    :tax_rate, :raw
   ) do
     include Redaction::Raw
 
     def reference
       InvoiceReference.new(number: invoice_number, invoice_datetime: invoice_datetime,
                            random_code: random_code, order_id: order_id,
-                           total_amount: amount&.total_amount, buyer_ubn: buyer&.ubn)
+                           total_amount: amount&.total_amount, buyer_ubn: buyer&.ubn,
+                           tax_type: tax_type, tax_rate: tax_rate)
     end
   end
 end
