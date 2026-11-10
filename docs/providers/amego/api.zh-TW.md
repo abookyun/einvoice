@@ -549,7 +549,7 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 | `18` | 資料庫連線失敗 | `ProviderError` | |
 | `19` | 公司已停用 | `AuthError` | `ACCOUNT_SUSPENDED` |
 | `20` | `data` 不是 JSON | `ValidationError` | |
-| `21` | 使用人數過多，請稍後再試 | `ProviderError` | `RATE_LIMITED` |
+| `21` | 使用人數過多，請稍後再試 | `NetworkError` | `RATE_LIMITED` |
 | `22` | 尚未申請 API | `AuthError` | `NOT_ENROLLED` |
 | `23` | 這個 API 需要陣列 | `ValidationError` | |
 | `51` | 超過 180 天查詢期限 | `ProviderError` | |

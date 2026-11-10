@@ -547,7 +547,7 @@ Common codes:
 | `18` | Database connection failed | `ProviderError` | |
 | `19` | Company suspended | `AuthError` | `ACCOUNT_SUSPENDED` |
 | `20` | `data` is not JSON | `ValidationError` | |
-| `21` | Too many users, try later | `ProviderError` | `RATE_LIMITED` |
+| `21` | Too many users, try later | `NetworkError` | `RATE_LIMITED` |
 | `22` | API access not applied for | `AuthError` | `NOT_ENROLLED` |
 | `23` | This API takes an array | `ValidationError` | |
 | `51` | Past the 180-day query limit | `ProviderError` | |
