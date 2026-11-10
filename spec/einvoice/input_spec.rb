@@ -232,6 +232,17 @@ RSpec.describe Einvoice::Input do
       expect(taxes(input)).to eq([[10, 0], [10, 0], [9, 1]])
     end
 
+    # Four shares of 0.5 each used to round up to 1, 1, 1 and leave -1 for the
+    # last line. Largest remainder gives the 2 units to the last two lines.
+    it "never gives a line negative tax when the shares round up" do
+      exclusive = allowance([item(10)] * 4, { sales_amount: 40, tax_amount: 2, total_amount: 42 },
+                            price_mode: "TAX_EXCLUSIVE")
+      expect(taxes(exclusive)).to eq([[10, 0], [10, 0], [10, 1], [10, 1]])
+
+      inclusive = allowance([item(10.5)] * 4, { sales_amount: 40, tax_amount: 2, total_amount: 42 })
+      expect(taxes(inclusive)).to eq([[10.5, 0], [10.5, 0], [9.5, 1], [9.5, 1]])
+    end
+
     it "adds the tax to tax-excluded items" do
       input = allowance([item(95), item(48)], { sales_amount: 143, tax_amount: 7, total_amount: 150 },
                         price_mode: "TAX_EXCLUSIVE")

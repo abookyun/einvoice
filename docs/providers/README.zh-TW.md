@@ -69,7 +69,7 @@
 
 core 依品項算出稅額，也就是 input 的 `#tax_breakdown`。只有 core 計算稅額，adapter 從明細讀取需要的值：
 
-- 每一列有 `net_amount`、`tax`、`gross_amount`，以及 `net_unit_price` 和 `gross_unit_price`。每一列的稅額是整數，四捨五入，尾差放在最後一個應稅列。單價由品項的 `unit_price` 算出，四捨五入到 7 位小數，所以「單價 × 數量」和該列金額可能差一點，差距來自該列稅額的四捨五入。各家 note 寫明它的 API 容許多少差距。
+- 每一列有 `net_amount`、`tax`、`gross_amount`，以及 `net_unit_price` 和 `gross_unit_price`。每一列的稅額是整數，用最大餘數法分配：每列先取應分稅額的整數部分，剩下的稅額依小數部分由大到小補上，同分時先補後面的列。每列稅額都不會是負數。單價由品項的 `unit_price` 算出，四捨五入到 7 位小數，所以「單價 × 數量」和該列金額可能差一點，差距來自該列稅額的四捨五入。各家 note 寫明它的 API 容許多少差距。
 - 合計有 `sales_amount`（未稅）、`taxable_amount`、`zero_rated_amount`、`tax_free_amount`、`tax_amount` 和 `total_amount`。稅額是 `round(應稅銷售額 × tax_rate)`。
 - 零稅率和免稅的品項稅額為 `0`。
 

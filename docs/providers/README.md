@@ -67,7 +67,7 @@ When a provider needs a field that the caller did not give, the adapter may quer
 
 The core computes the tax from the items, as `#tax_breakdown` on the input. Only the core computes tax, and adapters read the values they need from the breakdown:
 
-- Each line has `net_amount`, `tax` and `gross_amount`, and `net_unit_price` and `gross_unit_price`. Line taxes are whole TWD. Each is rounded half up, and the remainder goes on the last taxed line. The unit prices come from the item's `unit_price`, rounded to 7 decimal places, so `unit price × quantity` can differ from the line amount by the rounding of the line tax. The provider note says how much difference its API allows.
+- Each line has `net_amount`, `tax` and `gross_amount`, and `net_unit_price` and `gross_unit_price`. Line taxes are whole TWD. They are split by the largest remainder: each line takes the whole part of its share, and the units left go to the lines with the largest fractions, later lines first on a tie. No line tax is negative. The unit prices come from the item's `unit_price`, rounded to 7 decimal places, so `unit price × quantity` can differ from the line amount by the rounding of the line tax. The provider note says how much difference its API allows.
 - The totals are `sales_amount` (without tax), `taxable_amount`, `zero_rated_amount`, `tax_free_amount`, `tax_amount` and `total_amount`. The tax is `round(taxable sales × tax_rate)`.
 - Zero-rated and tax-free lines have tax `0`.
 

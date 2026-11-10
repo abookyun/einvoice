@@ -22,9 +22,10 @@ module Einvoice
   TaxBreakdown::Line = Data.define(:tax_type, :net_amount, :tax, :gross_amount, :net_unit_price,
                                    :gross_unit_price)
 
-  # Splits tax over lines. Every method rounds each line half up and puts the
-  # remainder on the last taxed line, so the line taxes add up to the total tax.
-  # Lines that are not taxed have tax 0.
+  # Splits tax over lines by the largest remainder: each taxed line takes the
+  # whole part of its share, and the units left go to the lines with the
+  # largest fractions, later lines first on a tie. So the line taxes add up to
+  # the total tax and none is negative. Lines that are not taxed have tax 0.
   module TaxSplit
     Line = Data.define(:amount, :tax)
 
@@ -102,14 +103,10 @@ module Einvoice
     end
 
     def distribute(amounts, taxable, total)
-      last = taxable.rindex(true)
-      taxes = amounts.each_index.map do |i|
-        next 0 unless taxable[i]
-        next nil if i == last
-
-        yield(amounts[i]).round
-      end
-      taxes[last] = total - taxes.compact.sum if last
+      shares = amounts.each_index.map { |i| taxable[i] ? yield(amounts[i]) : 0r }
+      taxes = shares.map(&:floor)
+      order = amounts.each_index.select { |i| taxable[i] }.sort_by { |i| [taxes[i] - shares[i], -i] }
+      (total - taxes.sum).times { |k| taxes[order[k]] += 1 }
       taxes
     end
 
