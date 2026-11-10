@@ -367,7 +367,7 @@ Seen live `[live]`: a voided invoice has `IIS_Invalid_Status` `1` and `IIS_Remai
 ### 4.8 Contract and live tests
 
 - **Offline contract.** `spec/einvoice/ecpay/provider_spec.rb` runs the shared contract against `spec/support/fake_ecpay.rb`. The fake speaks the real envelope, encryption and `RtnCode`s.
-- **Unknown numbers.** ECPay checks the format first, so the contract gets `unknown_invoice_number: "ZZ00000000"` and `unknown_allowance_number: "9999999999999999"`.
+- **Unknown numbers.** ECPay checks the format first, so the contract gets `unknown_reference: { number: "ZZ00000000", invoice_datetime: <today> }` and `unknown_allowance_number: "9999999999999999"`.
 - **References.** The contract passes the reference from `issue` to the next steps, so `invoice_datetime` is always there.
 - **Shared fixtures.** Another SDK publishes wire fixtures for this API. The spec runs a copy of them from `spec/fixtures/shared/ecpay/`. Cases where the unified model differs on purpose are skipped, with the reason.
 - **Live specs.** `spec/einvoice/ecpay/live_spec.rb` runs against stage with `ECPAY_LIVE=1`. The stage account is shared with every other developer, so each run builds a unique order id (`RB` + time + a random number).

@@ -361,7 +361,7 @@ core 的 `tax_breakdown` 提供這些總計：`taxable_amount`、`tax_free_amoun
 ### 4.8 Contract 與 live 測試
 
 - **共用的測試帳號。** 所有開發者都用帳號 `12345678`。live spec 必須產生不重複的訂單編號和折讓單號。contract 用固定的折讓 id（`AL_1`、`AL_AV`），在 live 帳號上可能會重複。
-- **不存在的號碼。** 使用格式正確的發票號碼，例如 `unknown_invoice_number: "ZZ00000000"`。折讓單號是最多 16 字元的自由文字，所以預設的 `NOPE00000000` 可以用。
+- **不存在的號碼。** 使用格式正確的發票號碼，例如 `unknown_reference: { number: "ZZ00000000" }`。折讓單號是最多 16 字元的自由文字，所以預設的 `NOPE00000000` 可以用。
 - **開立後馬上作廢。** contract 會作廢剛開立的發票。Amego 可能回傳 `3050121`（還在開立中）或 `3050131`（佇列中）`[info 71]`。2026-10-22 實測時，開立後馬上作廢直接成功，第二次作廢丟出 `ConflictError` `[live]`。live spec 遇到 `RETRY_LATER` 仍會重試。fake 不模擬佇列。
 - **折讓。** `issue` 回傳的 reference 提供發票日期。adapter 仍會查詢買方，所以 fake 必須回應 `invoice_query`。
 - **fake。** fake 需要表單外層格式、`sign` 檢查，以及 2.3 的回應格式。

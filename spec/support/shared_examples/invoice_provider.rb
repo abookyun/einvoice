@@ -10,13 +10,16 @@
 # adapter only gets held to what it declares.
 #
 # Options:
-#   unknown_invoice_number: a number that is well-formed for the provider but
-#     does not exist there. Real APIs check the shape before they look anything
-#     up, so an adapter whose numbers have a fixed format must supply one that
-#     passes that check — otherwise the lookup fails as invalid, not missing.
+#   unknown_reference: a Hash of InvoiceReference fields for an invoice that
+#     does not exist at the provider. It has to carry every field the provider
+#     needs to query by number, and a number that is well-formed there: real
+#     APIs check both before they look anything up, so a reference that misses
+#     either fails as invalid, not missing. The default has a number and
+#     today's date, which is what ECPay needs. ezPay adds a random_code.
 #   unknown_allowance_number: the same, for a 折讓單號.
 RSpec.shared_examples "an invoice provider" do |options = {}|
-  unknown_invoice_number = options.fetch(:unknown_invoice_number, "NOPE00000000")
+  unknown_reference = options.fetch(:unknown_reference, { number: "NOPE00000000",
+                                                          invoice_datetime: Einvoice::Taipei.today.iso8601 })
   unknown_allowance_number = options.fetch(:unknown_allowance_number, "NOPE00000000")
 
   def issue_payload(order_id: "ORDER_1", **overrides)
@@ -79,8 +82,7 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
     end
 
     it "raises NotFoundError for an unknown invoice" do
-      unknown = { number: unknown_invoice_number, invoice_datetime: Einvoice::Taipei.now }
-      expect { provider.query({ invoice: unknown }) }
+      expect { provider.query({ invoice: unknown_reference }) }
         .to raise_error(Einvoice::NotFoundError)
     end
   end

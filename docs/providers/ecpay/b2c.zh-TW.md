@@ -369,7 +369,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 ### 4.8 Contract 與 live 測試
 
 - **離線 contract。** `spec/einvoice/ecpay/provider_spec.rb` 對 `spec/support/fake_ecpay.rb` 執行 shared contract。fake 使用真實的外層格式、加密方式和 `RtnCode`。
-- **不存在的號碼。** ECPay 會先檢查格式，所以 contract 收到 `unknown_invoice_number: "ZZ00000000"` 和 `unknown_allowance_number: "9999999999999999"`。
+- **不存在的號碼。** ECPay 會先檢查格式，所以 contract 收到 `unknown_reference: { number: "ZZ00000000", invoice_datetime: <今天> }` 和 `unknown_allowance_number: "9999999999999999"`。
 - **Reference。** contract 會把 `issue` 回傳的 reference 傳給後面的步驟，所以一定有 `invoice_datetime`。
 - **共用 fixture。** 另一個 SDK 公開了這個 API 的 wire fixture。spec 會執行放在 `spec/fixtures/shared/ecpay/` 的副本。unified model 刻意不同的 case 會跳過，並寫出原因。
 - **Live spec。** `spec/einvoice/ecpay/live_spec.rb` 在設定 `ECPAY_LIVE=1` 時對 stage 執行。stage 帳號和所有開發者共用，所以每次執行都會產生不重複的訂單編號（`RB` 加上時間和亂數）。

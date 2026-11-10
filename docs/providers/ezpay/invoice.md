@@ -366,7 +366,7 @@ The query has no allowance data and no cancelled status. So the adapter never re
 ### 4.8 Contract and live tests
 
 - **References.** The contract passes the reference from `issue` to the next steps. It has `random_code` and `order_id`, so query and allowance work.
-- **Unknown invoice.** The contract queries an unknown invoice with a reference that has a random code. The query reaches ezPay and comes back as `INV20006` (`NotFoundError`).
+- **Unknown invoice.** The contract queries an unknown invoice with the reference the adapter's spec passes as `unknown_reference`. For ezPay it needs a random code, for example `{ number: "ZZ00000000", random_code: "0000" }`. The query reaches ezPay and comes back as `INV20006` (`NotFoundError`).
 - **Void right after issue.** The contract voids an invoice it has just issued. Live, ezPay refuses until the next day's upload (`LIB10009`). The fake voids at once. A live spec cannot test voids in one run.
 - **Credit a voided invoice.** This test voids first, so it has the same problem live. ezPay has no documented code for "allowance on a voided invoice". The adapter reads `LIB10005` on an allowance as `ALLOWANCE_BLOCKED_BY_VOID` (6.4, see 7).
 - **Unknown allowance.** ezPay has no documented code for "allowance not found". The adapter reads `IAI10002` (query failed) on an allowance void as `NotFoundError` (6.4, see 7).

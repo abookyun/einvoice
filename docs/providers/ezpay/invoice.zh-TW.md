@@ -368,7 +368,7 @@ adapter 依原發票的買方，從 `invoice.buyer_ubn` 決定用哪一種：
 ### 4.8 Contract 與 live 測試
 
 - **Reference。** contract 把 `issue` 回傳的 reference 傳給後面的步驟。reference 有 `random_code` 和 `order_id`，所以查詢和折讓都能運作。
-- **不存在的發票。** contract 用帶有隨機碼的 reference 查詢不存在的發票。查詢會送到 ezPay，回傳 `INV20006`（`NotFoundError`）。
+- **不存在的發票。** contract 用 adapter spec 傳入的 `unknown_reference` 查詢不存在的發票。ezPay 需要隨機碼，例如 `{ number: "ZZ00000000", random_code: "0000" }`。查詢會送到 ezPay，回傳 `INV20006`（`NotFoundError`）。
 - **開立後馬上作廢。** contract 會作廢剛開立的發票。在 live 環境，ezPay 要等隔天上傳後才允許作廢（`LIB10009`）。fake 會馬上作廢。live spec 無法在同一次執行中測試作廢。
 - **對已作廢的發票開折讓。** 這個測試會先作廢，所以在 live 環境有同樣的問題。ezPay 沒有「對已作廢發票開折讓」的代碼。adapter 把折讓時的 `LIB10005` 視為 `ALLOWANCE_BLOCKED_BY_VOID`（6.4，見第 7 節）。
 - **不存在的折讓。** ezPay 沒有「查無折讓」的代碼。adapter 把作廢折讓時的 `IAI10002`（查詢失敗）視為 `NotFoundError`（6.4，見第 7 節）。

@@ -11,7 +11,7 @@ RSpec.describe Einvoice::ECPay::Provider do
   # here over the real wire format — AES envelope, PHP url-encoding and ECPay's
   # own RtnCodes included.
   it_behaves_like "an invoice provider",
-                  unknown_invoice_number: "ZZ00000000",
+                  unknown_reference: { number: "ZZ00000000", invoice_datetime: Einvoice::Taipei.today.iso8601 },
                   unknown_allowance_number: "9999999999999999"
 
   it "identifies itself and declares what it can do" do

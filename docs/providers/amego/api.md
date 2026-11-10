@@ -359,7 +359,7 @@ A void in `wait` is not done yet. The invoice is still `ISSUED` until `invoice_t
 ### 4.8 Contract and live tests
 
 - **Shared test account.** Every developer uses the account `12345678`. A live spec must build unique order ids and unique allowance numbers. The contract uses fixed allowance ids (`AL_1`, `AL_AV`), which can collide on the live account.
-- **Unknown numbers.** Use a well-formed invoice number, for example `unknown_invoice_number: "ZZ00000000"`. Allowance numbers are free text up to 16 chars, so the default `NOPE00000000` fits.
+- **Unknown numbers.** Use a well-formed invoice number, for example `unknown_reference: { number: "ZZ00000000" }`. Allowance numbers are free text up to 16 chars, so the default `NOPE00000000` fits.
 - **Void right after issue.** The contract voids an invoice it has just issued. Amego may answer `3050121` (still being issued) or `3050131` (queued) `[info 71]`. On 2026-10-22 a void right after the issue worked at once, and a second void raised `ConflictError` `[live]`. The live spec still retries on `RETRY_LATER`. The fake ignores the queue.
 - **Allowance.** The reference from `issue` gives the invoice date. The adapter still queries for the buyer, so the fake must answer `invoice_query`.
 - **A fake.** A fake needs the form envelope, the `sign` check, and the response shapes in 2.3.
