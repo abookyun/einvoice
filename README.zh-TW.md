@@ -55,7 +55,7 @@ invoice.status          # => :issued
 provider.void(invoice: result.reference, reason: "客戶取消")
 ```
 
-`result.reference` 是一個 `InvoiceReference`。它記錄之後作廢、折讓或查詢這張發票時，加值中心會要的資料：號碼、`invoice_datetime`、`random_code`、`order_id`、`total_amount` 和 `buyer_ubn`。請把它們和訂單一起存起來，之後用 `invoice:` 傳入 reference（或包含這些欄位的 Hash）。也可以只傳發票號碼，但如果加值中心需要更多資料，會丟出 `ValidationError` 並說明缺少哪個欄位。沒有發票號碼時，可以在宣告 `QUERY_BY_ORDER_ID` 的加值中心用 `invoice: { order_id: "ORDER_1" }` 查詢。`void_allowance` 收 `allowance:`，也就是 `AllowanceResult#reference` 回傳的 `AllowanceReference`。
+`result.reference` 是一個 `InvoiceReference`。它記錄之後作廢、折讓或查詢這張發票時，加值中心會要的資料：號碼、`invoice_datetime`、`random_code`、`order_id`、`total_amount` 和 `buyer_ubn`。請把 `result.reference.to_h` 和訂單一起存起來。它只包含 JSON 安全的值（`invoice_datetime` 是 UTC+8 的 ISO 8601 字串），可以直接存進 JSON 欄位。之後原樣用 `invoice:` 傳回來，或直接傳 reference 本身。存起來的時間必須帶時區：`"2026-08-01 10:00"` 會被拒絕，不會被當成錯的時區；只有日期的 `"2026-08-01"` 視為台北當天。也可以只傳發票號碼，但如果加值中心需要更多資料，會丟出 `ValidationError` 並說明缺少哪個欄位。沒有發票號碼時，可以在宣告 `QUERY_BY_ORDER_ID` 的加值中心用 `invoice: { order_id: "ORDER_1" }` 查詢。`void_allowance` 收 `allowance:`，也就是 `AllowanceResult#reference` 回傳的 `AllowanceReference`。
 
 輸入可以直接傳一般的 Hash，key 用字串或 symbol 都可以。列舉欄位可以傳標準的 symbol（`:taxable`），也可以傳傳輸格式的字串（`"TAXABLE"`）。在送出任何網路請求之前，輸入會先經過檢查，並轉換成不可變的 value object。格式錯誤的請求會在本地端丟出 `Einvoice::ValidationError`。
 

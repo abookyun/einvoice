@@ -129,18 +129,32 @@ module Einvoice
   # provider for it, or raises ValidationError naming the field.
   #
   # +invoice_datetime+ is a Time in UTC+8. +buyer_ubn+ is nil for a consumer.
+  #
+  # A reference is stored between calls, often for days. #to_h is that stored
+  # form: JSON-safe values only, with +invoice_datetime+ as an ISO 8601 string in
+  # UTC+8. Pass the Hash back as +invoice:+, as it is or after a JSON round
+  # trip, and Input reads the same reference.
   InvoiceReference = Data.define(:number, :invoice_datetime, :random_code, :order_id, :total_amount,
                                  :buyer_ubn) do
     def initialize(number: nil, invoice_datetime: nil, random_code: nil, order_id: nil,
                    total_amount: nil, buyer_ubn: nil)
       super
     end
+
+    def to_h
+      super.merge(invoice_datetime: invoice_datetime && Taipei.iso8601(invoice_datetime)).compact
+    end
   end
 
-  # The facts about an existing allowance. +allowance_date+ is a Date.
+  # The facts about an existing allowance. +allowance_date+ is a Date. #to_h is
+  # the stored form, as for InvoiceReference, with the date as YYYY-MM-DD.
   AllowanceReference = Data.define(:allowance_number, :allowance_date, :invoice_number) do
     def initialize(allowance_number:, allowance_date: nil, invoice_number: nil)
       super
+    end
+
+    def to_h
+      super.merge(allowance_date: allowance_date&.strftime("%Y-%m-%d")).compact
     end
   end
 

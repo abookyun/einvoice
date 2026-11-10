@@ -33,9 +33,10 @@ RSpec.describe Einvoice::Taipei do
     expect(described_class.date(value)).to eq(Date.new(2026, 8, 1))
   end
 
-  it "rejects a string" do
-    expect { described_class.time("2026-08-01", field: "cancel_datetime") }
-      .to raise_error(Einvoice::ValidationError, /cancel_datetime must be a Time or a Date/)
-    expect { described_class.date("2026-08-01") }.to raise_error(Einvoice::ValidationError)
+  it "reads a string only with an offset, or as a plain date" do
+    expect(described_class.date("2026-08-01T16:30:00Z")).to eq(Date.new(2026, 8, 2))
+    expect(described_class.date("2026-08-01")).to eq(Date.new(2026, 8, 1))
+    expect { described_class.time("2026-08-01T10:00:00", field: "cancel_datetime") }
+      .to raise_error(Einvoice::ValidationError, /cancel_datetime must be a date/)
   end
 end

@@ -177,10 +177,37 @@ RSpec.describe Einvoice::Input do
     it "checks the fields of a hash" do
       expect { described_class.void({ invoice: { number: "JU1", buyer_ubn: "1" }, reason: "x" }) }
         .to raise_error(Einvoice::ValidationError, /invoice.buyer_ubn must be 8 digits/)
-      expect { described_class.void({ invoice: { number: "JU1", invoice_datetime: "2026-08-01" }, reason: "x" }) }
+      expect { described_class.void({ invoice: { number: "JU1", invoice_datetime: 20_260_801 }, reason: "x" }) }
         .to raise_error(Einvoice::ValidationError, /invoice.invoice_datetime must be a Time/)
       expect { described_class.void({ invoice: { order_id: "O1" }, reason: "x" }) }
         .to raise_error(Einvoice::ValidationError, /invoice.number is required/)
+    end
+
+    # A reference is stored for days, often as JSON, so its stored form has to
+    # come back as the same reference.
+    it "reads a stored reference back unchanged" do
+      invoice = Einvoice::InvoiceReference.new(
+        number: "JU1", invoice_datetime: Time.utc(2026, 7, 31, 16, 30, Rational(1, 4)), random_code: "0123",
+        order_id: "O1", total_amount: 100, buyer_ubn: "53538851"
+      )
+      allowance = Einvoice::AllowanceReference.new(allowance_number: "A1", allowance_date: Date.new(2026, 8, 1),
+                                                   invoice_number: "JU1")
+      stored = JSON.parse(JSON.generate(invoice: invoice.to_h, allowance: allowance.to_h))
+
+      expect(stored["invoice"]["invoice_datetime"]).to eq("2026-08-01T00:30:00.250000000+08:00")
+      expect(described_class.void({ invoice: stored["invoice"], reason: "x" }).invoice).to eq(invoice)
+      expect(described_class.void_allowance({ allowance: stored["allowance"] }).allowance).to eq(allowance)
+    end
+
+    it "reads a stored time only with its offset" do
+      read = ->(value) { described_class.void({ invoice: { number: "JU1", invoice_datetime: value }, reason: "x" }) }
+      times = ["2026-08-01T10:00:00+08:00", "2026-08-01T02:00:00Z", "2026-08-01 10:00:00 +0800"]
+      expect(times.map { |time| read.call(time).invoice.invoice_datetime }.uniq)
+        .to eq([Time.new(2026, 8, 1, 10, 0, 0, "+08:00")])
+      expect(read.call("2026-08-01").invoice.invoice_datetime.strftime("%F %T %:z")).to eq("2026-08-01 00:00:00 +08:00")
+      expect { read.call("2026-08-01 10:00:00") }
+        .to raise_error(Einvoice::ValidationError, /invoice.invoice_datetime must be a date .* or a time with an offset/)
+      expect { read.call("2026-02-30") }.to raise_error(Einvoice::ValidationError, /not a valid date/)
     end
 
     it "takes an allowance as a plain number, a hash or a reference" do
