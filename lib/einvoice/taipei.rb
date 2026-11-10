@@ -72,7 +72,7 @@ module Einvoice
         invalid!("#{field} must be a date (2026-08-01) or a time with an offset (2026-08-01T10:00:00+08:00), " \
                  "got #{string.inspect}", provider)
       end
-    rescue ArgumentError, Date::Error
+    rescue ArgumentError # Date::Error is one too
       invalid!("#{field} is not a valid date or time, got #{string.inspect}", provider)
     end
 
