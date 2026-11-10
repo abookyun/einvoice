@@ -524,7 +524,7 @@ unified model 會用到的回應欄位：
 | `IIS_Category` | 有統一編號為 `B2B`，沒有為 `B2C` |
 | `IIS_Type` | `07` / `08` |
 | `IIS_Tax_Type` | `1`、`2`、`3`、`4`、`9` |
-| `IIS_Tax_Rate` | 稅率，2 位小數 |
+| `IIS_Tax_Rate` | 稅率，2 位小數。adapter 只在 `SPECIAL` 發票讀取它。其他稅別的稅率是固定的 |
 | `IIS_Tax_Amount` | 稅額。**只有 B2B 發票才有值。** B2C 為 `0`，因為稅額包含在金額裡 |
 | `IIS_Sales_Amount` | 發票金額，含稅 |
 | `IIS_Create_Date` | 開立時間，`yyyy-MM-dd HH:mm:ss` |

@@ -184,6 +184,16 @@ RSpec.describe Einvoice::ECPay::Provider do
       expect(found).to have_attributes(tax_type: Einvoice::TaxType::TAX_FREE, tax_rate: 0)
       expect(found.reference).to eq(issued.reference)
     end
+
+    # ECPay fixes no rate for special tax, so the rate comes from GetIssue.
+    it "reads the rate of a special-tax invoice back from ECPay" do
+      issued = provider.issue(issue_input(tax_type: "SPECIAL", tax_rate: 0.15,
+                                          provider_options: { special_tax_type: "2" }))
+      found = provider.query(invoice: issued.reference)
+
+      expect(found).to have_attributes(tax_type: Einvoice::TaxType::SPECIAL, tax_rate: Rational(15, 100))
+      expect(found.reference).to eq(issued.reference)
+    end
   end
 
   describe "#void" do

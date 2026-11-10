@@ -231,16 +231,24 @@ module Einvoice
           buyer: build_buyer(result),
           items: items,
           tax_type: tax_type,
-          tax_rate: query_rate(tax_type),
+          tax_rate: query_rate(tax_type, result["IIS_Tax_Rate"]),
           raw: result
         )
       end
 
-      # ECPay taxes taxable lines at 5% only. A special-tax rate is not returned.
-      def query_rate(tax_type)
+      # ECPay fixes the rate of a taxable, zero-rated or tax-free invoice. A
+      # special-tax invoice has its own rate, which GetIssue returns. A rate
+      # that is not a MIG rate reads as nil, so an allowance has to give one.
+      def query_rate(tax_type, reported)
         case tax_type
         when TaxType::TAXABLE, TaxType::MIXED then TAXABLE_RATE
         when TaxType::ZERO_RATED, TaxType::TAX_FREE then 0r
+        when TaxType::SPECIAL
+          begin
+            Input.mig_rate!(reported, "IIS_Tax_Rate", name)
+          rescue ValidationError
+            nil
+          end
         end
       end
 

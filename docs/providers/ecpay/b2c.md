@@ -522,7 +522,7 @@ Response fields that the unified model uses:
 | `IIS_Category` | `B2B` with a 統一編號, `B2C` without |
 | `IIS_Type` | `07` / `08` |
 | `IIS_Tax_Type` | `1`, `2`, `3`, `4`, `9` |
-| `IIS_Tax_Rate` | Rate, 2 decimals |
+| `IIS_Tax_Rate` | Rate, 2 decimals. The adapter reads it for a `SPECIAL` invoice only. Other tax types have a fixed rate |
 | `IIS_Tax_Amount` | Tax. **Only for a B2B invoice.** For B2C it is `0`, because the tax is inside the amount |
 | `IIS_Sales_Amount` | Invoice amount, tax included |
 | `IIS_Create_Date` | Issue time, `yyyy-MM-dd HH:mm:ss` |
