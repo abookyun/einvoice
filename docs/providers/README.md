@@ -73,7 +73,7 @@ The core computes the tax from the items, as `#tax_breakdown` on the input. Only
 
 The caller's `AmountSummary` is checked against the breakdown. It never tells the core what to compute, and the core never changes the caller's items. An invoice follows F0401: for a consumer, `sales_amount` includes tax and `tax_amount` is `0`, and for a business buyer, `tax_amount` has to be the breakdown's tax. An allowance follows G0401: `sales_amount` excludes tax and `tax_amount` is the breakdown's tax.
 
-**Tax rate.** `tax_rate` is a decimal, for example `0.05`. The core accepts the MIG rates only: `0`, `0.01`, `0.02`, `0.05`, `0.15` and `0.25` `[mig 表 4-18]`. The default is `0.05` for taxable sales and `0` for zero-rated or tax-free sales. When a provider cannot send a rate, the adapter raises `UnsupportedError`.
+**Tax rate.** `tax_rate` is a decimal, for example `0.05`. The core accepts the MIG rates only: `0`, `0.01`, `0.02`, `0.05`, `0.15` and `0.25` `[mig 表 4-18]`. On an issue the lines decide the default, not the header: `0.05` when a line is taxable, else `0`. A special-tax line has no default. A taxable line cannot have rate `0`. When a provider cannot send a rate, the adapter raises `UnsupportedError`.
 
 **Input checks.** The core checks these before an adapter runs. A value object built with `.new` goes through the same checks as a Hash.
 

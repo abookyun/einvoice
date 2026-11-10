@@ -62,7 +62,7 @@ The checks:
 - A buyer `ubn` is 8 digits, a company's 統一編號. (MIG 表 4-7 allows a BAN of 8 to 10 digits; the 9- and 10-digit forms are not used for a buyer.) A B2B invoice needs one, and an explicit `category` has to agree with it.
 - Totals are whole numbers and not negative. Item quantity, price and amount are numbers with at most 7 decimal places.
 - A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits. These formats come from the providers' docs; the MIG lists the carrier types only.
-- `tax_rate` is a decimal, such as `0.05`, and has to be a MIG rate. On an issue it defaults to `0.05` for taxable sales and `0` for zero-rated or tax-free sales. A special-tax invoice needs it.
+- `tax_rate` is a decimal, such as `0.05`, and has to be a MIG rate. On an issue the lines decide its default, not the header: `0.05` when a line is taxable, else `0`. A special-tax line needs it. A taxable line cannot have rate `0`.
 - The amounts agree with the items (below).
 - A void reason is at most 20 characters. A void allowance reason defaults to `作廢折讓`.
 

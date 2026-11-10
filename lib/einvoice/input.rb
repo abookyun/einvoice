@@ -31,11 +31,7 @@ module Einvoice
     # The rates the MIG allows [mig 表 4-18].
     TAX_RATES = [0, Rational(1, 100), Rational(2, 100), Rational(5, 100), Rational(15, 100),
                  Rational(25, 100)].freeze
-    DEFAULT_TAX_RATES = {
-      TaxType::TAXABLE => Rational(5, 100),
-      TaxType::ZERO_RATED => 0r,
-      TaxType::TAX_FREE => 0r
-    }.freeze
+    STANDARD_TAX_RATE = Rational(5, 100)
     # A reference or an allowance can describe a mixed-tax invoice.
     REFERENCE_TAX_TYPES = (TaxType::ALL + [TaxType::MIXED]).freeze
 
@@ -56,7 +52,7 @@ module Einvoice
         amount: amount,
         tax_type: tax_type,
         price_mode: enum!(h[:price_mode], PriceMode::ALL, :price_mode, provider),
-        tax_rate: tax_rate!(h[:tax_rate], tax_type, provider),
+        tax_rate: tax_rate!(h[:tax_rate], items, tax_type, provider),
         category: category,
         carrier: build_carrier(h[:carrier], provider),
         donation: build_donation(h[:donation], provider),
@@ -80,21 +76,22 @@ module Einvoice
 
     # The tax type and rate come from the input, else from the invoice
     # reference. There is no default: an allowance taxed at the wrong rate is a
-    # wrong filing. A zero-rated or tax-free allowance has rate 0.
+    # wrong filing. An allowance with no taxed line has rate 0.
     def allowance(input, provider: nil)
       h = hash!(unbuild(input), "input", provider)
       invoice = invoice_reference!(h[:invoice], provider, need_number: true)
       tax_type = h[:tax_type] ? enum!(h[:tax_type], REFERENCE_TAX_TYPES, :tax_type, provider) : invoice.tax_type
       fail!("tax_type is required, or invoice.tax_type in the reference", provider) if tax_type.nil?
 
+      items = build_items(h[:items], provider)
       tax_rate = h[:tax_rate].nil? ? invoice.tax_rate : mig_rate!(h[:tax_rate], "tax_rate", provider)
-      tax_rate ||= 0r if [TaxType::ZERO_RATED, TaxType::TAX_FREE].include?(tax_type)
+      tax_rate ||= 0r if items.none? { |item| TaxType::TAXED.include?(item.tax_type || tax_type) }
       fail!("tax_rate is required, or invoice.tax_rate in the reference", provider) if tax_rate.nil?
 
       parsed = AllowanceInput.new(
         invoice: invoice,
         allowance_id: fetch!(h, :allowance_id, provider),
-        items: build_items(h[:items], provider),
+        items: items,
         amount: build_amount(h[:amount], provider),
         price_mode: enum!(h[:price_mode], PriceMode::ALL, :price_mode, provider),
         tax_type: tax_type,
@@ -319,12 +316,16 @@ module Einvoice
       end
     end
 
-    # A decimal rate that the MIG allows. The default depends on the tax type.
-    # A special-tax invoice has no default: the caller has to give its rate.
-    def tax_rate!(value, tax_type, provider)
-      return DEFAULT_TAX_RATES[tax_type] if value.nil?
+    # A decimal rate that the MIG allows. When none is given, the lines decide,
+    # not the header: a taxable line is taxed at 5% under a tax-free header
+    # too. A special-tax line has no default: the caller has to give its rate.
+    def tax_rate!(value, items, tax_type, provider)
+      return mig_rate!(value, "tax_rate", provider) unless value.nil?
 
-      mig_rate!(value, "tax_rate", provider)
+      types = items.map { |item| item.tax_type || tax_type }
+      return nil if types.include?(TaxType::SPECIAL)
+
+      types.include?(TaxType::TAXABLE) ? STANDARD_TAX_RATE : 0r
     end
 
     def mig_rate!(value, field, provider)

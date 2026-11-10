@@ -154,10 +154,22 @@ RSpec.describe Einvoice::Input do
       expect([input.carrier, input.donation]).to all(be_truthy)
     end
 
-    it "defaults tax_rate by tax type" do
+    it "defaults tax_rate by the tax types of the lines" do
       expect(issue.tax_rate).to eq(Rational(5, 100))
       expect(issue(tax_type: "ZERO_RATED").tax_rate).to eq(0)
       expect(error_for { issue(tax_type: "SPECIAL") }).to match(/tax_rate is required for a special line/)
+
+      # A taxable line under a tax-free header is still taxed at 5%.
+      items = [{ "description" => "a", "quantity" => 1, "unit_price" => 100, "amount" => 100, "tax_type" => "TAXABLE" },
+               { "description" => "b", "quantity" => 1, "unit_price" => 50, "amount" => 50 }]
+      input = issue(tax_type: "TAX_FREE", items: items,
+                    amount: { "sales_amount" => 150, "tax_amount" => 0, "total_amount" => 150 })
+      expect(input.tax_rate).to eq(Rational(5, 100))
+      expect(input.tax_breakdown.tax_amount).to eq(5)
+    end
+
+    it "refuses rate 0 on a taxable line" do
+      expect(error_for { issue(tax_rate: 0) }).to match(/tax_rate must be above 0 when a line is taxable/)
     end
 
     it "accepts only the MIG tax rates, as decimals" do
@@ -244,6 +256,13 @@ RSpec.describe Einvoice::Input do
       free = allowance([item(100)], { sales_amount: 100, tax_amount: 0, total_amount: 100 },
                        invoice: "JU1", tax_type: "TAX_FREE")
       expect(free.tax_rate).to eq(0)
+
+      # Rate 0 comes only with no taxed line. A taxable line under a zero-rated
+      # header needs its rate like any taxable allowance.
+      expect do
+        allowance([item(100, tax_type: "TAXABLE")], { sales_amount: 100, tax_amount: 0, total_amount: 100 },
+                  invoice: "JU1", tax_type: "ZERO_RATED")
+      end.to raise_error(Einvoice::ValidationError, /tax_rate is required, or invoice.tax_rate/)
     end
 
     it "needs every item's tax type when the invoice has mixed tax" do

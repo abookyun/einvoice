@@ -45,6 +45,8 @@ module Einvoice
         taxed.any? && tax_rate.nil?
 
       rate = taxed.any? ? Number.decimal!(tax_rate, field: "tax_rate", provider: provider) : 0r
+      # A taxed line at rate 0 would file taxable sales as untaxed.
+      invalid!("tax_rate must be above 0 when a line is taxable", provider) if taxed.any? && rate.zero?
       inclusive = price_mode == PriceMode::TAX_INCLUSIVE
       amounts = items.each_with_index.map do |item, index|
         Number.decimal!(item.amount, field: "items[#{index}].amount", provider: provider)
