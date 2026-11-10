@@ -301,11 +301,11 @@ TotalAmount = SalesAmount + FreeTaxSalesAmount + ZeroTaxSalesAmount + TaxAmount
 
 品項價格未稅（`DetailVat` 為 `0`，只限 B2B）時，`TaxAmount = round(SalesAmount × 0.05)`，其他相同。
 
-adapter 用 core 的稅額 helper，從品項算出這些總計，再檢查 `TotalAmount` 是否等於 `amount.total_amount`；B2B 時也檢查 `TaxAmount` 是否等於 `amount.tax_amount`。不一致就在呼叫前丟出 `ValidationError`。B2C 時公式算出的稅額為 `0`，和 F0401 一致。
+core 的 `tax_breakdown` 提供這些總計：`taxable_amount`、`tax_free_amount`、`zero_rated_amount`、`tax_amount` 和 `total_amount`。它的稅額和 Amego 的公式相同。B2B 時 adapter 直接送出；B2C 時 `SalesAmount` 送 `taxable_amount + tax_amount`，`TaxAmount` 送 `0`，和 F0401 一致。core 已經把 `amount` 和明細核對過，adapter 不必再檢查。
 
 除非 `DetailAmountRound` 為 `1`，否則品項金額保留 7 位小數 `[doc]`。
 
-**折讓。** 金額不含稅，每個品項有自己的整數 `Tax` `[doc]`。這正是 core 給出的格式（G0401）。adapter 直接送出每個品項的金額和稅額。`TotalAmount` 是未稅金額的合計，`TaxAmount` 是品項稅額的合計。99 元拆成 94 加稅額 5 的折讓，Amego 接受了 `[live]`。
+**折讓。** 金額不含稅，每個品項有自己的整數 `Tax` `[doc]`。這就是 G0401。adapter 送出 core 明細中每一列的 `net_amount` 和 `tax`。`TotalAmount` 是未稅金額的合計，`TaxAmount` 是品項稅額的合計。99 元拆成 94 加稅額 5 的折讓，Amego 接受了 `[live]`。
 
 **查詢。** `total_amount` 是總計。`tax_amount` 只有 B2B 才會拆出來，和開立時一樣。結果是 `total = total_amount`、`tax = tax_amount`、`sales = total - tax`。
 

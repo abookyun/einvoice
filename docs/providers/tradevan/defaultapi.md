@@ -287,13 +287,13 @@ The unified rules are in [the unified model](../README.md#the-unified-model).
 - The header `total` must equal the sum of `itemTotal` `[rules]`. Amounts are compared as decimals, not as integers.
 - In `[readme]`, `itemTotal` 20000 and `tax` 952. The response gives `texclusiveAmount` 19048, `tax` 952, `inclusiveAmount` 20000. So Tradevan splits the tax: `20000 / 1.05 = 19047.6`, rounded to 19048.
 - The adapter sends `itemTotal` with tax, and leaves the item `tax` out. Tradevan computes the split.
-- B2B uses the same fields. The unified B2B amount has the tax apart, so `total` is `amount.total_amount`, and `itemTotal` is each item's amount with its tax.
+- B2B uses the same fields. `total` is `amount.total_amount`, and `itemTotal` is each line's `gross_amount` from the core's `tax_breakdown`.
 
 **Allowance.**
 
 - The header has `allowanceExclusiveAmount`, `allowanceTax` and `allowanceInclusiveAmount` `[rules]`. Each item has `itemExclude` (tax excluded), `tax` and `itemTotal`.
-- After the core, each item has an amount without tax and its own tax (G0401). The adapter sends them as `itemExclude` and `tax`, and their sum as `itemTotal`.
-- The header takes `sales_amount`, `tax_amount` and `total_amount`.
+- The core's `tax_breakdown` gives each line's `net_amount`, `tax` and `gross_amount` (G0401). The adapter sends them as `itemExclude`, `tax` and `itemTotal`.
+- The header takes `sales_amount`, `tax_amount` and `total_amount`, which the core has checked against the breakdown.
 
 **Query.** `exclusiveAmount`, `tax` and `total` map directly.
 

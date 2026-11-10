@@ -299,11 +299,11 @@ TotalAmount = SalesAmount + FreeTaxSalesAmount + ZeroTaxSalesAmount + TaxAmount
 
 With prices that exclude tax (`DetailVat` `0`, B2B only), `TaxAmount = round(SalesAmount × 0.05)`, and the rest is the same.
 
-The adapter computes these totals from the items with the core's tax helper. Then it checks that `TotalAmount` equals `amount.total_amount`, and for B2B that `TaxAmount` equals `amount.tax_amount`. If they differ, it raises `ValidationError` before the call. For B2C the formula gives `tax 0`, as F0401 does.
+The core's `tax_breakdown` gives these totals: `taxable_amount`, `tax_free_amount`, `zero_rated_amount`, `tax_amount` and `total_amount`. Its tax is the same as Amego's formula. For B2B the adapter sends them as they are. For B2C it sends `SalesAmount` as `taxable_amount + tax_amount` and `TaxAmount` `0`, as F0401 does. The core has already checked `amount` against the breakdown, so the adapter does not check it again.
 
 Item amounts keep 7 decimals unless `DetailAmountRound` is `1` `[doc]`.
 
-**Allowance.** Amounts exclude tax, and each item has its own integer `Tax` `[doc]`. This is the shape that the core gives (G0401). The adapter sends each item's amount and tax as they are. `TotalAmount` is the sum without tax, and `TaxAmount` is the sum of the item taxes. A 99 split into 94 and a tax of 5 was accepted `[live]`.
+**Allowance.** Amounts exclude tax, and each item has its own integer `Tax` `[doc]`. This is G0401. The adapter sends each line's `net_amount` and `tax` from the core's breakdown. `TotalAmount` is the sum without tax, and `TaxAmount` is the sum of the item taxes. A 99 split into 94 and a tax of 5 was accepted `[live]`.
 
 **Query.** `total_amount` is the total. `tax_amount` is only split out for B2B, as on issue. The result is `total = total_amount`, `tax = tax_amount`, `sales = total - tax`.
 

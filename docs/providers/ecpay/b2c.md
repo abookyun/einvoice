@@ -310,7 +310,7 @@ The unified rules are in [the unified model](../README.md#the-unified-model).
 
 **Allowance.**
 
-- After the core, each allowance item has an amount without tax and its own tax (G0401). ECPay wants amounts with tax `[doc 7901]`. So `ItemAmount` is the item amount plus its tax, and `AllowanceAmount` is `amount.total_amount`.
+- ECPay wants prices and amounts with tax `[doc 7901]`. `ItemPrice` is each line's `gross_unit_price` and `ItemAmount` its `gross_amount`, from the core's `tax_breakdown`. `AllowanceAmount` is `amount.total_amount`.
 - `ItemAmount` may differ from `ItemPrice × ItemCount` by at most 1. The sum of `ItemAmount` must equal `AllowanceAmount`. The adapter checks this before the call.
 - ECPay splits out the tax again for the MOF (4.7).
 

@@ -312,7 +312,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 
 **折讓。**
 
-- 經過 core 處理後，每個折讓品項都有不含稅的金額，以及自己的稅額（G0401）。ECPay 要的是含稅金額 `[doc 7901]`。所以 `ItemAmount` 是品項金額加上它的稅額，`AllowanceAmount` 是 `amount.total_amount`。
+- ECPay 要的是含稅的單價和金額 `[doc 7901]`。`ItemPrice` 是 core `tax_breakdown` 中每一列的 `gross_unit_price`，`ItemAmount` 是它的 `gross_amount`。`AllowanceAmount` 是 `amount.total_amount`。
 - `ItemAmount` 和 `ItemPrice × ItemCount` 最多可以差 1。`ItemAmount` 的加總必須等於 `AllowanceAmount`。adapter 在呼叫前會檢查。
 - ECPay 會再替財政部把稅額拆出來（4.7）。
 

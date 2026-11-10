@@ -289,12 +289,12 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 - 表頭的 `total` 必須等於 `itemTotal` 的合計 `[rules]`。比較時用小數，不用整數。
 - `[readme]` 中，`itemTotal` 為 20000，`tax` 為 952。回應給出 `texclusiveAmount` 19048、`tax` 952、`inclusiveAmount` 20000。所以拆稅由關貿處理：`20000 / 1.05 = 19047.6`，四捨五入成 19048。
 - adapter 送出含稅的 `itemTotal`，不送品項的 `tax`。拆稅由關貿計算。
-- B2B 使用同樣的欄位。unified 的 B2B 金額是未稅加稅額，所以 `total` 是 `amount.total_amount`，`itemTotal` 是每個品項的金額加上它的稅額。
+- B2B 使用同樣的欄位。`total` 是 `amount.total_amount`，`itemTotal` 是 core `tax_breakdown` 中每一列的 `gross_amount`。
 
 **折讓。**
 
 - 表頭有 `allowanceExclusiveAmount`、`allowanceTax` 和 `allowanceInclusiveAmount` `[rules]`。每個品項有 `itemExclude`（未稅）、`tax` 和 `itemTotal`。
-- 經過 core 處理後，每個品項都有未稅金額和自己的稅額（G0401）。adapter 把它們送成 `itemExclude` 和 `tax`，兩者相加送成 `itemTotal`。
+- core 的 `tax_breakdown` 提供每一列的 `net_amount`、`tax` 和 `gross_amount`（G0401）。adapter 把它們送成 `itemExclude`、`tax` 和 `itemTotal`。
 - 表頭取 `sales_amount`、`tax_amount` 和 `total_amount`。
 
 **查詢。** `exclusiveAmount`、`tax` 和 `total` 直接對應。

@@ -297,7 +297,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 - B2B 的品項價格未稅，B2C 的品項價格含稅。所以 B2C 的品項合計和 `TotalAmt` 含稅，但 `Amt` 不含稅。
 - ezPay 只檢查 `ItemAmt = ItemCount × ItemPrice` 和 `TotalAmt = Amt + TaxAmt`，其他由呼叫端負責 `[inv 三]`。
 
-B2B 時，unified 的金額已經是這個格式：直接送出 `sales_amount`、`tax_amount` 和 `total_amount`。B2C 時，unified 的金額是 `tax 0`（F0401）。adapter 用 core 的稅額 helper 拆稅：`TaxAmt` 是應稅品項的稅額，`Amt = TotalAmt - TaxAmt`。
+B2B 時，unified 的金額已經是這個格式：直接送出 `sales_amount`、`tax_amount` 和 `total_amount`。B2C 時，unified 的金額是 `tax 0`（F0401）。adapter 從 core 的 `tax_breakdown` 取得拆好的值：`TaxAmt` 是它的 `tax_amount`，`Amt` 是它的 `sales_amount`。adapter 不自己算稅。
 
 查詢結果的 B2C 也是同樣的拆法：`Amt 1333`、`TaxAmt 67`、`TotalAmt 1400` `[inv 八(二)]`。
 
@@ -310,10 +310,10 @@ B2B 時，unified 的金額已經是這個格式：直接送出 `sales_amount`�
 
 adapter 依原發票的買方，從 `invoice.buyer_ubn` 決定用哪一種：
 
-- **消費者**（`buyer_ubn` 為 `nil`）：含稅價格。`ItemAmt` 是每個品項的金額加上 core 算出的稅額，`ItemTaxAmt` 為 `0`。「買方不能扣抵」這條規則不影響，因為消費者本來就不扣抵營業稅。含稅價格也比較容易整除：2 件、每件 50 元，仍然是每件 50。
-- **營業人**：未稅價格，也就是 core 給出的格式（G0401）。`ItemAmt` 是每個品項的未稅金額，`ItemTaxAmt` 是 core 算出的稅額。
+- **消費者**（`buyer_ubn` 為 `nil`）：含稅價格。`ItemAmt` 是 core 明細中每一列的 `gross_amount`，`ItemTaxAmt` 為 `0`。「買方不能扣抵」這條規則不影響，因為消費者本來就不扣抵營業稅。含稅價格也比較容易整除：2 件、每件 50 元，仍然是每件 50。
+- **營業人**：未稅價格（G0401）。`ItemAmt` 是每一列的 `net_amount`，`ItemTaxAmt` 是它的 `tax`。
 
-兩種情況的 `TotalAmt` 都是 `amount.total_amount`。`ItemPrice` 為 `ItemAmt / ItemCount`，必須是整數，否則 adapter 丟出 `ValidationError`。未稅時可能發生這種情況，例如 2 件共 95 元（見第 7 節）。
+兩種情況的 `TotalAmt` 都是 `amount.total_amount`。`ItemPrice` 是該列的 `gross_unit_price` 或 `net_unit_price`。ezPay 要求 `ItemAmt = ItemCount × ItemPrice` 完全相等，而且是整數，所以明細的單價和金額對不上時，adapter 丟出 `ValidationError`。未稅時可能發生這種情況，例如 2 件共 95 元（見第 7 節）。
 
 **整數。** 品項數量和價格都是整數。unified model 允許小數，所以要在呼叫前檢查。
 
