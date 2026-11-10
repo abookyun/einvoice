@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "bigdecimal"
 
 RSpec.describe Einvoice::Input do
   # A wire-style, string-keyed hash like a JSON fixture would supply.
@@ -134,6 +135,10 @@ RSpec.describe Einvoice::Input do
         .to match(/items\[0\].quantity may have at most 7 decimal places/)
       item = item.merge("quantity" => "0.5", "unit_price" => 200)
       expect(issue(items: [item]).items.first.quantity).to eq("0.5")
+      expect(error_for { issue(items: [item.merge("quantity" => BigDecimal("0.00000001"))]) })
+        .to match(/items\[0\].quantity may have at most 7 decimal places/)
+      expect(issue(items: [item.merge("quantity" => BigDecimal("0.5"))]).items.first.quantity)
+        .to eq(BigDecimal("0.5"))
     end
 
     it "checks the carrier code shape" do
@@ -308,6 +313,8 @@ RSpec.describe Einvoice::Input do
     it "checks the fields of a hash" do
       expect { described_class.void({ invoice: { number: "JU1", buyer_ubn: "1" }, reason: "x" }) }
         .to raise_error(Einvoice::ValidationError, /invoice.buyer_ubn must be 8 digits/)
+      expect { described_class.void({ invoice: { number: "JU1", total_amount: "12.5" }, reason: "x" }) }
+        .to raise_error(Einvoice::ValidationError, /invoice.total_amount must be a whole number/)
       expect { described_class.void({ invoice: { number: "JU1", invoice_datetime: 20_260_801 }, reason: "x" }) }
         .to raise_error(Einvoice::ValidationError, /invoice.invoice_datetime must be a Time/)
       expect { described_class.void({ invoice: { order_id: "O1" }, reason: "x" }) }

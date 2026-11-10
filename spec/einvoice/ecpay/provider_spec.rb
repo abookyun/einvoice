@@ -174,6 +174,16 @@ RSpec.describe Einvoice::ECPay::Provider do
       expect(found.buyer.ubn).to be_nil
       expect(found.reference).to eq(issued.reference)
     end
+
+    # The reference carries the rate into an allowance, so a tax-free invoice
+    # must read back with rate 0, not without one.
+    it "reads the rate of a tax-free invoice back as 0" do
+      issued = provider.issue(issue_input(tax_type: "TAX_FREE"))
+      found = provider.query(invoice: issued.reference)
+
+      expect(found).to have_attributes(tax_type: Einvoice::TaxType::TAX_FREE, tax_rate: 0)
+      expect(found.reference).to eq(issued.reference)
+    end
   end
 
   describe "#void" do

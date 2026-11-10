@@ -213,6 +213,16 @@ RSpec.describe Einvoice::ECPay::Payload do
         .to raise_error(Einvoice::ValidationError,
                         /ItemPrice × ItemCount \(1000\) must be within 1 of ItemAmount \(1050\)/)
     end
+
+    it "requires the items to add up to AllowanceAmount" do
+      expect do
+        described_class.check_allowance!(
+          "AllowanceAmount" => 100,
+          "Items" => [{ "ItemPrice" => 60, "ItemCount" => 1, "ItemAmount" => 60 },
+                      { "ItemPrice" => 30, "ItemCount" => 1, "ItemAmount" => 30 }]
+        )
+      end.to raise_error(Einvoice::ValidationError, /AllowanceAmount \(100\) must equal the item total \(90\)/)
+    end
   end
 
   describe "provider options" do

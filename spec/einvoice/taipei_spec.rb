@@ -39,4 +39,9 @@ RSpec.describe Einvoice::Taipei do
     expect { described_class.time("2026-08-01T10:00:00", field: "cancel_datetime") }
       .to raise_error(Einvoice::ValidationError, /cancel_datetime must be a date/)
   end
+
+  it "refuses a value that is not a date or a time" do
+    expect { described_class.date(20_260_801, field: "allowance_date") }
+      .to raise_error(Einvoice::ValidationError, /allowance_date must be a Date or a Time, got Integer/)
+  end
 end
