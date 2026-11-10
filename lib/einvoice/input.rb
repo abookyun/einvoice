@@ -272,11 +272,10 @@ module Einvoice
       fail!("amount is required", provider) if value.nil?
 
       h = hash!(value, "amount", provider)
-      sales = integer!(h[:sales_amount], :sales_amount, provider)
-      tax = integer!(h[:tax_amount], :tax_amount, provider)
-      total = integer!(h[:total_amount], :total_amount, provider)
-      { sales_amount: sales, tax_amount: tax, total_amount: total }.each do |field, value|
-        fail!("#{field} must not be negative, got #{value}", provider) if value.negative?
+      sales, tax, total = %i[sales_amount tax_amount total_amount].map do |field|
+        value = Number.integer!(h[field], field: "amount.#{field}", provider: provider)
+        fail!("amount.#{field} must not be negative, got #{value}", provider) if value.negative?
+        value
       end
       unless sales + tax == total
         fail!("amount total #{total} != sales #{sales} + tax #{tax}", provider)
@@ -352,14 +351,6 @@ module Einvoice
       return symbol if symbol && allowed.include?(symbol)
 
       fail!("invalid #{field}: #{value.inspect}", provider)
-    end
-
-    def integer!(value, field, provider)
-      return value if value.is_a?(Integer)
-      # Accept an integral float/numeric but reject fractional TWD (MIG invariant).
-      return value.to_i if value.is_a?(Numeric) && value == value.to_i
-
-      fail!("#{field} must be an integer (TWD), got #{value.inspect}", provider)
     end
 
     # Read a required field, or fail naming it. "Required" means present, not

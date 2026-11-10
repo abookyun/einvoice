@@ -58,7 +58,8 @@ RSpec.describe Einvoice::Input do
 
     it "rejects a fractional TWD amount (MIG integer invariant)" do
       bad = issue_hash.merge("amount" => { "sales_amount" => 99.5, "tax_amount" => 0.5, "total_amount" => 100 })
-      expect { described_class.issue(bad) }.to raise_error(Einvoice::ValidationError, /integer/)
+      expect { described_class.issue(bad) }
+        .to raise_error(Einvoice::ValidationError, /amount.sales_amount must be a whole number/)
     end
 
     it "rejects an unknown tax_type" do
@@ -131,6 +132,13 @@ RSpec.describe Einvoice::Input do
       input = issue(tax_type: "TAX_FREE", items: items,
                     amount: { "sales_amount" => 1, "tax_amount" => 0, "total_amount" => 1 })
       expect(input.tax_breakdown).to have_attributes(taxable_amount: 0, tax_free_amount: 1, sales_amount: 1)
+    end
+
+    # The same rule as invoice.total_amount in a reference, so a JSON document
+    # with string amounts reads the same in both places.
+    it "reads totals as whole numbers, from a string too" do
+      amount = issue(amount: { "sales_amount" => "100", "tax_amount" => "0", "total_amount" => "100" }).amount
+      expect(amount).to have_attributes(sales_amount: 100, tax_amount: 0, total_amount: 100)
     end
 
     it "rejects negative totals" do
