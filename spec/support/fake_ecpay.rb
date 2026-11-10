@@ -27,6 +27,11 @@ class FakeECPay
     @invoices.fetch(number)["cancelled"] = true
   end
 
+  # GetIssue then answers without an issue date, as a broken response would.
+  def drop_issue_date!(number)
+    @invoices.fetch(number)["issued_at"] = ""
+  end
+
   def initialize
     @invoices = {}
     @by_relate = {}

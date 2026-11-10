@@ -228,6 +228,18 @@ RSpec.describe Einvoice::ECPay::Provider do
         }
     end
 
+    it "reports a lookup without an issue date as the provider's error" do
+      issued = provider.issue(issue_input)
+      ecpay.drop_issue_date!(issued.invoice_number)
+
+      expect { provider.void(invoice: { number: issued.invoice_number, order_id: "ORDER_1" }, reason: "客戶取消") }
+        .to raise_error(Einvoice::ProviderError) { |e|
+          expect(e.reason).to eq(Einvoice::Reason::LOOKUP_FAILED)
+          expect(e.message).to match(/the invoice found by order id has no issue date/)
+        }
+      expect(ecpay.path).to eq("/B2CInvoice/GetIssue")
+    end
+
     it "does not guess the issue date of a plain number" do
       expect { provider.void(invoice: "LA25000001", reason: "客戶取消") }
         .to raise_error(Einvoice::ValidationError, /void needs invoice.invoice_datetime/)

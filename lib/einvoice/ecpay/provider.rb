@@ -328,6 +328,10 @@ module Einvoice
           raise ProviderError.new("#{operation} needs invoice.invoice_datetime; looking it up by order id failed: " \
                                   "#{e.message}", provider: name, reason: Reason::LOOKUP_FAILED, cause: e)
         end
+        if found.invoice_datetime.nil?
+          raise ProviderError.new("#{operation} needs invoice.invoice_datetime; the invoice found by order id has " \
+                                  "no issue date", provider: name, reason: Reason::LOOKUP_FAILED)
+        end
         format_date(found.invoice_datetime)
       end
 
