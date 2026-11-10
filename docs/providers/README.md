@@ -75,7 +75,7 @@ The caller's `AmountSummary` is checked against the breakdown. It never tells th
 
 **Tax rate.** `tax_rate` is a decimal, for example `0.05`. The core accepts the MIG rates only: `0`, `0.01`, `0.02`, `0.05`, `0.15` and `0.25` `[mig 表 4-18]`. The default is `0.05` for taxable sales and `0` for zero-rated or tax-free sales. When a provider cannot send a rate, the adapter raises `UnsupportedError`.
 
-**Input checks.** The core checks these before an adapter runs.
+**Input checks.** The core checks these before an adapter runs. A value object built with `.new` goes through the same checks as a Hash.
 
 - `ubn` is 8 digits: a company's 統一編號. MIG 表 4-7 allows a BAN of 8 to 10 digits, but the 9- and 10-digit forms are not used for a buyer here. A B2B invoice needs a `ubn`. If the caller sets `category`, it must agree with `ubn`.
 - Totals are integers and not negative. Item quantity, price and amount are numbers with at most 7 decimals.

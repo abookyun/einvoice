@@ -29,9 +29,20 @@ RSpec.describe Einvoice::Input do
       expect(input.amount.total_amount).to eq(100)
     end
 
-    it "passes an already-built input through untouched" do
+    # A value object built with .new takes the same checks as a Hash, so an
+    # adapter can trust whatever Input returns.
+    it "checks a value object as it checks a Hash" do
       input = described_class.issue(issue_hash)
-      expect(described_class.issue(input)).to be(input)
+      expect(described_class.issue(input)).to eq(input)
+
+      expect { described_class.issue(input.with(buyer: Einvoice::Buyer.new(ubn: "123"))) }
+        .to raise_error(Einvoice::ValidationError, /buyer ubn must be 8 digits/)
+      wrong_total = Einvoice::AmountSummary.new(sales_amount: 1, tax_amount: 0, total_amount: 1)
+      expect { described_class.issue(input.with(amount: wrong_total)) }
+        .to raise_error(Einvoice::ValidationError, /total_amount is 1, but the items add up to 100/)
+      item = Einvoice::InvoiceItem.new(description: "x", quantity: "lots", unit_price: 100, amount: 100)
+      expect { described_class.issue(issue_hash.merge("items" => [item])) }
+        .to raise_error(Einvoice::ValidationError, /items\[0\].quantity must be a number/)
     end
 
     it "raises ValidationError tagged with the provider on a missing order_id" do
@@ -280,7 +291,7 @@ RSpec.describe Einvoice::Input do
       expect(described_class.void({ invoice: "JU1", reason: "x" }).invoice)
         .to eq(Einvoice::InvoiceReference.new(number: "JU1"))
       reference = Einvoice::InvoiceReference.new(number: "JU2", order_id: "O2")
-      expect(described_class.void({ invoice: reference, reason: "x" }).invoice).to be(reference)
+      expect(described_class.void({ invoice: reference, reason: "x" }).invoice).to eq(reference)
     end
 
     it "reads the fields of a hash" do
@@ -434,9 +445,11 @@ RSpec.describe Einvoice::Input do
       expect(input.donation.npoban).to eq("168001")
     end
 
-    it "passes an already-built Donation through" do
+    it "checks a Donation value object as it checks a Hash" do
       donation = Einvoice::Donation.new(npoban: "168001")
-      expect(described_class.issue(issue_hash.merge("donation" => donation)).donation).to be(donation)
+      expect(described_class.issue(issue_hash.merge("donation" => donation)).donation).to eq(donation)
+      expect { described_class.issue(issue_hash.merge("donation" => Einvoice::Donation.new(npoban: "abc"))) }
+        .to raise_error(Einvoice::ValidationError, /npoban must be 3–7 digits/)
     end
 
     it "requires the npoban" do

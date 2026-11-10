@@ -5,7 +5,11 @@ module Einvoice
   # immutable value types, validating as it goes and raising
   # {ValidationError} on bad input. Adapters call these before mapping to their
   # wire format, so a malformed request fails the same way everywhere and never
-  # reaches the network. An already-built value object passes through untouched.
+  # reaches the network.
+  #
+  # A value object built with +.new+ goes through the same checks as a Hash:
+  # Input turns it back into a Hash first. So whatever an adapter gets from
+  # Input has passed every check, however the caller built it.
   #
   # Enum fields accept either the canonical symbol (+:taxable+) or a wire-style
   # string (+"TAXABLE"+, any case) — the bridge that lets the Ruby SDK consume
@@ -38,9 +42,7 @@ module Einvoice
     module_function
 
     def issue(input, provider: nil)
-      return input if input.is_a?(IssueInvoiceInput)
-
-      h = hash!(input, "input", provider)
+      h = hash!(unbuild(input), "input", provider)
       items = build_items(h[:items], provider)
       amount = build_amount(h[:amount], provider)
       buyer = build_buyer(h[:buyer], provider)
@@ -68,9 +70,7 @@ module Einvoice
     end
 
     def void(input, provider: nil)
-      return input if input.is_a?(VoidInvoiceInput)
-
-      h = hash!(input, "input", provider)
+      h = hash!(unbuild(input), "input", provider)
       VoidInvoiceInput.new(
         invoice: invoice_reference!(h[:invoice], provider, need_number: true),
         reason: reason!(fetch!(h, :reason, provider), provider),
@@ -82,9 +82,7 @@ module Einvoice
     # reference. There is no default: an allowance taxed at the wrong rate is a
     # wrong filing. A zero-rated or tax-free allowance has rate 0.
     def allowance(input, provider: nil)
-      return input if input.is_a?(AllowanceInput)
-
-      h = hash!(input, "input", provider)
+      h = hash!(unbuild(input), "input", provider)
       invoice = invoice_reference!(h[:invoice], provider, need_number: true)
       tax_type = h[:tax_type] ? enum!(h[:tax_type], REFERENCE_TAX_TYPES, :tax_type, provider) : invoice.tax_type
       fail!("tax_type is required, or invoice.tax_type in the reference", provider) if tax_type.nil?
@@ -108,9 +106,7 @@ module Einvoice
     end
 
     def void_allowance(input, provider: nil)
-      return input if input.is_a?(VoidAllowanceInput)
-
-      h = hash!(input, "input", provider)
+      h = hash!(unbuild(input), "input", provider)
       VoidAllowanceInput.new(
         allowance: allowance_reference!(h[:allowance], provider),
         reason: reason!(blank?(h[:reason]) ? DEFAULT_VOID_ALLOWANCE_REASON : h[:reason], provider),
@@ -119,9 +115,7 @@ module Einvoice
     end
 
     def query(input, provider: nil)
-      return input if input.is_a?(QueryInvoiceInput)
-
-      h = hash!(input, "input", provider)
+      h = hash!(unbuild(input), "input", provider)
       invoice = invoice_reference!(h[:invoice], provider, need_number: false)
       if blank?(invoice.number) && blank?(invoice.order_id)
         fail!("query needs invoice.number or invoice.order_id", provider)
@@ -133,7 +127,20 @@ module Einvoice
     def carrier(input, provider: nil)
       fail!("carrier is required", provider) if input.nil?
 
-      build_carrier(input, provider)
+      build_carrier(unbuild(input), provider)
+    end
+
+    # A value object back to the Hash it came from, all the way down, so it
+    # takes the same path through the checks as a Hash. A reference becomes
+    # its stored form (#to_h).
+    def unbuild(value)
+      case value
+      when InvoiceReference, AllowanceReference then value.to_h
+      when Data then value.to_h.transform_values { |field| unbuild(field) }
+      when Hash then value.transform_values { |field| unbuild(field) }
+      when Array then value.map { |item| unbuild(item) }
+      else value
+      end
     end
 
     # --- amounts ---------------------------------------------------------------
@@ -181,10 +188,10 @@ module Einvoice
     def invoice_reference!(value, provider, need_number:)
       fail!("invoice is required", provider) if blank?(value)
 
-      reference = case value
-                  when InvoiceReference then value
-                  when String then InvoiceReference.new(number: value)
-                  else build_invoice_reference(hash!(value, "invoice", provider), provider)
+      reference = if value.is_a?(String)
+                    InvoiceReference.new(number: value)
+                  else
+                    build_invoice_reference(hash!(value, "invoice", provider), provider)
                   end
       fail!("invoice.number is required", provider) if need_number && blank?(reference.number)
       reference
@@ -211,7 +218,6 @@ module Einvoice
     # An AllowanceReference, a Hash of its fields, or a plain allowance number.
     def allowance_reference!(value, provider)
       fail!("allowance is required", provider) if blank?(value)
-      return value if value.is_a?(AllowanceReference)
       return AllowanceReference.new(allowance_number: value) if value.is_a?(String)
 
       h = hash!(value, "allowance", provider)
@@ -231,7 +237,6 @@ module Einvoice
 
     def build_buyer(value, provider)
       return nil if value.nil?
-      return value if value.is_a?(Buyer)
 
       h = hash!(value, "buyer", provider)
       ubn = blank?(h[:ubn]) ? nil : h[:ubn].to_s
@@ -243,7 +248,6 @@ module Einvoice
 
     def build_carrier(value, provider)
       return nil if value.nil?
-      return value if value.is_a?(Carrier)
 
       h = hash!(value, "carrier", provider)
       type = enum!(h[:type], CarrierType::ALL, :carrier_type, provider)
@@ -256,7 +260,6 @@ module Einvoice
 
     def build_donation(value, provider)
       return nil if value.nil?
-      return value if value.is_a?(Donation)
 
       # Kept as a String: a 愛心碼 is an identifier, not a number, and real ones
       # carry a leading zero (0096) that an integer round-trip would destroy.
@@ -269,7 +272,6 @@ module Einvoice
     end
 
     def build_amount(value, provider)
-      return value if value.is_a?(AmountSummary)
       fail!("amount is required", provider) if value.nil?
 
       h = hash!(value, "amount", provider)
@@ -289,8 +291,6 @@ module Einvoice
       fail!("items must be a non-empty array", provider) unless value.is_a?(Array) && !value.empty?
 
       value.each_with_index.map do |item, index|
-        next item if item.is_a?(InvoiceItem)
-
         h = hash!(item, "items[#{index}]", provider)
         %i[quantity unit_price amount].each do |field|
           Number.decimal!(fetch!(h, field, provider), field: "items[#{index}].#{field}", provider: provider)
