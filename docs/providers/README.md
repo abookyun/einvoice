@@ -67,7 +67,7 @@ When a provider needs a field that the caller did not give, the adapter may quer
 
 The core computes the tax from the items, as `#tax_breakdown` on the input. Only the core computes tax, and adapters read the values they need from the breakdown:
 
-- Each line has `net_amount`, `tax` and `gross_amount`, and `net_unit_price` and `gross_unit_price`. Line taxes are whole TWD. They are split by the largest remainder: each line takes the whole part of its share, and the units left go to the lines with the largest fractions, later lines first on a tie. No line tax is negative. The unit prices come from the item's `unit_price`, rounded to 7 decimal places, so `unit price × quantity` can differ from the line amount by the rounding of the line tax. The provider note says how much difference its API allows.
+- Each line has `net_amount`, `tax` and `gross_amount`, and `net_unit_price` and `gross_unit_price`. Line taxes are whole TWD. They are split by the largest remainder: each line takes the whole part of its share, and the units left go to the lines with the largest fractions, later lines first on a tie. Each line tax is the floor or the ceiling of its share, so it has the sign of its amount. A discount line with a negative amount can take a negative tax. No other line tax is negative. The unit prices come from the item's `unit_price`, rounded to 7 decimal places, so `unit price × quantity` can differ from the line amount by the rounding of the line tax. The provider note says how much difference its API allows.
 - The totals are `sales_amount` (without tax), `taxable_amount`, `zero_rated_amount`, `tax_free_amount`, `tax_amount` and `total_amount`. The tax is `round(taxable sales × tax_rate)`.
 - Zero-rated and tax-free lines have tax `0`.
 
@@ -78,7 +78,7 @@ The caller's `AmountSummary` is checked against the breakdown. It never tells th
 **Input checks.** The core checks these before an adapter runs. A value object built with `.new` goes through the same checks as a Hash.
 
 - `ubn` is 8 digits: a company's 統一編號. MIG 表 4-7 allows a BAN of 8 to 10 digits, but the 9- and 10-digit forms are not used for a buyer here. A B2B invoice needs a `ubn`. If the caller sets `category`, it must agree with `ubn`.
-- Totals are integers and not negative. Item quantity, price and amount are numbers with at most 7 decimals.
+- Totals are integers and not negative. Item quantity, price and amount are numbers with at most 7 decimals. An invoice item may be negative, as a discount line. An allowance item may not (MIG 4.1).
 - The amounts agree with the items, as described above.
 - A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits. These formats come from the ECPay and ezPay docs: the MIG lists the carrier types only.
 - A void reason is 1 to 20 characters. A void allowance reason is optional. The core fills `作廢折讓` when it is missing.

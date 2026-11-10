@@ -141,6 +141,18 @@ RSpec.describe Einvoice::Input do
       expect(amount).to have_attributes(sales_amount: 100, tax_amount: 0, total_amount: 100)
     end
 
+    # The MIG has no sign rule for an invoice item, and a discount line is
+    # common. Its tax takes the sign of its amount, and the other lines keep
+    # theirs.
+    it "gives a discount line a tax with the sign of its amount" do
+      items = [{ "description" => "a", "quantity" => 1, "unit_price" => 100, "amount" => 100 },
+               { "description" => "discount", "quantity" => 1, "unit_price" => -20, "amount" => -20 }]
+      input = issue(price_mode: "TAX_EXCLUSIVE", buyer: { "ubn" => "53538851" }, items: items,
+                    amount: { "sales_amount" => 80, "tax_amount" => 4, "total_amount" => 84 })
+      lines = input.tax_breakdown.lines.map { |line| [line.net_amount, line.tax, line.gross_amount] }
+      expect(lines).to eq([[100, 5, 105], [-20, -1, -21]])
+    end
+
     it "rejects negative totals" do
       expect(error_for { issue(amount: { "sales_amount" => -100, "tax_amount" => 0, "total_amount" => -100 }) })
         .to match(/sales_amount must not be negative/)
@@ -304,6 +316,15 @@ RSpec.describe Einvoice::Input do
                         { sales_amount: 148, tax_amount: 2, total_amount: 150 }, invoice: mixed)
       expect(taxes(input)).to eq([[100, 0], [48, 2]])
       expect(input.tax_breakdown).to have_attributes(taxable_amount: 48, tax_free_amount: 100)
+    end
+
+    # MIG 4.1 does not allow a negative amount on an allowance.
+    it "refuses a negative item" do
+      amount = { sales_amount: 76, tax_amount: 4, total_amount: 80 }
+      expect { allowance([item(100), item(-20)], amount) }
+        .to raise_error(Einvoice::ValidationError, /items\[1\].amount must not be negative, got -20/)
+      expect { allowance([item(80, quantity: -1)], amount) }
+        .to raise_error(Einvoice::ValidationError, /items\[0\].quantity must not be negative/)
     end
 
     it "takes the tax type and rate from the input before the reference, and has no default" do

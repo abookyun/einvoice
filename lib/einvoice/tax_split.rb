@@ -25,7 +25,10 @@ module Einvoice
   # Splits tax over lines by the largest remainder: each taxed line takes the
   # whole part of its share, and the units left go to the lines with the
   # largest fractions, later lines first on a tie. So the line taxes add up to
-  # the total tax and none is negative. Lines that are not taxed have tax 0.
+  # the total tax, and each line tax is the floor or the ceiling of its share.
+  # A line tax has the sign of its amount: a discount line with a negative
+  # amount can take a negative tax, and no other line does. Lines that are not
+  # taxed have tax 0.
   module TaxSplit
     Line = Data.define(:amount, :tax)
 

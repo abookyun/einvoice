@@ -84,6 +84,7 @@ module Einvoice
       fail!("tax_type is required, or invoice.tax_type in the reference", provider) if tax_type.nil?
 
       items = build_items(h[:items], provider)
+      check_not_negative!(items, provider)
       tax_rate = h[:tax_rate].nil? ? invoice.tax_rate : mig_rate!(h[:tax_rate], "tax_rate", provider)
       tax_rate ||= 0r if items.none? { |item| TaxType::TAXED.include?(item.tax_type || tax_type) }
       fail!("tax_rate is required, or invoice.tax_rate in the reference", provider) if tax_rate.nil?
@@ -304,6 +305,18 @@ module Einvoice
     end
 
     # --- checks ----------------------------------------------------------------
+
+    # MIG 4.1 does not allow a negative amount on an allowance. An invoice may
+    # have a negative discount line, so build_items does not check this.
+    def check_not_negative!(items, provider)
+      items.each_with_index do |item, index|
+        %i[amount quantity unit_price].each do |field|
+          value = Number.decimal!(item.public_send(field), field: "items[#{index}].#{field}", provider: provider)
+          fail!("items[#{index}].#{field} must not be negative, got #{item.public_send(field)}", provider) if
+            value.negative?
+        end
+      end
+    end
 
     # A B2B invoice needs a 統一編號. An explicit category has to agree with it.
     def check_category!(category, buyer, provider)
