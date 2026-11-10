@@ -6,3 +6,7 @@ reviews:
     drafts: false
     base_branches:
       - "2\\.0\\.0-alpha"
+  # This repository comments where code needs explaining, not on every method.
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
