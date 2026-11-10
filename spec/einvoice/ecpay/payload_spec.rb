@@ -197,6 +197,24 @@ RSpec.describe Einvoice::ECPay::Payload do
     end
   end
 
+  describe ".check_allowance!" do
+    def check(price, count, amount)
+      described_class.check_allowance!(
+        "AllowanceAmount" => amount,
+        "Items" => [{ "ItemPrice" => price, "ItemCount" => count, "ItemAmount" => amount }]
+      )
+    end
+
+    # ECPay allows ItemPrice × ItemCount to differ from ItemAmount by 1, for
+    # the rounding of the line tax.
+    it "allows a difference of 1 between price × count and the amount" do
+      expect { check(26.25, 2, 53) }.not_to raise_error
+      expect { check(1000, 1, 1050) }
+        .to raise_error(Einvoice::ValidationError,
+                        /ItemPrice × ItemCount \(1000\) must be within 1 of ItemAmount \(1050\)/)
+    end
+  end
+
   describe "provider options" do
     it "passes 零稅率 and 特種稅額 details through" do
       payload = build(tax_type: "ZERO_RATED",

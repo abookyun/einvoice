@@ -182,16 +182,25 @@ module Einvoice
           data["Items"].any? { |item| item["ItemTaxType"] == "2" }
       end
 
-      # The sum of ItemAmount has to equal AllowanceAmount [doc 7901].
+      # The sum of ItemAmount has to equal AllowanceAmount [doc 7901], and on
+      # each item ItemPrice × ItemCount may differ from ItemAmount by 1 at most.
       def check_allowance!(data)
+        errors = []
         total = data["Items"].sum { |item| item["ItemAmount"].to_r }
-        return if total.round == data["AllowanceAmount"]
+        unless total.round == data["AllowanceAmount"]
+          errors << "AllowanceAmount (#{data['AllowanceAmount']}) must equal the item total (#{total.round})"
+        end
+        data["Items"].each_with_index do |item, index|
+          product = item["ItemPrice"].to_r * item["ItemCount"].to_r
+          next if (product - item["ItemAmount"].to_r).abs <= 1
 
-        raise ValidationError.new(
-          "Invalid ECPay allowance payload — AllowanceAmount (#{data['AllowanceAmount']}) must equal " \
-          "the item total (#{total.round})",
-          provider: Client::PROVIDER
-        )
+          errors << "Items[#{index}]: ItemPrice × ItemCount (#{Number.plain(product)}) must be within 1 of " \
+                    "ItemAmount (#{item['ItemAmount']})"
+        end
+        return if errors.empty?
+
+        raise ValidationError.new("Invalid ECPay allowance payload — #{errors.join('; ')}",
+                                  provider: Client::PROVIDER)
       end
 
       def string_keys(hash)
