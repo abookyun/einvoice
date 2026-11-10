@@ -40,6 +40,15 @@ RSpec.describe Einvoice::Taipei do
       .to raise_error(Einvoice::ValidationError, /cancel_datetime must be a date/)
   end
 
+  # Time.new would read these as Mar 2 and the next day.
+  it "refuses a time string with an impossible date or time" do
+    %w[2026-02-30T10:00:00+08:00 2026-02-28T24:00:00+08:00 2026-08-01T10:60:00+08:00].each do |value|
+      expect { described_class.time(value, field: "invoice_datetime") }
+        .to raise_error(Einvoice::ValidationError, /invoice_datetime is not a valid date or time/)
+    end
+    expect(described_class.time("2028-02-29T23:59:59.5+08:00").day).to eq(29)
+  end
+
   it "refuses a value that is not a date or a time" do
     expect { described_class.date(20_260_801, field: "allowance_date") }
       .to raise_error(Einvoice::ValidationError, /allowance_date must be a Date or a Time, got Integer/)

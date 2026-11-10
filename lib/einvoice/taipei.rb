@@ -65,7 +65,13 @@ module Einvoice
         year, month, day, hour, minute, second, fraction, zone = match.captures
         seconds = second.to_i + (fraction ? Rational(fraction[1..].to_i, 10**(fraction.length - 1)) : 0)
         zone = zone == "Z" ? "UTC" : zone.sub(/(\d{2})(\d{2})\z/, '\1:\2')
-        Time.new(year.to_i, month.to_i, day.to_i, hour.to_i, minute.to_i, seconds, zone)
+        fields = [year, month, day, hour, minute, second].map(&:to_i)
+        time = Time.new(*fields[0, 5], seconds, zone)
+        # Time.new rolls an impossible value over (Feb 30 becomes Mar 2, 24:00
+        # the next day), so a stored typo would name another day. Refuse it.
+        raise ArgumentError unless [time.year, time.month, time.day, time.hour, time.min, time.sec] == fields
+
+        time
       elsif (match = DATE.match(string))
         Date.new(*match.captures.map(&:to_i))
       else
