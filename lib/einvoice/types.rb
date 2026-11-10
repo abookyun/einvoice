@@ -83,6 +83,21 @@ module Einvoice
     def business?
       !(ubn.nil? || ubn.to_s.empty?)
     end
+
+    # Name, email, address and phone are personal data, so inspect, to_s and pp
+    # show them as [FILTERED], here and inside every input or result. The ubn is
+    # a company's public number and stays. Read the fields directly when needed.
+    def inspect
+      fields = to_h.map do |key, value|
+        "#{key}=#{key == :ubn || value.nil? ? value.inspect : Redaction::FILTERED}"
+      end
+      "#<data #{self.class.name} #{fields.join(', ')}>"
+    end
+    alias_method :to_s, :inspect
+
+    def pretty_print(printer)
+      printer.text(inspect)
+    end
   end
 
   # 載具. +code+ shape depends on +type+ (mobile barcode "/"+7, citizen cert 16

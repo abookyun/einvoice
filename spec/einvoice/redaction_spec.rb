@@ -23,6 +23,22 @@ RSpec.describe Einvoice::Redaction do
     it "keeps raw readable" do
       expect(result.raw).to eq("IIS_Customer_Name" => "王小明")
     end
+
+    it "hides the buyer's personal data, in a result and in an input" do
+      buyer = Einvoice::Buyer.new(name: "王小明", ubn: "53538851", email: "ming@example.com", phone: "0912345678")
+      input = Einvoice::Input.issue({
+        order_id: "O1", buyer: buyer, tax_type: :taxable, price_mode: :tax_inclusive,
+        items: [{ description: "x", quantity: 1, unit_price: 105, amount: 105 }],
+        amount: { sales_amount: 100, tax_amount: 5, total_amount: 105 }
+      })
+      [result.with(buyer: buyer), input, buyer].each do |value|
+        [value.inspect, value.to_s, PP.pp(value, +"")].each do |text|
+          expect(text).to include('ubn="53538851"', "name=[FILTERED]", "address=nil")
+          expect(text).not_to include("王小明", "ming@example.com", "0912345678")
+        end
+      end
+      expect(buyer.name).to eq("王小明")
+    end
   end
 
   describe "an ECPay client" do

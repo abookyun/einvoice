@@ -111,7 +111,7 @@ end
 
 ### 帳號金鑰與買方資料
 
-- 結果物件的 `inspect`、`to_s` 和 `pp` 會把 `raw` 顯示成 `[FILTERED]`，因為 `raw` 是加值中心的回應，裡面有買方的資料。需要時，請直接讀 `#raw`。adapter 的 client 也會把金鑰顯示成 `[FILTERED]`。
+- 結果物件的 `inspect`、`to_s` 和 `pp` 會把 `raw` 顯示成 `[FILTERED]`，因為 `raw` 是加值中心的回應，裡面有買方的資料。需要時，請直接讀 `#raw`。`Buyer` 的姓名、email、地址和電話也會顯示成 `[FILTERED]`，不論它在哪個輸入或結果裡；`ubn` 照常顯示。adapter 的 client 也會把金鑰顯示成 `[FILTERED]`。
 - `base_url` 必須使用 https。只有 localhost 可以用 http，方便測試。
 
 ### Capabilities
