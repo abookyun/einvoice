@@ -123,6 +123,16 @@ RSpec.describe Einvoice::Input do
       expect(input.tax_breakdown).to have_attributes(taxable_amount: 95, tax_free_amount: 50, tax_amount: 5)
     end
 
+    # 0.35 + 0.15 is 0.5 and rounds to 1. Summed as Floats it rounded to 0, and
+    # the 1 was reported as taxable.
+    it "keeps fractional tax-free amounts out of the taxable total" do
+      items = [{ "description" => "a", "quantity" => 1, "unit_price" => 0.35, "amount" => 0.35 },
+               { "description" => "b", "quantity" => 1, "unit_price" => 0.15, "amount" => 0.15 }]
+      input = issue(tax_type: "TAX_FREE", items: items,
+                    amount: { "sales_amount" => 1, "tax_amount" => 0, "total_amount" => 1 })
+      expect(input.tax_breakdown).to have_attributes(taxable_amount: 0, tax_free_amount: 1, sales_amount: 1)
+    end
+
     it "rejects negative totals" do
       expect(error_for { issue(amount: { "sales_amount" => -100, "tax_amount" => 0, "total_amount" => -100 }) })
         .to match(/sales_amount must not be negative/)

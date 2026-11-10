@@ -74,7 +74,11 @@ module Einvoice
     def totals(lines, split, inclusive)
       tax = split.sum(&:tax)
       sales = inclusive ? split.sum(0r) { |line| line.amount + line.tax }.round - tax : split.sum(0r, &:amount).round
-      untaxed = ->(type) { lines.select { |line| line.tax_type == type }.sum(0r) { |line| line.net_amount.to_r }.round }
+      # Sum the exact split, not the lines: net_amount may be a Float, and 0.35 +
+      # 0.15 as Floats rounds to 0, not 1.
+      untaxed = lambda do |type|
+        lines.zip(split).select { |line, _| line.tax_type == type }.sum(0r) { |_, part| part.amount }.round
+      end
       zero = untaxed.call(TaxType::ZERO_RATED)
       free = untaxed.call(TaxType::TAX_FREE)
       TaxBreakdown.new(lines: lines, sales_amount: sales, taxable_amount: sales - zero - free,
