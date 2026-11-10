@@ -49,6 +49,20 @@ RSpec.describe Einvoice::MOF::DonationCodes do
       expect(codes.lookup("0096").code).to eq("0096")
     end
 
+    # The donateCode filter is not in the OpenAPI file. If it matches more than
+    # the exact code, or is ignored and the first page comes back, another
+    # organisation must not count as this code.
+    it "takes only the row with the exact code" do
+      stub_request(:get, url).with(query: { donateCode: "271" })
+                             .to_return(json([row("2718"), row("27100")]))
+      expect(codes.lookup("271")).to be_nil
+      expect(codes.exist?("271")).to be(false)
+
+      stub_request(:get, url).with(query: { donateCode: "2719" })
+                             .to_return(json([row("2718"), row("2719", "donateNm" => "其他協會")]))
+      expect(codes.lookup("2719")).to have_attributes(code: "2719", name: "其他協會")
+    end
+
     it "rejects anything that is not a 3–7 digit 愛心碼, without asking 財政部" do
       ["ab", "12", "12345678", "", nil, "12a4"].each do |bad|
         expect { codes.lookup(bad) }

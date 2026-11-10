@@ -48,12 +48,13 @@ module Einvoice
 
       # The registered organisation for a 愛心碼, or +nil+ when the code is not in
       # the dataset. Raises {ValidationError} if it isn't 3–7 digits.
+      #
+      # The donateCode filter is not in the OpenAPI file, so its match rule is
+      # not known. Only a row with exactly this code counts.
       def lookup(code)
         assert_format!(code)
-        rows = get(donateCode: code)
-        return nil if rows.empty?
-
-        build(rows.first)
+        row = get(donateCode: code).find { |r| r["donateCode"].to_s == code.to_s }
+        row && build(row)
       end
 
       # Whether a 愛心碼 is registered.
