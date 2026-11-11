@@ -27,6 +27,11 @@ class FakeECPay
     @invoices.fetch(number)["cancelled"] = true
   end
 
+  # GetIssue then answers with this IIS_Tax_Rate.
+  def report_tax_rate!(number, rate)
+    @invoices.fetch(number)["tax_rate"] = rate
+  end
+
   # GetIssue then answers without an issue date, as a broken response would.
   def drop_issue_date!(number)
     @invoices.fetch(number)["issued_at"] = ""
@@ -124,7 +129,7 @@ class FakeECPay
             "IIS_Customer_Email" => stored["CustomerEmail"].to_s,
             "IIS_Category" => stored["CustomerIdentifier"].to_s.empty? ? "B2C" : "B2B",
             "IIS_Tax_Type" => stored["TaxType"],
-            "IIS_Tax_Rate" => tax_rate(stored),
+            "IIS_Tax_Rate" => invoice.fetch("tax_rate") { tax_rate(stored) },
             "IIS_Tax_Amount" => 0,
             "IIS_Sales_Amount" => invoice["sales"],
             "IIS_Create_Date" => invoice["issued_at"],

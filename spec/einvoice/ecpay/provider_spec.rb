@@ -194,6 +194,15 @@ RSpec.describe Einvoice::ECPay::Provider do
       expect(found).to have_attributes(tax_type: Einvoice::TaxType::SPECIAL, tax_rate: Rational(15, 100))
       expect(found.reference).to eq(issued.reference)
     end
+
+    # The query still answers. An allowance on it then has to give the rate.
+    it "reads a special-tax rate that is not a MIG rate as nil" do
+      issued = provider.issue(issue_input(tax_type: "SPECIAL", tax_rate: 0.15,
+                                          provider_options: { special_tax_type: "2" }))
+      ecpay.report_tax_rate!(issued.invoice_number, 0.3)
+
+      expect(provider.query(invoice: issued.reference).tax_rate).to be_nil
+    end
   end
 
   describe "#void" do
