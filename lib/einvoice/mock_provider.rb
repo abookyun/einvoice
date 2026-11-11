@@ -7,10 +7,12 @@ module Einvoice
   # validation as a real adapter (via {Input}) but never hits the network, so
   # application code can be exercised end-to-end without credentials.
   #
-  # It mirrors real-adapter behaviour beyond the happy path: capability gating (a
-  # non-TWD currency is rejected unless FOREIGN_CURRENCY is declared), an
-  # in-memory state machine (void/allowance respect the invoice's status), and
-  # {#fail_next} to inject a one-shot failure for exercising error handling.
+  # It mirrors real-adapter behaviour beyond the happy path: capability gating
+  # (each operation, and a non-TWD currency, is refused unless its capability
+  # is declared), an in-memory state machine (an invoice with an allowance in
+  # force cannot be voided, a voided invoice cannot be credited, and voiding
+  # its last allowance returns it to issued), and {#fail_next} to inject a
+  # one-shot failure for exercising error handling.
   class MockProvider < Provider
     attr_reader :capabilities
 
@@ -26,7 +28,8 @@ module Einvoice
       @capabilities = Set.new(capabilities)
       @invoices = {}
       @by_order_id = {}
-      @allowances = Set.new
+      # 折讓單號 => { invoice_number:, voided: }
+      @allowances = {}
       @queued_failure = nil
     end
 
@@ -43,6 +46,7 @@ module Einvoice
 
     def issue(input)
       check_failure!
+      assert_supports!(Capability::ISSUE)
       parsed = Input.issue(input, provider: name)
       assert_currency_supported!(parsed.currency)
       assert_supports!(Capability::B2B) if parsed.resolved_category == InvoiceCategory::B2B
@@ -70,10 +74,13 @@ module Einvoice
 
     def void(input)
       check_failure!
+      assert_supports!(Capability::VOID)
       parsed = Input.void(input, provider: name)
       stored = require_invoice(parsed.invoice.number)
       fail!(ConflictError, "Invoice already voided", Reason::ALREADY_VOIDED) if
         stored[:status] == InvoiceStatus::VOIDED
+      fail!(ConflictError, "Void the invoice's allowances first", Reason::VOID_BLOCKED_BY_ALLOWANCE) if
+        allowance_in_force?(parsed.invoice.number)
 
       stored[:status] = InvoiceStatus::VOIDED
       VoidInvoiceResult.new(invoice_number: parsed.invoice.number, status: InvoiceStatus::VOIDED,
@@ -82,6 +89,7 @@ module Einvoice
 
     def allowance(input)
       check_failure!
+      assert_supports!(Capability::ALLOWANCE)
       parsed = Input.allowance(input, provider: name)
       stored = require_invoice(parsed.invoice.number)
       # A voided invoice has nothing left to credit. Deliberately not
@@ -93,7 +101,7 @@ module Einvoice
       stored[:status] = InvoiceStatus::ALLOWANCE
       @allowance_seq += 1
       allowance_number = format("AL%08d", @allowance_seq)
-      @allowances << allowance_number
+      @allowances[allowance_number] = { invoice_number: parsed.invoice.number, voided: false }
       AllowanceResult.new(
         allowance_number: allowance_number,
         invoice_number: parsed.invoice.number,
@@ -105,17 +113,22 @@ module Einvoice
 
     def void_allowance(input)
       check_failure!
+      assert_supports!(Capability::VOID_ALLOWANCE)
       parsed = Input.void_allowance(input, provider: name)
       allowance_number = parsed.allowance.allowance_number
-      fail!(NotFoundError, "Allowance not found") unless @allowances.include?(allowance_number)
+      allowance = @allowances[allowance_number] || fail!(NotFoundError, "Allowance not found")
+      fail!(ConflictError, "Allowance already voided", Reason::ALREADY_VOIDED) if allowance[:voided]
 
-      @allowances.delete(allowance_number)
+      allowance[:voided] = true
+      invoice_number = allowance[:invoice_number]
+      @invoices[invoice_number][:status] = InvoiceStatus::ISSUED unless allowance_in_force?(invoice_number)
       VoidAllowanceResult.new(allowance_number: allowance_number, cancel_datetime: Taipei.now,
                               raw: { mock: true })
     end
 
     def query(input)
       check_failure!
+      assert_supports!(Capability::QUERY)
       parsed = Input.query(input, provider: name)
       reference = parsed.invoice
       assert_supports!(Capability::QUERY_BY_ORDER_ID) if reference.number.nil?
@@ -160,6 +173,10 @@ module Einvoice
       n = @seq
       @seq += 1
       format("%s%08d", @track, n)
+    end
+
+    def allowance_in_force?(invoice_number)
+      @allowances.each_value.any? { |a| a[:invoice_number] == invoice_number && !a[:voided] }
     end
 
     def require_invoice(invoice_number)

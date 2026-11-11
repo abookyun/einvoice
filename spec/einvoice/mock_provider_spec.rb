@@ -24,6 +24,20 @@ RSpec.describe Einvoice::MockProvider do
   end
 
   describe "capability gating" do
+    # A mock built to act as a partial adapter must refuse what it leaves out,
+    # or a test of the caller's UnsupportedError handling passes for nothing.
+    it "refuses each of the five operations it does not declare" do
+      partial = described_class.new(capabilities: [])
+      {
+        issue: { order_id: "O1" }, void: { invoice: "MK00000001", reason: "x" },
+        allowance: { invoice: "MK00000001" }, void_allowance: { allowance: "AL00000001" },
+        query: { invoice: "MK00000001" }
+      }.each do |operation, input|
+        expect { partial.public_send(operation, input) }
+          .to raise_error(Einvoice::UnsupportedError), "#{operation} was not refused"
+      end
+    end
+
     it "rejects a non-TWD currency when FOREIGN_CURRENCY is not declared" do
       domestic = described_class.new(capabilities: Einvoice::Capability::ALL - [Einvoice::Capability::FOREIGN_CURRENCY])
       payload = {

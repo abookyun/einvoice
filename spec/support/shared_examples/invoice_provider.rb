@@ -157,6 +157,49 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
   # to agree on the class. The finer `reason` is deliberately not asserted: it is
   # documented as nil when an adapter cannot determine one.
   describe "operations that conflict with the invoice's state" do
+    def credit(issued, allowance_id)
+      provider.allowance({
+        invoice: issued.reference,
+        allowance_id: allowance_id,
+        items: [{ description: "商品一", quantity: 1, unit_price: 40, amount: 40 }],
+        amount: { sales_amount: 38, tax_amount: 2, total_amount: 40 },
+        price_mode: "TAX_INCLUSIVE"
+      })
+    end
+
+    it "refuses to void an invoice with an allowance in force" do
+      skip "no ALLOWANCE" unless provider.supports?(Einvoice::Capability::ALLOWANCE)
+
+      issued = provider.issue(issue_payload(order_id: "ORDER_VA"))
+      credit(issued, "AL_VA")
+
+      expect { provider.void({ invoice: issued.reference, reason: "客戶取消" }) }
+        .to raise_error(Einvoice::ConflictError)
+    end
+
+    it "voids the invoice once its allowance is voided, and reads it back as issued" do
+      skip "no VOID_ALLOWANCE" unless provider.supports?(Einvoice::Capability::VOID_ALLOWANCE)
+
+      issued = provider.issue(issue_payload(order_id: "ORDER_VAV"))
+      provider.void_allowance({ allowance: credit(issued, "AL_VAV").reference })
+
+      expect(provider.query({ invoice: issued.reference }).status)
+        .to eq(Einvoice::InvoiceStatus::ISSUED).or be_nil
+      expect(provider.void({ invoice: issued.reference, reason: "客戶取消" }).status)
+        .to eq(Einvoice::InvoiceStatus::VOIDED)
+    end
+
+    it "refuses to void the same allowance twice" do
+      skip "no VOID_ALLOWANCE" unless provider.supports?(Einvoice::Capability::VOID_ALLOWANCE)
+
+      issued = provider.issue(issue_payload(order_id: "ORDER_AA"))
+      allowance = credit(issued, "AL_AA")
+      provider.void_allowance({ allowance: allowance.reference })
+
+      expect { provider.void_allowance({ allowance: allowance.reference }) }
+        .to raise_error(Einvoice::ConflictError)
+    end
+
     it "refuses to void the same invoice twice" do
       skip "no VOID" unless provider.supports?(Einvoice::Capability::VOID)
 
