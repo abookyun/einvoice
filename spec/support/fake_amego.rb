@@ -73,6 +73,7 @@ class FakeAmego
     when "/json/g0401" then array!(data) { allowance(data.first) }
     when "/json/g0501" then array!(data) { void_allowance(data.first) }
     when "/json/invoice_query" then query(data)
+    when "/json/barcode" then barcode(data)
     else reply(code: 99, msg: "unknown path #{path}")
     end
   end
@@ -156,6 +157,20 @@ class FakeAmego
 
     allowance["voided"] = true
     @invoices[allowance["invoice"]]["remaining"] += allowance["credit"]
+    reply(code: 0, msg: "")
+  end
+
+  # --- barcode -----------------------------------------------------------------
+
+  # Every well-formed barcode is registered, except UNREGISTERED.
+  UNREGISTERED = "/NOTREG0"
+
+  def barcode(data)
+    code = data["barCode"].to_s
+    return reply(code: 9_000_111, msg: "手機條碼為空") if code.empty?
+    return reply(code: 9_000_112, msg: "手機條碼格式錯誤") unless code.match?(%r{\A/[0-9A-Z+\-.]{7}\z})
+    return reply(code: 9_000_113, msg: "手機條碼不存在") if code == UNREGISTERED
+
     reply(code: 0, msg: "")
   end
 

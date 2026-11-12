@@ -58,7 +58,10 @@ module Einvoice
         4_050_132 => [:conflict, Reason::ALREADY_VOIDED],
         4_050_134 => [:not_found, nil],
         4_050_135 => [:conflict, Reason::PAST_DEADLINE],
-        4_050_141 => [:conflict, nil]                     # a queued change is waiting
+        4_050_141 => [:conflict, nil],                    # a queued change is waiting
+
+        9_000_111 => [:validation, nil],                  # barcode empty
+        9_000_112 => [:validation, nil]                   # barcode format wrong
       }.freeze
 
       # The other f0401 codes from 3040101 to 3040199 are field format errors.

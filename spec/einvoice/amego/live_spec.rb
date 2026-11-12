@@ -121,6 +121,11 @@ RSpec.describe "Amego live API", :live do
       .to raise_error(Einvoice::ConflictError)
   end
 
+  # 9000113 means "not registered" (docs, section 6.4).
+  it "checks a mobile barcode" do
+    expect(provider.validate_carrier({ type: "MOBILE_BARCODE", code: "/ZZZZZZZ" })).to be(false)
+  end
+
   it "maps unknown invoices and allowances to NotFoundError" do
     expect { provider.query({ invoice: "ZZ00000000" }) }.to raise_error(Einvoice::NotFoundError)
     expect { provider.void({ invoice: "ZZ00000000", reason: "整合測試" }) }

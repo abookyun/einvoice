@@ -34,6 +34,7 @@ RSpec.describe Einvoice::Amego::Provider, "adapter details" do
     expect(provider).to be_supports(Einvoice::Capability::B2B)
     expect(provider).to be_supports(Einvoice::Capability::MIXED_TAX)
     expect(provider).to be_supports(Einvoice::Capability::QUERY_BY_ORDER_ID)
+    expect(provider).to be_supports(Einvoice::Capability::CARRIER_VALIDATION)
     expect(provider).not_to be_supports(Einvoice::Capability::FOREIGN_CURRENCY)
     expect(provider).not_to be_supports(Einvoice::Capability::SCHEDULED_ISSUE)
   end
@@ -186,6 +187,27 @@ RSpec.describe Einvoice::Amego::Provider, "adapter details" do
       .to raise_error(Einvoice::ConflictError) { |error|
         expect(error.reason).to eq(Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE)
       }
+  end
+
+  describe "#validate_carrier" do
+    it "asks barcode whether a mobile barcode is registered" do
+      expect(provider.validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })).to be(true)
+      expect(amego.path).to eq("/json/barcode")
+      expect(amego.data).to eq("barCode" => "/ABC1234")
+      expect(provider.validate_carrier({ type: "MOBILE_BARCODE", code: FakeAmego::UNREGISTERED })).to be(false)
+    end
+
+    it "maps a malformed barcode to a ValidationError" do
+      stub_request(:post, "#{FakeAmego::BASE_URL}/json/barcode")
+        .to_return(body: JSON.generate("code" => 9_000_112, "msg" => "手機條碼格式錯誤"))
+      expect { provider.validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" }) }
+        .to raise_error(Einvoice::ValidationError)
+    end
+
+    it "checks a mobile barcode only" do
+      expect { provider.validate_carrier({ type: "CITIZEN_CERTIFICATE", code: "TP12345678901234" }) }
+        .to raise_error(Einvoice::UnsupportedError, /mobile barcode only/)
+    end
   end
 
   it "reaches other endpoints through #raw" do

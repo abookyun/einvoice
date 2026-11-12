@@ -27,8 +27,12 @@ module Einvoice
         Capability::QUERY,
         Capability::QUERY_BY_ORDER_ID,
         Capability::B2B,
-        Capability::MIXED_TAX
+        Capability::MIXED_TAX,
+        Capability::CARRIER_VALIDATION
       ].freeze
+
+      # The barcode code for a mobile barcode that is not registered.
+      UNREGISTERED_BARCODE = "9000113"
 
       VOID_TYPES = %w[C0501 A0501 A0201 A0202].freeze
       ISSUE_TYPES = %w[C0401 A0401 A0101 A0102].freeze
@@ -115,6 +119,24 @@ module Einvoice
         reference = Input.query(input, provider: name).invoice
         assert_supports!(Capability::QUERY_BY_ORDER_ID) if reference.order_id
         build_query_result(fetch_invoice(Payload.query(reference)))
+      end
+
+      # Whether a carrier is registered (+barcode+). Amego can check a 手機條碼
+      # only. For a donation code, use {Einvoice::MOF::DonationCodes}.
+      def validate_carrier(carrier)
+        parsed = Input.carrier(carrier, provider: name)
+        unless parsed.type == CarrierType::MOBILE_BARCODE
+          raise UnsupportedError.new("Amego can check a mobile barcode only, not #{parsed.type}", provider: name)
+        end
+
+        begin
+          @client.request("/json/barcode", { "barCode" => parsed.code })
+        rescue Error => e
+          return false if e.raw_code == UNREGISTERED_BARCODE
+
+          raise
+        end
+        true
       end
 
       private
