@@ -6,9 +6,9 @@
 
 ## 1. 狀態與來源
 
-> **可信度：** adapter 進行中。它的 live spec 在 2026-10-22 於公開的測試帳號上通過，看到的事實標為 `[live]`。第 4 節和 6.4 的錯誤類別欄是 adapter 要遵守的對應方式。live spec 沒有檢查每一列。
+> **可信度：** adapter 已完成（`Einvoice::Amego::Provider`）。它的 live spec 在 2026-10-22 於公開的測試帳號上通過，看到的事實標為 `[live]`。adapter 改用 reference 和 core 稅額明細之後，live spec 在 2026-11-12 再次通過。第 4 節和 6.4 的錯誤類別欄描述 adapter 的行為。live spec 沒有檢查每一列。
 
-這是 Amego 在 `https://invoice-api.amego.tw` 的 JSON API。2.x 的 adapter 會是 `Einvoice::Amego::Provider`。標 `[live]` 的事實是在公開測試帳號上實際看到的。
+這是 Amego 在 `https://invoice-api.amego.tw` 的 JSON API。2.x 的 adapter 是 `Einvoice::Amego::Provider`。標 `[live]` 的事實是在公開測試帳號上實際看到的。
 
 文件屬於光貿科技 Amego，公開在 <https://invoice.amego.tw/api_doc/>。本筆記是我們的整理。
 
@@ -179,7 +179,7 @@ Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部
 
 每次呼叫只送一筆資料，接受陣列的 endpoint 也一樣（2.3）。
 
-**折讓資料從查詢取得。** `g0401` 需要原發票的日期和買方（`BuyerIdentifier`、`BuyerName`）。`issue` 或 `query` 回傳的 reference 有日期和 `buyer_ubn`，但沒有買方名稱。所以 adapter 會先呼叫 `invoice_query`，取得名稱；reference 沒有日期時，也一起取得日期。如果 `provider_options` 給了 `buyer_name`，而且 reference 有 `invoice_datetime`，adapter 就不查詢。查詢只能查 180 天內的發票。超過之後，呼叫端必須自己提供，否則 adapter 丟出 `ValidationError`。查詢失敗時，adapter 丟出帶有 `LOOKUP_FAILED` 的 `ProviderError`（[unified model](../README.zh-TW.md#unified-model)）。
+**折讓資料從查詢取得。** `g0401` 需要原發票的日期和買方（`BuyerIdentifier`、`BuyerName`）。`issue` 或 `query` 回傳的 reference 有日期和 `buyer_ubn`，但沒有買方名稱。所以 adapter 會先呼叫 `invoice_query`，取得名稱。reference 沒有日期或統一編號時，也一起取得。如果 `provider_options` 給了 `buyer_name`，而且 reference 有 `invoice_datetime`，adapter 就不查詢。查詢只能查 180 天內的發票。超過之後，呼叫端必須兩者都提供。查詢失敗，或查到的發票沒有日期時，adapter 丟出帶有 `LOOKUP_FAILED` 的 `ProviderError`（[unified model](../README.zh-TW.md#unified-model)）。
 
 ### 4.2 欄位
 
@@ -197,7 +197,7 @@ Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部
 | `donation.npoban` | `NPOBAN` | 可以同時帶載具 |
 | `remark` | `MainRemark` | 最多 200 |
 | `tax_type`、`items[].tax_type` | `TaxType` | 品項的課稅別不同時為 `9`，否則為對應代碼（6.1）。`SPECIAL`：`UnsupportedError` |
-| `tax_rate` | `TaxRate` | 小數字串，例如 `0.05`。只接受 `0` 和 `0.05`，其他稅率：`UnsupportedError` |
+| `tax_rate` | `TaxRate` | 小數字串，例如 `0.05`。只接受 `0` 和 `0.05`，其他稅率：`UnsupportedError`。沒有應稅品項時，core 給 `0`。Amego 在免稅發票上接受了 `0` `[live]` |
 | `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` 為 `0`，否則為 `1`。`0` 只能用在 B2B：B2C 用 `TAX_EXCLUSIVE` 會丟出 `ValidationError` |
 | `amount` | `SalesAmount`、`FreeTaxSalesAmount`、`ZeroTaxSalesAmount`、`TaxAmount`、`TotalAmount` | 從品項計算。見 4.3 |
 | `provider_options[:customs_clearance_mark]` | `CustomsClearanceMark` | `1` 或 `2`。有零稅率品項時必填 |
@@ -236,11 +236,11 @@ Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部
 | `allowance_id` | `AllowanceNumber` | 最多 16。在帳號內不能重複 |
 | （當下） | `AllowanceDate` | UTC+8 的今天，`Ymd`。Amego 要求必填，它就是這次折讓的日期 |
 | （固定） | `AllowanceType` | `2` |
-| `invoice.buyer_ubn` | `BuyerIdentifier` | `nil` 時為 `0000000000`。必須和原發票一致 |
+| `invoice.buyer_ubn`，沒有時用查詢結果 | `BuyerIdentifier` | 兩者都沒有時為 `0000000000`。必須和原發票一致 |
 | `provider_options[:buyer_name]`，沒有時取自查詢 | `BuyerName` | 必須和原發票一致 |
 | `invoice.number` | `ProductItem[].OriginalInvoiceNumber` | |
 | `invoice.invoice_datetime`，沒有時取自查詢 | `ProductItem[].OriginalInvoiceDate` | UTC+8 的 `Ymd` |
-| `items[]` | `ProductItem[]` | `description` → `OriginalDescription`、`quantity` → `Quantity`、`unit_price` → `UnitPrice`、`amount` → `Amount`，再加上品項的 `Tax` 和 `TaxType`。金額不含稅。見 4.3 |
+| `items[]` | `ProductItem[]` | `description` → `OriginalDescription`、`quantity` → `Quantity`，再加上 core 明細中該列的 `Amount`、`Tax` 和 `TaxType`。金額不含稅。`UnitPrice` 是 `Amount / Quantity`。見 4.3 |
 | `amount` | `TaxAmount`、`TotalAmount` | 見 4.3 |
 
 結果：
@@ -281,6 +281,8 @@ Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部
 | `amount` | 見 4.3 |
 | `buyer` | `buyer_name`、`buyer_identifier`（`0000000000` 轉成 `nil`）、`buyer_address`、`buyer_telephone_number`、`buyer_email_address` |
 | `items` | `product_item[]`：`description`、`quantity`、`unit_price`、`amount`、`unit`、`tax_type`、`remark` |
+| `tax_type` | 由品項的 `tax_type` 決定。品項不同時為 `MIXED`。有品項沒有課稅別時為 `nil` |
+| `tax_rate` | `tax_rate`。不是 MIG 稅率時為 `nil` |
 | `reference` | 用上面的欄位組成 |
 
 ### 4.3 金額與稅額
@@ -306,6 +308,8 @@ core 的 `tax_breakdown` 提供這些總計：`taxable_amount`、`tax_free_amoun
 除非 `DetailAmountRound` 為 `1`，否則品項金額保留 7 位小數 `[doc]`。
 
 **折讓。** 金額不含稅，每個品項有自己的整數 `Tax` `[doc]`。這就是 G0401。adapter 送出 core 明細中每一列的 `net_amount` 和 `tax`。`TotalAmount` 是未稅金額的合計，`TaxAmount` 是品項稅額的合計。99 元拆成 94 加稅額 5 的折讓，Amego 接受了 `[live]`。
+
+`UnitPrice` 是該列的 `net_amount` 除以數量，所以 `UnitPrice × Quantity` 等於 `Amount`。live 執行時送的就是這個值。core 的 `net_unit_price` 從品項的單價算出，可能和 `Amount / Quantity` 不同。文件沒有說 Amego 是否接受這個差距，所以 adapter 不使用它。
 
 **查詢。** `total_amount` 是總計。`tax_amount` 只有 B2B 才會拆出來，和開立時一樣。結果是 `total = total_amount`、`tax = tax_amount`、`sales = total - tax`。
 
@@ -606,7 +610,7 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 | `4050135` | 超過期限 | `ConflictError` | `PAST_DEADLINE` |
 | `4050141` | 等待佇列中的變更 | `ConflictError` | `RETRY_LATER` |
 
-`barcode` 的代碼：`9000111` 空白、`9000112` 格式錯誤、`9000113` 不存在。做載具檢查時，`9000113` 表示「未登記」，不是錯誤。
+`barcode` 的代碼：`9000111` 空白、`9000112` 格式錯誤、`9000113` 不存在。做載具檢查時，`9000113` 表示「未登記」，不是錯誤。未登記的手機條碼回傳了 `9000113` `[live]`。
 
 ## 7. 待解問題
 
@@ -616,5 +620,5 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 4. 查詢把品項的 `remark` 列為最多 40，開立 API 列為最多 120。哪一個才對？
 5. Amego 的自然人憑證規則是 `^TP[0-9]{14}$`。ECPay 的是「2 個大寫英文字母加 14 位數字」，core 也照這個檢查。MIG 沒有規定格式。Amego 會拒絕其他英文字母嗎？
 6. 陣列型呼叫送多筆時，其中一筆失敗，其他筆會成功嗎？在確認之前，一次只送一筆。
-7. live spec 只檢查了主要流程，沒有檢查零稅率、混合稅率、載具和小數數量。
+7. live spec 檢查了主要流程、免稅發票和手機條碼驗證，沒有檢查零稅率、混合稅率、帶載具的發票和小數數量。
 8. payload 裡的空白用 `%20` 送出可以正常運作，對原始 JSON 計算的 `sign` 也能通過 `[live]`。我們沒有測試 `+`，所以不知道 Amego 用的是哪一種 PHP decoder。

@@ -4,9 +4,9 @@ English | [繁體中文](api.zh-TW.md)
 
 ## 1. Status and sources
 
-> **Trust:** an adapter is in progress. Its live spec passed on the public test account on 2026-10-22, and the facts it saw are marked `[live]`. Section 4 and the class columns in 6.4 are the mapping the adapter follows. The live spec did not check every row.
+> **Trust:** adapter built (`Einvoice::Amego::Provider`). Its live spec passed on the public test account on 2026-10-22, and the facts it saw are marked `[live]`. It passed again on 2026-11-12, after the adapter moved to references and the core's tax breakdown. Section 4 and the class columns in 6.4 describe what the adapter does. The live spec did not check every row.
 
-This is Amego's JSON API at `https://invoice-api.amego.tw`. The 2.x adapter will be `Einvoice::Amego::Provider`. Facts marked `[live]` were seen on the public test account.
+This is Amego's JSON API at `https://invoice-api.amego.tw`. The 2.x adapter is `Einvoice::Amego::Provider`. Facts marked `[live]` were seen on the public test account.
 
 The docs belong to 光貿科技 Amego and are published at <https://invoice.amego.tw/api_doc/>. This note is our summary.
 
@@ -177,7 +177,7 @@ A track is set to one mode in the back office (發票作業 > 發票字軌列表
 
 Each call sends one entry, also to the array endpoints (2.3).
 
-**Allowance data from a query.** `g0401` needs the original invoice date and its buyer (`BuyerIdentifier`, `BuyerName`). A reference from `issue` or `query` has the date and `buyer_ubn`, but no buyer name. So the adapter calls `invoice_query` first, and takes the name, and the date if the reference has none. When `provider_options` gives `buyer_name`, and the reference has `invoice_datetime`, the adapter skips the query. The query only works within 180 days. After that, the caller must give them, or the adapter raises `ValidationError`. If the query fails, the adapter raises `ProviderError` with `LOOKUP_FAILED` ([the unified model](../README.md#the-unified-model)).
+**Allowance data from a query.** `g0401` needs the original invoice date and its buyer (`BuyerIdentifier`, `BuyerName`). A reference from `issue` or `query` has the date and `buyer_ubn`, but no buyer name. So the adapter calls `invoice_query` first, and takes the name. It also takes the date and the 統一編號 when the reference has none. When `provider_options` gives `buyer_name`, and the reference has `invoice_datetime`, the adapter skips the query. The query only works within 180 days. After that, the caller must give both. If the query fails, or the invoice it finds has no date, the adapter raises `ProviderError` with `LOOKUP_FAILED` ([the unified model](../README.md#the-unified-model)).
 
 ### 4.2 Fields
 
@@ -195,7 +195,7 @@ Each call sends one entry, also to the array endpoints (2.3).
 | `donation.npoban` | `NPOBAN` | A carrier can be sent with it |
 | `remark` | `MainRemark` | Max 200 |
 | `tax_type`, `items[].tax_type` | `TaxType` | `9` when items have different tax types, else the code (6.1). `SPECIAL`: `UnsupportedError` |
-| `tax_rate` | `TaxRate` | As a decimal string, for example `0.05`. Only `0` and `0.05`. Any other rate: `UnsupportedError` |
+| `tax_rate` | `TaxRate` | As a decimal string, for example `0.05`. Only `0` and `0.05`. Any other rate: `UnsupportedError`. The core gives `0` when no item is taxed. Amego accepted `0` on a tax-free invoice `[live]` |
 | `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` `0`, else `1`. `0` only for B2B: B2C with `TAX_EXCLUSIVE` is a `ValidationError` |
 | `amount` | `SalesAmount`, `FreeTaxSalesAmount`, `ZeroTaxSalesAmount`, `TaxAmount`, `TotalAmount` | Computed from the items. See 4.3 |
 | `provider_options[:customs_clearance_mark]` | `CustomsClearanceMark` | `1` or `2`. Required when a zero rated item is present |
@@ -234,11 +234,11 @@ The void is asynchronous. `code` `0` means Amego accepted the void into its queu
 | `allowance_id` | `AllowanceNumber` | Max 16. Must be unique in the account |
 | (now) | `AllowanceDate` | Today in UTC+8, `Ymd`. Amego requires it, and it is the date of this allowance |
 | (fixed) | `AllowanceType` | `2` |
-| `invoice.buyer_ubn` | `BuyerIdentifier` | `0000000000` when `nil`. Must match the original invoice |
+| `invoice.buyer_ubn`, else the query | `BuyerIdentifier` | `0000000000` when neither has one. Must match the original invoice |
 | `provider_options[:buyer_name]`, else the query | `BuyerName` | Must match the original invoice |
 | `invoice.number` | `ProductItem[].OriginalInvoiceNumber` | |
 | `invoice.invoice_datetime`, else the query | `ProductItem[].OriginalInvoiceDate` | `Ymd` in UTC+8 |
-| `items[]` | `ProductItem[]` | `description` → `OriginalDescription`, `quantity` → `Quantity`, `unit_price` → `UnitPrice`, `amount` → `Amount`, plus the item's `Tax` and `TaxType`. Amounts exclude tax. See 4.3 |
+| `items[]` | `ProductItem[]` | `description` → `OriginalDescription`, `quantity` → `Quantity`, plus the line's `Amount`, `Tax` and `TaxType` from the core. Amounts exclude tax. `UnitPrice` is `Amount / Quantity`. See 4.3 |
 | `amount` | `TaxAmount`, `TotalAmount` | See 4.3 |
 
 Result:
@@ -279,6 +279,8 @@ Result:
 | `amount` | See 4.3 |
 | `buyer` | `buyer_name`, `buyer_identifier` (`0000000000` becomes `nil`), `buyer_address`, `buyer_telephone_number`, `buyer_email_address` |
 | `items` | `product_item[]`: `description`, `quantity`, `unit_price`, `amount`, `unit`, `tax_type`, `remark` |
+| `tax_type` | From the items' `tax_type`. `MIXED` when they differ. `nil` when an item has none |
+| `tax_rate` | `tax_rate`. A rate that is not a MIG rate is `nil` |
 | `reference` | Built from the fields above |
 
 ### 4.3 Amounts and tax
@@ -304,6 +306,8 @@ The core's `tax_breakdown` gives these totals: `taxable_amount`, `tax_free_amoun
 Item amounts keep 7 decimals unless `DetailAmountRound` is `1` `[doc]`.
 
 **Allowance.** Amounts exclude tax, and each item has its own integer `Tax` `[doc]`. This is G0401. The adapter sends each line's `net_amount` and `tax` from the core's breakdown. `TotalAmount` is the sum without tax, and `TaxAmount` is the sum of the item taxes. A 99 split into 94 and a tax of 5 was accepted `[live]`.
+
+`UnitPrice` is the line's `net_amount` over its quantity, so `UnitPrice × Quantity` is `Amount`. That is what the live run sent. The core's `net_unit_price` comes from the item's unit price, so it can differ from `Amount / Quantity`. The docs do not say if Amego takes that gap, so the adapter does not use it.
 
 **Query.** `total_amount` is the total. `tax_amount` is only split out for B2B, as on issue. The result is `total = total_amount`, `tax = tax_amount`, `sales = total - tax`.
 
@@ -604,7 +608,7 @@ Common codes:
 | `4050135` | Past the time limit | `ConflictError` | `PAST_DEADLINE` |
 | `4050141` | Waiting for a queued change | `ConflictError` | `RETRY_LATER` |
 
-`barcode` codes: `9000111` empty, `9000112` wrong format, `9000113` does not exist. For a carrier check, `9000113` means "not registered", not an error.
+`barcode` codes: `9000111` empty, `9000112` wrong format, `9000113` does not exist. For a carrier check, `9000113` means "not registered", not an error. A barcode that is not registered gave `9000113` `[live]`.
 
 ## 7. Open questions
 
@@ -614,5 +618,5 @@ Common codes:
 4. The query lists the item `remark` as max 40, the issue API as max 120. Which is right?
 5. Amego's citizen certificate rule is `^TP[0-9]{14}$`. ECPay's is "2 capital letters and 14 digits", and the core checks that. The MIG gives no format. Does Amego reject other letters?
 6. When an array call has several entries and one fails, do the others succeed? Until we know, send one entry per call.
-7. The live spec checked the main paths only. It did not check zero rate, mixed tax, carriers or a decimal quantity.
+7. The live spec checked the main paths, a tax-free invoice and a barcode check. It did not check zero rate, mixed tax, an invoice with a carrier or a decimal quantity.
 8. A space in the payload works when sent as `%20`, and the `sign` over the raw JSON still passes `[live]`. We did not test `+`, so we do not know which PHP decoder Amego uses.

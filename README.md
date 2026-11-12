@@ -161,11 +161,12 @@ To try it without an account, use Amego's published test account (shared with ev
 
 - **Amego picks the invoice number** (自動配號).
 - **A void is queued.** Amego accepts it at once, but a query right after it can still report the invoice as issued.
-- **An allowance needs the original invoice's buyer and date.** The adapter queries the invoice for them. Pass `provider_options: { buyer_identifier:, buyer_name:, invoice_date: }` to skip the query, for example for an invoice older than 180 days. `allowance_date:` sets the allowance date. It defaults to today (Asia/Taipei).
+- **An allowance needs the original invoice's buyer and date.** The reference has the date and the 統一編號, but not the buyer's name, so the adapter queries the invoice for it. Pass `provider_options: { buyer_name: }` to skip the query, for example for an invoice older than 180 days. The allowance date is today (Asia/Taipei).
 - **The allowance number is yours.** `allowance_id` is sent as Amego's `AllowanceNumber` (max 16, unique in the account).
 - **Mixed tax rates are derived** from the items, as with ECPay.
-- **Not supported**: special tax rates and foreign currency. `tax_rate` must be empty or 5%.
-- **Anything else**: reach the other endpoints through `provider.raw(path, payload)`, for example `provider.raw("/json/barcode", { barCode: "/ABC1234" })`.
+- **Not supported**: special tax rates and foreign currency. `tax_rate` must be 0 or 0.05.
+- **Carrier validation**: `validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })` asks Amego whether a mobile barcode is registered. Amego can check a mobile barcode only. For 愛心碼, use `Einvoice::MOF::DonationCodes` (below).
+- **Anything else**: reach the other endpoints through `provider.raw(path, payload)`. Section 3 of the note lists them.
 - The details and the open questions are in [`docs/providers/amego/api.md`](docs/providers/amego/api.md).
 
 ## 財政部 lookups

@@ -170,11 +170,12 @@ provider = Einvoice::Amego::Provider.new(
 
 - **發票號碼由 Amego 配發**（自動配號）。
 - **作廢會進入佇列。** Amego 會馬上接受作廢，但作廢後馬上查詢，結果仍可能是已開立。
-- **折讓需要原發票的買方資料和日期。** adapter 會先查詢原發票取得這些資料。如果要省略查詢（例如超過 180 天的發票），請傳 `provider_options: { buyer_identifier:, buyer_name:, invoice_date: }`。`allowance_date:` 設定折讓日期，預設是今天（Asia/Taipei）。
+- **折讓需要原發票的買方資料和日期。** reference 有日期和統一編號，但沒有買方名稱，所以 adapter 會先查詢原發票取得名稱。如果要省略查詢（例如超過 180 天的發票），請傳 `provider_options: { buyer_name: }`。折讓日期是今天（Asia/Taipei）。
 - **折讓單號由你指定。** `allowance_id` 會當成 Amego 的 `AllowanceNumber` 送出（最多 16 字元，同一帳號內不能重複）。
 - **混合稅率由品項判斷**，和 ECPay 相同。
-- **不支援**：特種稅率和外幣。`tax_rate` 必須不填，或填 5%。
-- **其他功能**：其他 endpoint 請用 `provider.raw(path, payload)` 呼叫，例如 `provider.raw("/json/barcode", { barCode: "/ABC1234" })`。
+- **不支援**：特種稅率和外幣。`tax_rate` 只能是 0 或 0.05。
+- **載具驗證**：`validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })` 會向 Amego 查詢手機條碼是否已註冊。Amego 只能檢查手機條碼。愛心碼請用 `Einvoice::MOF::DonationCodes`（見下方）。
+- **其他功能**：其他 endpoint 請用 `provider.raw(path, payload)` 呼叫。note 的第 3 節列出了這些 endpoint。
 - 細節和待解問題見 [`docs/providers/amego/api.zh-TW.md`](docs/providers/amego/api.zh-TW.md)。
 
 ## 財政部查詢
