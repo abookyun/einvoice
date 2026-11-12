@@ -191,11 +191,12 @@ provider = Einvoice::EzPay::Provider.new(
 ```
 
 - **實驗性質。** ezPay 沒有共用的測試帳號，也沒有人對 ezPay 執行過這個 adapter。它的加密和 `CheckCode` 和 ezPay 手冊的範例逐 byte 吻合。請先用你自己的測試商店測試，再正式使用。
-- **查詢需要第二個 key。** 用發票號碼查詢時傳 `provider_options: { random_code: }`，用訂單編號查詢時傳 `{ total_amount: }`。這兩個值都在 `IssueInvoiceResult` 裡。
-- **折讓需要原發票的訂單編號**：`provider_options: { order_id: }`。折讓單號由 ezPay 配發，所以不會送出 `allowance_id`。
+- **查詢需要隨機碼。** `issue` 或 `query` 回傳的 reference 裡有隨機碼。
+- **折讓需要原發票的訂單編號。** reference 裡有訂單編號。沒有時，adapter 會先用發票號碼查詢。折讓單號由 ezPay 配發，所以不會送出 `allowance_id`。折讓日期是今天（Asia/Taipei）。
+- **查詢分不出有沒有折讓。** ezPay 只說明發票是否已作廢。未作廢的發票，查詢結果的狀態是 `nil`。
 - **作廢要等上傳之後。** ezPay 在隔天早上上傳前一天的發票，上傳前不能作廢。
-- **價格依發票類別決定。** B2C 價格含稅，B2B 價格未稅。`price_mode` 不符時丟出 `ValidationError`。品項數量和價格必須是整數。
-- **不支援**：不帶總金額的訂單編號查詢、特種稅率、外幣，以及載具驗證 API。`tax_rate` 必須不填，或填 5%。
+- **價格依發票類別決定。** ezPay 要求 B2C 價格含稅，B2B 價格未稅。adapter 從 core 的明細取得價格，所以任何 `price_mode` 都可以。品項數量和單價必須是整數。
+- **不支援**：訂單編號查詢、特種稅率、外幣、B2B 發票的混合稅率，以及載具驗證 API。`tax_rate` 只能是 0 或 0.05。
 - **其他功能**：`provider.raw(path, version, fields)`，例如 `provider.raw("/Api/invoice_touch_issue", "1.0", { ... })`。
 - 細節和待解問題見 [`docs/providers/ezpay/invoice.zh-TW.md`](docs/providers/ezpay/invoice.zh-TW.md)。
 

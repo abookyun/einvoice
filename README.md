@@ -182,11 +182,12 @@ provider = Einvoice::EzPay::Provider.new(
 ```
 
 - **Experimental.** ezPay has no shared test account, and nobody has run this adapter against ezPay. Its encryption and `CheckCode` match the samples in ezPay's manual byte for byte. Test it against your own test shop before you rely on it.
-- **A query needs a second key.** Pass `provider_options: { random_code: }` with an invoice number, or `{ total_amount: }` with an order id. Both are in the `IssueInvoiceResult`.
-- **An allowance needs the invoice's order id**: `provider_options: { order_id: }`. ezPay assigns the allowance number, so `allowance_id` is not sent.
+- **A query needs the random code.** The reference from `issue` or `query` has it.
+- **An allowance needs the invoice's order id.** The reference has it. Without it, the adapter queries the invoice by number first. ezPay assigns the allowance number, so `allowance_id` is not sent. The allowance date is today (Asia/Taipei).
+- **A query cannot tell an allowance.** ezPay only says if an invoice is voided. An invoice that is not voided reads back with status `nil`.
 - **A void waits for the upload.** ezPay uploads the day's invoices the next morning, and refuses a void before that.
-- **Prices follow the category.** B2C prices include tax and B2B prices exclude it. A different `price_mode` is a `ValidationError`. Item counts and prices must be whole numbers.
-- **Not supported**: query by order id without the total, special tax rates, foreign currency, and the carrier check APIs. `tax_rate` must be empty or 5%.
+- **Prices follow the category.** ezPay wants B2C prices with tax and B2B prices without. The adapter takes them from the core's breakdown, so any `price_mode` works. Item counts and unit prices must be whole numbers.
+- **Not supported**: query by order id, special tax rates, foreign currency, mixed tax on a B2B invoice, and the carrier check APIs. `tax_rate` must be 0 or 0.05.
 - **Anything else**: `provider.raw(path, version, fields)`, for example `provider.raw("/Api/invoice_touch_issue", "1.0", { ... })`.
 - The details and the open questions are in [`docs/providers/ezpay/invoice.md`](docs/providers/ezpay/invoice.md).
 

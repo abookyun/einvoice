@@ -6,9 +6,9 @@
 
 ## 1. 狀態與來源
 
-> **可信度：** 實驗性質的 adapter 進行中，只依本筆記寫成。它的加密和 `CheckCode` 和手冊範例逐 byte 吻合（2.6）。沒有對 ezPay 執行過：ezPay 沒有共用的測試帳號。第 4 節和 6.4 的錯誤類別欄是 adapter 要遵守的對應方式。
+> **可信度：** 實驗性質的 adapter（`Einvoice::EzPay::Provider`），只依本筆記寫成。它的加密和 `CheckCode` 和手冊範例逐 byte 吻合（2.6）。沒有對 ezPay 執行過：ezPay 沒有共用的測試帳號。第 4 節和 6.4 的錯誤類別欄描述 adapter 的行為。
 
-ezPay（簡單行動支付股份有限公司）經營 ezPay 電子發票加值服務平台。2.x 的 adapter 會是 `Einvoice::EzPay::Provider`。
+ezPay（簡單行動支付股份有限公司）經營 ezPay 電子發票加值服務平台。2.x 的 adapter 是 `Einvoice::EzPay::Provider`。
 
 為了驗證本筆記，我們不看 PDF、只依本筆記寫出 adapter，再拿 PDF 逐條核對缺口。筆記裡沒有寫錯的內容，但漏了一些事實。這一版把它們補上，並標出手冊本身也沒寫的地方（「手冊沒有寫」）。
 
@@ -165,9 +165,9 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 | `void` | `invoice_invalid` | `number` | |
 | `allowance` | `allowance_issue`，`Status` `1` | `number`、`order_id`、`buyer_ubn` | `tax_type_for_mixed`、`buyer_email` |
 | `void_allowance` | `allowanceInvalid` | `allowance_number` | |
-| `query` | `invoice_search` | `number` 加 `random_code`，或 `order_id` 加 `total_amount` | |
+| `query` | `invoice_search` | `number` 加 `random_code` | |
 
-**查詢一定要兩個 key。** 只有號碼，或只有訂單編號時，adapter 丟出 `ValidationError`，並指出缺少的欄位。adapter 沒辦法自己查出第二個 key。
+**查詢需要隨機碼。** 只有號碼時，adapter 丟出指出 `random_code` 的 `ValidationError`。adapter 沒辦法自己查出隨機碼。ezPay 也可以用訂單編號查詢，但必須同時給總金額。contract 只用訂單編號查詢，所以 adapter 不宣告 `QUERY_BY_ORDER_ID`（4.6），沒有號碼的 reference 會丟出 `UnsupportedError`。
 
 **折讓缺少資料時。** `allowance_issue` 需要原發票的 `MerchantOrderNo`，adapter 也需要知道買方是不是營業人（4.3）。`issue` 或 `query` 回傳的 reference 有 `order_id` 和 `buyer_ubn`，只給發票號碼時兩者都沒有。如果 reference 有 `random_code`，adapter 會先用號碼查詢，取得 `MerchantOrderNo` 和 `BuyerUBN`。否則丟出 `ValidationError`，指出缺少 `order_id`。查詢失敗時，adapter 丟出帶有 `LOOKUP_FAILED` 的 `ProviderError`（[unified model](../README.zh-TW.md#unified-model)）。
 
@@ -192,7 +192,7 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 | `tax_rate` | `TaxRate` | 百分比：`tax_rate × 100`，也就是 `5` 或 `0`。其他稅率：`UnsupportedError` |
 | `amount` | `Amt`、`TaxAmt`、`TotalAmt` | 見 4.3 |
 | `items[]` | `ItemName`、`ItemCount`、`ItemUnit`、`ItemPrice`、`ItemAmt`、`ItemTaxType` | 每個欄位是一個字串，品項之間用 `\|` 分隔。見下方 |
-| `price_mode` | （無） | ezPay 依 `Category` 決定：B2B 價格未稅，B2C 價格含稅。給了不同的 `price_mode` 會丟出 `ValidationError` |
+| `price_mode` | （無） | ezPay 依 `Category` 決定：B2B 價格未稅，B2C 價格含稅。adapter 從 core 的明細取得價格，所以任何 `price_mode` 都可以 |
 | `remark` | `Comment` | 最多 200 |
 | `currency` | （無） | 不是新台幣時丟出 `UnsupportedError`。境外電商有另一套 API |
 | `exchange_rate` | （無） | 不送出 |
@@ -204,8 +204,8 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 | `description` | `ItemName` | 最多 **30**，超過就丟出 `ValidationError`。文字中有 `\|`：`ValidationError` |
 | `quantity` | `ItemCount` | **整數**。有小數：`ValidationError` |
 | `unit` | `ItemUnit` | 必填。最多中文 2 字或英數 6 字。沒有時為 `個` |
-| `unit_price` | `ItemPrice` | **整數** |
-| `amount` | `ItemAmt` | 整數。必須等於 `ItemCount × ItemPrice` |
+| `unit_price` | `ItemPrice` | **整數**：`ItemAmt / ItemCount`。不是整數時：`ValidationError` |
+| `amount` | `ItemAmt` | 整數。core 明細中該列的金額：B2B 未稅，B2C 含稅 |
 | `tax_type` | `ItemTaxType` | 只用在混合稅率 |
 | `remark` | （無） | 沒有這個欄位，不送出 |
 
@@ -252,7 +252,7 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 | --- | --- |
 | `allowance_number` | `AllowanceNo` |
 | `invoice_number` | `InvoiceNumber` |
-| `allowance_date` | `nil`。結果裡沒有日期，日期由 ezPay 決定 |
+| `allowance_date` | UTC+8 的今天。結果裡沒有日期，adapter 會立即確認折讓（`Status` `1`），所以 ezPay 應該會把日期記為今天（推導） |
 | `total_amount` | `AllowanceAmt` |
 | `reference` | `allowance_number`、`allowance_date`、`invoice_number` |
 
@@ -284,6 +284,8 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 | `amount` | 見 4.3 |
 | `buyer` | `BuyerName`、`BuyerUBN`、`BuyerAddress`、`BuyerPhone`、`BuyerEmail` |
 | `items` | `ItemDetail`（JSON 字串）：`ItemName`、`ItemCount`、`ItemWord`（單位）、`ItemPrice`、`ItemAmount`、`ItemTaxType` |
+| `tax_type` | `TaxType`。`9` 是 `MIXED` |
+| `tax_rate` | `TaxRate`，這裡是小數，例如 `0.05000`。不是 MIG 稅率時為 `nil` |
 | `reference` | 用上面的欄位組成，`total_amount` 取 `TotalAmt` |
 
 ### 4.3 金額與稅額
@@ -313,7 +315,7 @@ adapter 依原發票的買方，從 `invoice.buyer_ubn` 決定用哪一種：
 - **消費者**（`buyer_ubn` 為 `nil`）：含稅價格。`ItemAmt` 是 core 明細中每一列的 `gross_amount`，`ItemTaxAmt` 為 `0`。「買方不能扣抵」這條規則不影響，因為消費者本來就不扣抵營業稅。含稅價格也比較容易整除：2 件、每件 50 元，仍然是每件 50。
 - **營業人**：未稅價格（G0401）。`ItemAmt` 是每一列的 `net_amount`，`ItemTaxAmt` 是它的 `tax`。
 
-兩種情況的 `TotalAmt` 都是 `amount.total_amount`。`ItemPrice` 是該列的 `gross_unit_price` 或 `net_unit_price`。ezPay 要求 `ItemAmt = ItemCount × ItemPrice` 完全相等，而且是整數，所以明細的單價和金額對不上時，adapter 丟出 `ValidationError`。未稅時可能發生這種情況，例如 2 件共 95 元（見第 7 節）。
+兩種情況的 `TotalAmt` 都是 `amount.total_amount`。`ItemPrice` 是 `ItemAmt / ItemCount`。ezPay 要求 `ItemAmt = ItemCount × ItemPrice` 完全相等，而且是整數，所以除不盡時，adapter 丟出 `ValidationError`。未稅時可能發生這種情況，例如 2 件共 95 元（見第 7 節）。
 
 **整數。** 品項數量和價格都是整數。unified model 允許小數，所以要在呼叫前檢查。
 
@@ -323,11 +325,11 @@ adapter 依原發票的買方，從 `invoice.buyer_ubn` 決定用哪一種：
 
 | ezPay | Unified `InvoiceStatus` |
 | --- | --- |
-| `InvoiceStatus` `1` | `ISSUED` |
+| `InvoiceStatus` `1` | `nil`：未作廢，不論有沒有折讓 |
 | `InvoiceStatus` `2` | `VOIDED` |
 | 其他值 | `nil` |
 
-查詢結果沒有折讓資料，也沒有註銷狀態。所以 adapter 從查詢結果永遠不會回報 `ALLOWANCE`。
+查詢結果沒有折讓資料，也沒有註銷狀態。所以 adapter 分不出 `ISSUED` 和 `ALLOWANCE`，兩者都不回報。
 
 `UploadStatus` 顯示上傳到財政部的狀況：`0` 未上傳、`1` 已上傳、`2` 上傳中、`3` 失敗、`4` 逾時。
 
@@ -348,9 +350,9 @@ adapter 依原發票的買方，從 `invoice.buyer_ubn` 決定用哪一種：
 | `QUERY` | 有 | 有 | reference 必須有隨機碼（4.1） |
 | `B2B` | 有 | 有 | `Category` `B2B` |
 | `MIXED_TAX` | 有 | 有 | 只限 B2C。B2B 有混合品項時丟出 `UnsupportedError` |
-| `QUERY_BY_ORDER_ID` | 有 | 有 | reference 必須有 `order_id` 和 `total_amount` |
+| `QUERY_BY_ORDER_ID` | 有 | 沒有 | ezPay 需要訂單編號加總金額（4.1） |
 | `SCHEDULED_ISSUE` | 有 | 無 | `Status` `3` 加上 `CreateStatusTime` |
-| `CARRIER_VALIDATION` | 有 | 有 | `validate_carrier` 對手機條碼呼叫 `checkBarCode`（5.7） |
+| `CARRIER_VALIDATION` | 有 | 沒有 | `checkBarCode`（5.7）。還沒實作：本筆記沒有 `CheckValue` 範例的輸入（2.6），所以沒辦法驗證簽章 |
 | `FOREIGN_CURRENCY` | 無 | 無 | 只有另一套境外電商 API 才有 |
 
 ### 4.7 與 MIG 的差異
@@ -371,7 +373,7 @@ adapter 依原發票的買方，從 `invoice.buyer_ubn` 決定用哪一種：
 - **不存在的發票。** contract 用 adapter spec 傳入的 `unknown_reference` 查詢不存在的發票。ezPay 需要隨機碼，例如 `{ number: "ZZ00000000", random_code: "0000" }`。查詢會送到 ezPay，回傳 `INV20006`（`NotFoundError`）。
 - **開立後馬上作廢。** contract 會作廢剛開立的發票。在 live 環境，ezPay 要等隔天上傳後才允許作廢（`LIB10009`）。fake 會馬上作廢。live spec 無法在同一次執行中測試作廢。
 - **對已作廢的發票開折讓。** 這個測試會先作廢，所以在 live 環境有同樣的問題。ezPay 沒有「對已作廢發票開折讓」的代碼。adapter 把折讓時的 `LIB10005` 視為 `ALLOWANCE_BLOCKED_BY_VOID`（6.4，見第 7 節）。
-- **不存在的折讓。** ezPay 沒有「查無折讓」的代碼。adapter 把作廢折讓時的 `IAI10002`（查詢失敗）視為 `NotFoundError`（6.4，見第 7 節）。
+- **不存在的折讓。** ezPay 沒有「查無折讓」的代碼。adapter 把作廢折讓時的 `IAI10002`（查詢失敗）視為 `NotFoundError`（6.4，見第 7 節）。重複作廢同一張折讓也沒有代碼。fake 假設回傳 `LIB10005`（發票已作廢的代碼），adapter 把它視為 `ConflictError`。
 - **訂單編號。** 最多 20 字元。contract 的編號（`ORDER_A` 等）符合。live spec 如果產生很長的編號，可能會超過。
 - **測試商店。** 沒有共用帳號。每位開發者要在 `cinv.ezpay.com.tw` 開一間測試商店，並加入測試字軌。
 
@@ -578,14 +580,15 @@ ezPay 的代碼是它自己定義的，不是 MIG 的代碼，也和 ECPay 的�
 2. ezPay 怎麼把 20 字元的 `AllowanceNo` 放進 MIG 的 16 字元？
 3. 特種稅額真的是 `TaxType` `1` 加上特種的 `TaxRate` 嗎？
 4. 作廢和折讓結果的 `CheckCode` 是怎麼算的？它們沒有手冊算法需要的五個欄位。
-5. 對已作廢的發票開折讓，以及作廢不存在的折讓，會回傳哪些代碼？contract 在這兩種情況需要 `ConflictError` 和 `NotFoundError`。
-6. 買方是營業人時，未稅的折讓品項不一定能除出整數的 `ItemPrice`，例如 2 個品項、`ItemAmt` 為 95。有辦法送出嗎？
-7. 這些內容都沒有 live 驗證過。需要在 `cinv.ezpay.com.tw` 開一間測試商店。
+5. 對已作廢的發票開折讓、作廢不存在的折讓，以及重複作廢折讓，會回傳哪些代碼？contract 在這三種情況需要 `ConflictError`、`NotFoundError` 和 `ConflictError`。
+6. 未稅的品項不一定能除出整數的 `ItemPrice`，例如 2 個品項、`ItemAmt` 為 95。B2B 發票和營業人的折讓都會遇到。有辦法送出嗎？
+7. 查詢能不能看出發票有折讓？如果可以，adapter 就能回報 `ISSUED` 和 `ALLOWANCE`，而不是 `nil`（4.4）。
+8. 這些內容都沒有 live 驗證過。需要在 `cinv.ezpay.com.tw` 開一間測試商店。
 
 下面這些手冊也沒有寫。括號裡是 adapter 的做法：
 
-8. 失敗時 `Result` 長什麼樣子（空字串、空物件或沒有這個欄位：三種都接受）。
-9. 中英混合的文字，「中文 2 字或英數 6 字」這類長度要怎麼算（只要有非 ASCII 字元，就用中文的上限）。
-10. 品項名稱含有 `|` 時怎麼辦（adapter 拒絕）。
-11. 混合稅率的發票要送哪個 `TaxRate`（`5`）。
-12. 折讓品項稅額要怎麼四捨五入（四捨五入，最後一個品項補足差額）。
+9. 失敗時 `Result` 長什麼樣子（空字串、空物件或沒有這個欄位：三種都接受）。
+10. 中英混合的文字，「中文 2 字或英數 6 字」這類長度要怎麼算（只要有非 ASCII 字元，就用中文的上限）。
+11. 品項名稱含有 `|` 時怎麼辦（adapter 拒絕）。
+12. 混合稅率的發票要送哪個 `TaxRate`（`5`）。
+13. 折讓品項稅額要怎麼四捨五入（core 用最大餘數法分配稅額）。
