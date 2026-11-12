@@ -50,7 +50,7 @@ Section 4 of every note maps the provider onto these rules. The core types follo
 
 | Reference | Fields |
 | --- | --- |
-| `InvoiceReference` | `number`, `invoice_datetime`, `random_code`, `order_id`, `total_amount`, `buyer_ubn` (`nil` for a consumer) |
+| `InvoiceReference` | `number`, `invoice_datetime`, `random_code`, `order_id`, `total_amount`, `buyer_ubn` (`nil` for a consumer), `tax_type` (`:mixed` when the items differ), `tax_rate` |
 | `AllowanceReference` | `allowance_number`, `allowance_date`, `invoice_number` |
 
 When a provider needs a field that the caller did not give, the adapter may query the provider for it. If it cannot, it raises `ValidationError` and names the field. It never fills in a guess. If the query itself fails, see the errors below.
@@ -63,15 +63,24 @@ When a provider needs a field that the caller did not give, the adapter may quer
 | `allowance_date` | `Date` | `AllowanceDate` |
 | `cancel_datetime` | `Time`, UTC+8. `nil` when the provider does not return it | `CancelDate` and `CancelTime` |
 
-**Amounts.** An invoice follows F0401. For a consumer, `sales_amount` includes tax and `tax_amount` is `0`. For a business buyer, `sales_amount` excludes tax and `tax_amount` holds the tax. An allowance follows G0401: its amounts exclude tax. If the caller gives `tax_amount` `0`, the core splits the tax out of the taxable items. It rounds half up and puts the remainder on the last taxable item. Only the core computes tax. Adapters use its result.
+**Amounts.** Issue and allowance describe their items the same way: `price_mode` says if the item amounts include tax, `tax_type` is the type of the whole document (an item can have its own), and `tax_rate` is the rate of the taxed lines. An allowance takes `tax_type` and `tax_rate` from the input, else from the invoice reference. There is no default. When the invoice has mixed tax, every allowance item needs its own `tax_type`.
 
-**Tax rate.** `tax_rate` is a decimal, for example `0.05`. The core accepts the MIG rates only: `0`, `0.01`, `0.02`, `0.05`, `0.15` and `0.25` `[mig 表 4-18]`. The default is `0.05` for taxable sales and `0` for zero-rated or tax-free sales. When a provider cannot send a rate, the adapter raises `UnsupportedError`.
+The core computes the tax from the items, as `#tax_breakdown` on the input. Only the core computes tax, and adapters read the values they need from the breakdown:
 
-**Input checks.** The core checks these before an adapter runs:
+- Each line has `net_amount`, `tax` and `gross_amount`, and `net_unit_price` and `gross_unit_price`. Line taxes are whole TWD. They are split by the largest remainder: each line takes the whole part of its share, and the units left go to the lines with the largest fractions, later lines first on a tie. Each line tax is the floor or the ceiling of its share, so it has the sign of its amount. A discount line with a negative amount can take a negative tax. No other line tax is negative. The unit prices come from the item's `unit_price`, rounded to 7 decimal places, so `unit price × quantity` can differ from the line amount by the rounding of the line tax. The provider note says how much difference its API allows.
+- The totals are `sales_amount` (without tax), `taxable_amount`, `zero_rated_amount`, `tax_free_amount`, `tax_amount` and `total_amount`. The tax is `round(taxable sales × tax_rate)`.
+- Zero-rated and tax-free lines have tax `0`.
 
-- `ubn` is 8 digits. A B2B invoice needs one. If the caller sets `category`, it must agree with `ubn`.
-- Totals are integers and not negative. Item quantity, price and amount are numbers with at most 7 decimals.
-- A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits.
+The caller's `AmountSummary` is checked against the breakdown. It never tells the core what to compute, and the core never changes the caller's items. An invoice follows F0401: for a consumer, `sales_amount` includes tax and `tax_amount` is `0`, and for a business buyer, `tax_amount` has to be the breakdown's tax. An allowance follows G0401: `sales_amount` excludes tax and `tax_amount` is the breakdown's tax.
+
+**Tax rate.** `tax_rate` is a decimal, for example `0.05`. The core accepts the MIG rates only: `0`, `0.01`, `0.02`, `0.05`, `0.15` and `0.25` `[mig 表 4-18]`. On an issue the lines decide the default, not the header: `0.05` when a line is taxable, else `0`. A special-tax line has no default. A taxable line cannot have rate `0`. When a provider cannot send a rate, the adapter raises `UnsupportedError`.
+
+**Input checks.** The core checks these before an adapter runs. A value object built with `.new` goes through the same checks as a Hash.
+
+- `ubn` is 8 digits: a company's 統一編號. MIG 表 4-7 allows a BAN of 8 to 10 digits, but the 9- and 10-digit forms are not used for a buyer here. A B2B invoice needs a `ubn`. If the caller sets `category`, it must agree with `ubn`.
+- Totals are integers and not negative. Item quantity, price and amount are numbers with at most 7 decimals. An invoice item may be negative, as a discount line. An allowance item may not (MIG 4.1).
+- The amounts agree with the items, as described above.
+- A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits. These formats come from the ECPay and ezPay docs: the MIG lists the carrier types only.
 - A void reason is 1 to 20 characters. A void allowance reason is optional. The core fills `作廢折讓` when it is missing.
 - A donation and a carrier can both be set. The MIG allows it.
 
@@ -86,7 +95,8 @@ When a provider needs a field that the caller did not give, the adapter may quer
 
 - A query that the adapter makes on its own, to fill a missing field, belongs to the provider group. If it fails, the adapter raises `ProviderError` with `Reason::LOOKUP_FAILED`. The message names the field it needed, and `cause` holds the error of the query. So a `NotFoundError` always means the invoice of the call itself.
 - Each provider has its own default class for an error code that we do not know. Section 6.4 gives it, with the evidence.
-- HTTP 5xx and 429 are a `NetworkError`, so the caller can retry.
+- When the body is not a provider response, HTTP 5xx and 429 are a `NetworkError`, so the caller can retry. A body that the adapter can read decides the error, whatever the status. ECPay, for example, sends a wrong key as HTTP 500 with a normal envelope.
+- The client rescues only connection errors. A bug in an adapter is not a `NetworkError`.
 - `Reason::RETRY_LATER` means the provider says "not now, try later", for example a void before the invoice is uploaded.
 
 **Capabilities.**
@@ -94,7 +104,7 @@ When a provider needs a field that the caller did not give, the adapter may quer
 - `QUERY_BY_ORDER_ID` means the provider can find an invoice from data that the caller knows, without the invoice number. The caller passes an `InvoiceReference` with `order_id`, and `total_amount` if the provider needs it.
 - `CARRIER_VALIDATION` means the adapter implements `Provider#validate_carrier`.
 
-**Connection.** `base_url` must use https. Only localhost may use http.
+**Connection.** `base_url` must use https. Only localhost may use http. It must not carry a user or password, because `inspect` shows it.
 
 ## Sources and trust
 

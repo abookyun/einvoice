@@ -20,6 +20,20 @@ module Einvoice
     TAX_FREE   = :tax_free     # 免稅
     SPECIAL    = :special      # 特種稅額
     ALL = [TAXABLE, ZERO_RATED, TAX_FREE, SPECIAL].freeze
+    # Not a MIG tax type, and an issue input does not take it. It describes an
+    # existing invoice whose items have different tax types, on a reference or
+    # an allowance. Each allowance item then has to carry its own tax_type.
+    MIXED = :mixed
+    # Taxes that add tax to a line. ZERO_RATED and TAX_FREE lines have tax 0.
+    TAXED = [TAXABLE, SPECIAL].freeze
+
+    module_function
+
+    # The tax type of a whole invoice: the one its items share, else MIXED.
+    def of(items, invoice_tax_type)
+      kinds = items.map { |item| item.tax_type || invoice_tax_type }.uniq
+      kinds.size > 1 ? MIXED : kinds.first || invoice_tax_type
+    end
   end
 
   # Invoice category. Derived from whether the buyer has a 統一編號:
@@ -69,6 +83,21 @@ module Einvoice
     def business?
       !(ubn.nil? || ubn.to_s.empty?)
     end
+
+    # Name, email, address and phone are personal data, so inspect, to_s and pp
+    # show them as [FILTERED], here and inside every input or result. The ubn is
+    # a company's public number and stays. Read the fields directly when needed.
+    def inspect
+      fields = to_h.map do |key, value|
+        "#{key}=#{key == :ubn || value.nil? ? value.inspect : Redaction::FILTERED}"
+      end
+      "#<data #{self.class.name} #{fields.join(', ')}>"
+    end
+    alias_method :to_s, :inspect
+
+    def pretty_print(printer)
+      printer.text(inspect)
+    end
   end
 
   # 載具. +code+ shape depends on +type+ (mobile barcode "/"+7, citizen cert 16
@@ -92,6 +121,9 @@ module Einvoice
   Donation::CODE_FORMAT = /\A\d{3,7}\z/
 
   # A single invoice line. +tax_type+ is required only on mixed-tax invoices.
+  # +unit_price+ and +amount+ include tax or not as the input's +price_mode+
+  # says. The core never changes them: the tax of each line is in the input's
+  # #tax_breakdown.
   InvoiceItem = Data.define(:description, :quantity, :unit_price, :amount, :unit, :tax_type, :remark) do
     def initialize(description:, quantity:, unit_price:, amount:, unit: nil, tax_type: nil, remark: nil)
       super
@@ -106,11 +138,11 @@ module Einvoice
 
   IssueInvoiceInput = Data.define(
     :order_id, :buyer, :items, :amount, :tax_type, :price_mode, :tax_rate, :category,
-    :carrier, :donation, :remark, :currency, :exchange_rate, :date, :provider_options
+    :carrier, :donation, :remark, :currency, :exchange_rate, :provider_options
   ) do
     def initialize(order_id:, buyer:, items:, amount:, tax_type:, price_mode:, tax_rate: nil,
                    category: nil, carrier: nil, donation: nil, remark: nil, currency: nil,
-                   exchange_rate: nil, date: nil, provider_options: nil)
+                   exchange_rate: nil, provider_options: nil)
       super
     end
 
@@ -118,50 +150,164 @@ module Einvoice
     def resolved_category
       category || (buyer&.business? ? InvoiceCategory::B2B : InvoiceCategory::B2C)
     end
+
+    # The tax of every line and the MIG totals, computed by the core. See
+    # {TaxBreakdown}.
+    def tax_breakdown(provider: nil)
+      TaxSplit.breakdown(items, tax_type: tax_type, tax_rate: tax_rate, price_mode: price_mode, provider: provider)
+    end
   end
 
+  # --- References ---
+
+  # The facts about an existing invoice that providers ask for when they void,
+  # credit or query it. Results of issue and query return one as #reference, so
+  # a caller passes it on and does not have to know what each provider needs.
+  # Every field is optional. An adapter that needs a missing field may query the
+  # provider for it, or raises ValidationError naming the field.
+  #
+  # +invoice_datetime+ is a Time in UTC+8. +buyer_ubn+ is nil for a consumer.
+  # +tax_type+ and +tax_rate+ are the invoice's, so an allowance can take them
+  # from here. +tax_type+ is MIXED when the items differ.
+  #
+  # A reference is stored between calls, often for days. #to_h is that stored
+  # form: JSON-safe values only, with +invoice_datetime+ as an ISO 8601 string in
+  # UTC+8. Pass the Hash back as +invoice:+, as it is or after a JSON round
+  # trip, and Input reads the same reference.
+  InvoiceReference = Data.define(:number, :invoice_datetime, :random_code, :order_id, :total_amount,
+                                 :buyer_ubn, :tax_type, :tax_rate) do
+    def initialize(number: nil, invoice_datetime: nil, random_code: nil, order_id: nil,
+                   total_amount: nil, buyer_ubn: nil, tax_type: nil, tax_rate: nil)
+      super
+    end
+
+    def to_h
+      super.merge(invoice_datetime: invoice_datetime && Taipei.iso8601(invoice_datetime),
+                  tax_type: tax_type&.to_s, tax_rate: tax_rate && Number.plain(tax_rate.to_r)).compact
+    end
+  end
+
+  # The facts about an existing allowance. +allowance_date+ is a Date. #to_h is
+  # the stored form, as for InvoiceReference, with the date as YYYY-MM-DD.
+  AllowanceReference = Data.define(:allowance_number, :allowance_date, :invoice_number) do
+    def initialize(allowance_number:, allowance_date: nil, invoice_number: nil)
+      super
+    end
+
+    def to_h
+      super.merge(allowance_date: allowance_date&.strftime("%Y-%m-%d")).compact
+    end
+  end
+
+  # --- Issue results ---
+
+  # +invoice_datetime+ is a Time in UTC+8 (MIG InvoiceDate and InvoiceTime).
+  # +buyer_ubn+ is nil for a consumer. +tax_type+ is TaxType.of the input, so
+  # MIXED for a mixed-tax invoice, and +tax_rate+ is the input's rate.
   IssueInvoiceResult = Data.define(
-    :invoice_number, :invoice_date, :random_code, :order_id, :total_amount, :status, :raw
-  )
+    :invoice_number, :invoice_datetime, :random_code, :order_id, :total_amount, :buyer_ubn, :tax_type,
+    :tax_rate, :status, :raw
+  ) do
+    include Redaction::Raw
+
+    def reference
+      InvoiceReference.new(number: invoice_number, invoice_datetime: invoice_datetime,
+                           random_code: random_code, order_id: order_id,
+                           total_amount: total_amount, buyer_ubn: buyer_ubn,
+                           tax_type: tax_type, tax_rate: tax_rate)
+    end
+  end
 
   # --- Void (作廢) ---
 
-  VoidInvoiceInput = Data.define(:invoice_number, :reason, :date, :provider_options) do
-    def initialize(invoice_number:, reason:, date: nil, provider_options: nil)
+  # +invoice+ is an InvoiceReference (Input also takes a plain number).
+  VoidInvoiceInput = Data.define(:invoice, :reason, :provider_options) do
+    def initialize(invoice:, reason:, provider_options: nil)
       super
     end
   end
 
-  VoidInvoiceResult = Data.define(:invoice_number, :status, :raw)
+  # +cancel_datetime+ is a Time in UTC+8 (MIG CancelDate and CancelTime), or nil
+  # when the provider does not return it.
+  VoidInvoiceResult = Data.define(:invoice_number, :status, :cancel_datetime, :raw) do
+    include Redaction::Raw
+
+    def initialize(invoice_number:, status:, raw:, cancel_datetime: nil)
+      super
+    end
+  end
 
   # --- Allowance (折讓) and its cancellation (折讓作廢) ---
 
-  AllowanceInput = Data.define(:invoice_number, :allowance_id, :items, :amount, :date, :provider_options) do
-    def initialize(invoice_number:, allowance_id:, items:, amount:, date: nil, provider_options: nil)
+  # +price_mode+ says if the item amounts include tax. +tax_type+ and
+  # +tax_rate+ come from the input, else from the invoice reference. With a
+  # MIXED tax type, every item carries its own tax_type.
+  #
+  # +amount+ follows G0401: +sales_amount+ excludes tax. Input checks it
+  # against #tax_breakdown, which holds the tax of each line.
+  AllowanceInput = Data.define(:invoice, :allowance_id, :items, :amount, :price_mode, :tax_type, :tax_rate,
+                               :provider_options) do
+    def initialize(invoice:, allowance_id:, items:, amount:, price_mode:, tax_type:, tax_rate:,
+                   provider_options: nil)
+      super
+    end
+
+    def tax_breakdown(provider: nil)
+      TaxSplit.breakdown(items, tax_type: tax_type, tax_rate: tax_rate, price_mode: price_mode, provider: provider)
+    end
+  end
+
+  # +allowance_date+ is a Date (MIG AllowanceDate has no time).
+  AllowanceResult = Data.define(:allowance_number, :invoice_number, :allowance_date, :total_amount, :raw) do
+    include Redaction::Raw
+
+    def reference
+      AllowanceReference.new(allowance_number: allowance_number, allowance_date: allowance_date,
+                             invoice_number: invoice_number)
+    end
+  end
+
+  # +allowance+ is an AllowanceReference (Input also takes a plain number).
+  VoidAllowanceInput = Data.define(:allowance, :reason, :provider_options) do
+    def initialize(allowance:, reason: nil, provider_options: nil)
       super
     end
   end
 
-  AllowanceResult = Data.define(:allowance_number, :invoice_number, :allowance_date, :total_amount, :raw)
+  VoidAllowanceResult = Data.define(:allowance_number, :cancel_datetime, :raw) do
+    include Redaction::Raw
 
-  VoidAllowanceInput = Data.define(:invoice_number, :allowance_number, :reason, :provider_options) do
-    def initialize(invoice_number:, allowance_number:, reason: nil, provider_options: nil)
+    def initialize(allowance_number:, raw:, cancel_datetime: nil)
       super
     end
   end
-
-  VoidAllowanceResult = Data.define(:allowance_number, :raw)
 
   # --- Query (查詢) ---
 
-  # Query by invoice number, or by your order id — at least one required.
-  QueryInvoiceInput = Data.define(:invoice_number, :order_id, :provider_options) do
-    def initialize(invoice_number: nil, order_id: nil, provider_options: nil)
+  # +invoice+ is an InvoiceReference with a number or an order id. A reference
+  # with only an order id (and what the provider needs with it) finds an invoice
+  # without its number. That needs QUERY_BY_ORDER_ID.
+  QueryInvoiceInput = Data.define(:invoice, :provider_options) do
+    def initialize(invoice:, provider_options: nil)
       super
     end
   end
 
+  # +status+ is nil when the provider's status has no InvoiceStatus, for
+  # example a cancelled (註銷) invoice.
+  #
+  # +tax_type+ and +tax_rate+ are nil when the provider does not say.
   QueryInvoiceResult = Data.define(
-    :invoice_number, :invoice_date, :random_code, :order_id, :status, :amount, :buyer, :items, :raw
-  )
+    :invoice_number, :invoice_datetime, :random_code, :order_id, :status, :amount, :buyer, :items, :tax_type,
+    :tax_rate, :raw
+  ) do
+    include Redaction::Raw
+
+    def reference
+      InvoiceReference.new(number: invoice_number, invoice_datetime: invoice_datetime,
+                           random_code: random_code, order_id: order_id,
+                           total_amount: amount&.total_amount, buyer_ubn: buyer&.ubn,
+                           tax_type: tax_type, tax_rate: tax_rate)
+    end
+  end
 end

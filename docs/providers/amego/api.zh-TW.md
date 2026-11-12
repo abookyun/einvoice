@@ -301,11 +301,11 @@ TotalAmount = SalesAmount + FreeTaxSalesAmount + ZeroTaxSalesAmount + TaxAmount
 
 品項價格未稅（`DetailVat` 為 `0`，只限 B2B）時，`TaxAmount = round(SalesAmount × 0.05)`，其他相同。
 
-adapter 用 core 的稅額 helper，從品項算出這些總計，再檢查 `TotalAmount` 是否等於 `amount.total_amount`；B2B 時也檢查 `TaxAmount` 是否等於 `amount.tax_amount`。不一致就在呼叫前丟出 `ValidationError`。B2C 時公式算出的稅額為 `0`，和 F0401 一致。
+core 的 `tax_breakdown` 提供這些總計：`taxable_amount`、`tax_free_amount`、`zero_rated_amount`、`tax_amount` 和 `total_amount`。它的稅額和 Amego 的公式相同。B2B 時 adapter 直接送出；B2C 時 `SalesAmount` 送 `taxable_amount + tax_amount`，`TaxAmount` 送 `0`，和 F0401 一致。core 已經把 `amount` 和明細核對過，adapter 不必再檢查。
 
 除非 `DetailAmountRound` 為 `1`，否則品項金額保留 7 位小數 `[doc]`。
 
-**折讓。** 金額不含稅，每個品項有自己的整數 `Tax` `[doc]`。這正是 core 給出的格式（G0401）。adapter 直接送出每個品項的金額和稅額。`TotalAmount` 是未稅金額的合計，`TaxAmount` 是品項稅額的合計。99 元拆成 94 加稅額 5 的折讓，Amego 接受了 `[live]`。
+**折讓。** 金額不含稅，每個品項有自己的整數 `Tax` `[doc]`。這就是 G0401。adapter 送出 core 明細中每一列的 `net_amount` 和 `tax`。`TotalAmount` 是未稅金額的合計，`TaxAmount` 是品項稅額的合計。99 元拆成 94 加稅額 5 的折讓，Amego 接受了 `[live]`。
 
 **查詢。** `total_amount` 是總計。`tax_amount` 只有 B2B 才會拆出來，和開立時一樣。結果是 `total = total_amount`、`tax = tax_amount`、`sales = total - tax`。
 
@@ -361,7 +361,7 @@ adapter 用 core 的稅額 helper，從品項算出這些總計，再檢查 `Tot
 ### 4.8 Contract 與 live 測試
 
 - **共用的測試帳號。** 所有開發者都用帳號 `12345678`。live spec 必須產生不重複的訂單編號和折讓單號。contract 用固定的折讓 id（`AL_1`、`AL_AV`），在 live 帳號上可能會重複。
-- **不存在的號碼。** 使用格式正確的發票號碼，例如 `unknown_invoice_number: "ZZ00000000"`。折讓單號是最多 16 字元的自由文字，所以預設的 `NOPE00000000` 可以用。
+- **不存在的號碼。** 使用格式正確的發票號碼，例如 `unknown_reference: { number: "ZZ00000000" }`。折讓單號是最多 16 字元的自由文字，所以預設的 `NOPE00000000` 可以用。
 - **開立後馬上作廢。** contract 會作廢剛開立的發票。Amego 可能回傳 `3050121`（還在開立中）或 `3050131`（佇列中）`[info 71]`。2026-10-22 實測時，開立後馬上作廢直接成功，第二次作廢丟出 `ConflictError` `[live]`。live spec 遇到 `RETRY_LATER` 仍會重試。fake 不模擬佇列。
 - **折讓。** `issue` 回傳的 reference 提供發票日期。adapter 仍會查詢買方，所以 fake 必須回應 `invoice_query`。
 - **fake。** fake 需要表單外層格式、`sign` 檢查，以及 2.3 的回應格式。
@@ -549,7 +549,7 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 | `18` | 資料庫連線失敗 | `ProviderError` | |
 | `19` | 公司已停用 | `AuthError` | `ACCOUNT_SUSPENDED` |
 | `20` | `data` 不是 JSON | `ValidationError` | |
-| `21` | 使用人數過多，請稍後再試 | `ProviderError` | `RATE_LIMITED` |
+| `21` | 使用人數過多，請稍後再試 | `NetworkError` | `RATE_LIMITED` |
 | `22` | 尚未申請 API | `AuthError` | `NOT_ENROLLED` |
 | `23` | 這個 API 需要陣列 | `ValidationError` | |
 | `51` | 超過 180 天查詢期限 | `ProviderError` | |

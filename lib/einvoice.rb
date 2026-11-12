@@ -2,6 +2,10 @@
 
 require "einvoice/version"
 require "einvoice/error"
+require "einvoice/redaction"
+require "einvoice/taipei"
+require "einvoice/number"
+require "einvoice/tax_split"
 require "einvoice/capability"
 require "einvoice/types"
 require "einvoice/input"

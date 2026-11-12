@@ -66,7 +66,7 @@ client 只用到一個 endpoint：
 | `limit` | O | 1 到 500 |
 | `offset` | O | 要跳過的筆數 |
 
-OpenAPI 文件沒有列出 `donateCode`，但這個 endpoint 實際上可以用它篩選 `[live]`。
+OpenAPI 文件沒有列出 `donateCode`，但這個 endpoint 實際上可以用它篩選 `[live]`。比對規則不明。`lookup` 只採用 `donateCode` 和查詢碼完全相同的那一筆 `[code]`，所以即使篩選比較寬鬆，或 endpoint 忽略這個篩選，也不會回報成別的機構。
 
 回應：一個陣列。每一筆有 `[doc]`：
 

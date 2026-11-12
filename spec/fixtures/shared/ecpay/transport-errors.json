@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "provider": "ecpay",
+  "note": "Transport-layer (envelope) errors: TransCode ≠ 1 with no business Data. Live-verified on einvoice-stage.ecpay.com.tw 2026-08-15 (HTTP 500 in every case). Classification keys off transCode alone — transMsg is recorded for reference. Codes not listed here normalize to PROVIDER with no reason.",
+  "cases": [
+    {
+      "name": "stale timestamp (over 10 minutes)",
+      "transCode": "104",
+      "transMsg": "Timestamp is over 10 minutes than it just produced.",
+      "expect": { "code": "AUTH", "reason": "stale_timestamp" }
+    },
+    {
+      "name": "Data decrypt fail (wrong HashKey/HashIV)",
+      "transCode": "110",
+      "transMsg": "The parameter [Data] decrypt fail.",
+      "expect": { "code": "AUTH", "reason": "credentials_invalid" }
+    },
+    {
+      "name": "merchant unknown / B2C-B2B not enabled",
+      "transCode": "115",
+      "transMsg": "B2C/B2B功能尚未開通，請聯繫所屬業務",
+      "expect": { "code": "AUTH", "reason": "not_enrolled" }
+    },
+    {
+      "name": "empty Data parameter (unlisted → PROVIDER fallback)",
+      "transCode": "111",
+      "transMsg": "The parameter [Data] cannot be empty.",
+      "expect": { "code": "PROVIDER", "reason": null }
+    }
+  ]
+}

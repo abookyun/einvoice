@@ -47,27 +47,63 @@ result = provider.issue(
 result.invoice_number   # => "MK10000000"
 result.status           # => :issued
 
-invoice = provider.query(order_id: "ORDER_1")
+invoice = provider.query(invoice: result.reference)
 invoice.status          # => :issued
 
-provider.void(invoice_number: result.invoice_number, reason: "客戶取消")
+provider.void(invoice: result.reference, reason: "客戶取消")
 ```
 
-Inputs accept plain hashes (string or symbol keys) — enum fields take the canonical symbol (`:taxable`) or a wire-style string (`"TAXABLE"`). They are validated and coerced into immutable value objects before anything hits the network; a malformed request raises `Einvoice::ValidationError` locally.
+`result.reference` is an `InvoiceReference`. It holds the facts about the invoice that providers ask for when you void, credit or query it later: the number, `invoice_datetime`, `random_code`, `order_id`, `total_amount`, `buyer_ubn`, and its `tax_type` and `tax_rate`. Store `result.reference.to_h` with your order. It holds JSON-safe values only (`invoice_datetime` is an ISO 8601 string in UTC+8), so it survives a JSON column. Pass it back as it is as `invoice:`, or pass the reference itself. A stored time has to carry its offset: `"2026-08-01 10:00"` is refused rather than read in the wrong zone, and a plain `"2026-08-01"` is that day in Taipei. A plain invoice number also works, but a provider that needs more raises `ValidationError` and names the field. To find an invoice without its number, query `invoice: { order_id: "ORDER_1" }` on a provider that declares `QUERY_BY_ORDER_ID`. `void_allowance` takes `allowance:`, an `AllowanceReference` from `AllowanceResult#reference`.
+
+Inputs accept plain hashes (string or symbol keys) — enum fields take the canonical symbol (`:taxable`) or a wire-style string (`"TAXABLE"`). They are validated and coerced into immutable value objects before anything hits the network; a malformed request raises `Einvoice::ValidationError` locally. A value object you build with `.new` goes through the same checks.
+
+The checks:
+
+- A buyer `ubn` is 8 digits, a company's 統一編號. (MIG 表 4-7 allows a BAN of 8 to 10 digits; the 9- and 10-digit forms are not used for a buyer.) A B2B invoice needs one, and an explicit `category` has to agree with it.
+- Totals are whole numbers and not negative. Item quantity, price and amount are numbers with at most 7 decimal places.
+- A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits. These formats come from the providers' docs; the MIG lists the carrier types only.
+- `tax_rate` is a decimal, such as `0.05`, and has to be a MIG rate. On an issue the lines decide its default, not the header: `0.05` when a line is taxable, else `0`. A special-tax line needs it. A taxable line cannot have rate `0`.
+- The amounts agree with the items (below).
+- A void reason is at most 20 characters. A void allowance reason defaults to `作廢折讓`.
+
+### Amounts and tax
+
+The core computes the tax from the items. `price_mode` says if the item amounts include tax, `tax_type` is the type of the whole invoice (an item can have its own), and `tax_rate` is the rate. The result is `input.tax_breakdown`: the net amount, tax and gross amount of each line, and the MIG totals. Adapters read it and do not compute tax themselves. The core never changes your items.
+
+Your `amount` is checked against it. An invoice follows F0401: for a consumer the tax is inside `sales_amount` and `tax_amount` is `0`. For a business buyer `tax_amount` is `round(taxable sales × tax_rate)`:
+
+```ruby
+amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }  # 100 with tax, to a business
+```
+
+An allowance follows G0401: `sales_amount` excludes tax, for a consumer too. It takes `tax_type` and `tax_rate` from the invoice reference, so pass `issued.reference`, or give them yourself. There is no default, so a zero-rated invoice is never credited with 5% tax. When the invoice has mixed tax, give every item its `tax_type`.
+
+```ruby
+provider.allowance(
+  invoice: issued.reference, allowance_id: "AL_1", price_mode: "TAX_INCLUSIVE",
+  items: [{ description: "退貨", quantity: 1, unit_price: 100, amount: 100 }],
+  amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }
+)
+```
 
 ### Errors
 
-Every failure is an `Einvoice::Error` subclass carrying a stable `#code`, the provider's `#raw_code` / `#raw_message`, and an optional action-oriented `#reason`. Rescue precisely or broadly:
+Every failure is an `Einvoice::Error` subclass carrying a stable `#code`, the provider's `#raw_code` / `#raw_message`, and an optional action-oriented `#reason`. `#group` tells which side failed: `:invoice` (the request breaks a rule of the MOF, or the invoice is not in the state it needs) or `:provider` (the account, the connection, or the provider's own service). Rescue precisely or broadly:
 
 ```ruby
 begin
-  provider.void(invoice_number: "AB12345678", reason: "customer cancelled")
+  provider.void(invoice: invoice.reference, reason: "customer cancelled")
 rescue Einvoice::ConflictError => e
   e.reason   # => :already_voided  (idempotent — treat as success)
 rescue Einvoice::Error => e
   e.code     # => :network, :auth, :not_found, …
 end
 ```
+
+### Credentials and buyer data
+
+- `inspect`, `to_s` and `pp` show results with `raw=[FILTERED]`, because `raw` is the provider's response and holds the buyer's data. Read `#raw` directly when you need it. A `Buyer` shows its name, email, address and phone as `[FILTERED]` too, inside every input and result; its `ubn` stays. An adapter's client shows its keys as `[FILTERED]`.
+- `base_url` has to use https. Only localhost may use http, for tests.
 
 ### Capabilities
 
@@ -103,9 +139,11 @@ A few things worth knowing:
 
 - **Paper vs. electronic is derived.** An invoice with a carrier or a donation is electronic (`Print=0`); anything else prints, and ECPay then requires a buyer name and address.
 - **Mixed tax rates are derived too.** Items that disagree on `tax_type` produce a 混合稅率 (TaxType 9) invoice; you don't ask for it explicitly.
-- **Void and allowance need the invoice's issue date**, which the unified input has no field for. It defaults to today (Asia/Taipei) — for an older invoice pass `provider_options: { invoice_date: "2026-08-01" }`, or query by `order_id`.
+- **Void, allowance and a query by number need the invoice's issue date.** It comes from `invoice.invoice_datetime`. If the reference has an `order_id` instead, the adapter looks the date up first. A failed lookup raises `ProviderError` with `reason: :lookup_failed`. A plain number is not enough.
+- **Void allowance needs the invoice number**, so pass the `AllowanceReference`, not only the allowance number.
 - **No foreign currency.** ECPay's B2C API has no such field, so a non-TWD `currency` raises `UnsupportedError` rather than being filed as TWD.
-- **Carrier validation**: `validate_mobile_barcode("/ABC1234")`, `validate_love_code("168001")`, `love_code_organ_name("168001")` — these ask ECPay, so they need this adapter and its credentials. For 愛心碼 there is also `Einvoice::MOF::DonationCodes` (below), which asks 財政部 directly and needs neither.
+- **A taxable invoice is 5%.** ECPay fixes the rate by tax type, so another `tax_rate` raises `UnsupportedError`.
+- **Carrier validation**: `validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })` (the `Provider` method behind `CARRIER_VALIDATION`; ECPay can check a mobile barcode only), `validate_love_code("168001")`, `love_code_organ_name("168001")` — these ask ECPay, so they need this adapter and its credentials. For 愛心碼 there is also `Einvoice::MOF::DonationCodes` (below), which asks 財政部 directly and needs neither.
 - **Anything else**: ECPay has ~25 further B2C endpoints (延遲開立, 字軌設定, 列印, 通知 …). Reach them through `provider.raw(path, payload)`, which applies the envelope, encryption and error mapping for you.
 
 ## 財政部 lookups

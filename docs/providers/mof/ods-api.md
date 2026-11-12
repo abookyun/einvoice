@@ -64,7 +64,7 @@ Parameters `[doc]`:
 | `limit` | O | 1 to 500 |
 | `offset` | O | Rows to skip |
 
-`donateCode` is not in the OpenAPI file, but the endpoint filters by it `[live]`.
+`donateCode` is not in the OpenAPI file, but the endpoint filters by it `[live]`. Its match rule is not known. `lookup` keeps only a row whose `donateCode` equals the code `[code]`, so a looser filter, or a filter the endpoint ignores, cannot report another organisation.
 
 Response: an array. Each row has `[doc]`:
 

@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "provider": "ecpay",
+  "cases": [
+    {
+      "name": "void: posts InvoiceNo + InvoiceDate + Reason",
+      "operation": "void",
+      "input": {
+        "invoiceNumber": "JU11082062",
+        "reason": "客戶取消",
+        "providerOptions": { "invoiceDate": "2026-06-17" }
+      },
+      "expect": {
+        "endpoint": "/B2CInvoice/Invalid",
+        "data": {
+          "InvoiceNo": "JU11082062",
+          "InvoiceDate": "2026-06-17",
+          "Reason": "客戶取消"
+        }
+      }
+    },
+    {
+      "name": "allowance: posts /Allowance with AllowanceAmount and default AllowanceNotify=N",
+      "operation": "allowance",
+      "input": {
+        "invoiceNumber": "JU11082062",
+        "allowanceId": "ORDER_1",
+        "items": [{ "description": "商品一", "quantity": 1, "unitPrice": 100, "amount": 100 }],
+        "amount": { "salesAmount": 100, "taxAmount": 0, "totalAmount": 100 },
+        "providerOptions": { "invoiceDate": "2026-06-17" }
+      },
+      "expect": {
+        "endpoint": "/B2CInvoice/Allowance",
+        "data": {
+          "InvoiceNo": "JU11082062",
+          "AllowanceAmount": 100,
+          "AllowanceNotify": "N"
+        }
+      }
+    },
+    {
+      "name": "allowance: email notify sends AllowanceNotify=E + NotifyMail + Reason",
+      "operation": "allowance",
+      "input": {
+        "invoiceNumber": "JU1",
+        "allowanceId": "O1",
+        "items": [{ "description": "x", "quantity": 1, "unitPrice": 100, "amount": 100 }],
+        "amount": { "salesAmount": 100, "taxAmount": 0, "totalAmount": 100 },
+        "providerOptions": {
+          "invoiceDate": "2026-06-17",
+          "allowanceNotify": "E",
+          "notifyMail": "b@x.com",
+          "reason": "退款"
+        }
+      },
+      "expect": {
+        "endpoint": "/B2CInvoice/Allowance",
+        "data": {
+          "AllowanceNotify": "E",
+          "NotifyMail": "b@x.com",
+          "Reason": "退款"
+        }
+      }
+    },
+    {
+      "name": "voidAllowance: posts InvoiceNo + AllowanceNo + default Reason",
+      "operation": "voidAllowance",
+      "input": {
+        "invoiceNumber": "JU11082062",
+        "allowanceNumber": "A1"
+      },
+      "expect": {
+        "endpoint": "/B2CInvoice/AllowanceInvalid",
+        "data": {
+          "InvoiceNo": "JU11082062",
+          "AllowanceNo": "A1",
+          "Reason": "作廢折讓"
+        }
+      }
+    }
+  ]
+}

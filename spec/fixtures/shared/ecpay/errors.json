@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "provider": "ecpay",
+  "note": "ECPay classification is keyword-based on RtnMsg, not purely on RtnCode (several rows share RtnCode 0). `code` is the InvoiceErrorCode; `reason` is the optional action-oriented axis (null when the message implies no distinct consumer action). Both SDKs must agree on both axes.",
+  "cases": [
+    {
+      "name": "unknown invoice (query)",
+      "rtnCode": "2",
+      "rtnMsg": "查無發票資料，請重新確認",
+      "expect": { "code": "NOT_FOUND", "reason": null }
+    },
+    {
+      "name": "no invoice number data",
+      "rtnCode": "1600003",
+      "rtnMsg": "無發票號碼資料",
+      "expect": { "code": "NOT_FOUND", "reason": null }
+    },
+    {
+      "name": "unknown transaction number (edit/trigger/cancel)",
+      "rtnCode": "4000001",
+      "rtnMsg": "不存在此交易單號",
+      "expect": { "code": "NOT_FOUND", "reason": null }
+    },
+    {
+      "name": "invoice word track exhausted",
+      "rtnCode": "1100040",
+      "rtnMsg": "發票字軌已用完",
+      "expect": { "code": "NUMBER_EXHAUSTED", "reason": null }
+    },
+    {
+      "name": "invoice already voided",
+      "rtnCode": "0",
+      "rtnMsg": "發票已作廢過",
+      "expect": { "code": "CONFLICT", "reason": "already_voided" }
+    },
+    {
+      "name": "void blocked by an existing allowance",
+      "rtnCode": "5070450",
+      "rtnMsg": "該發票已被折讓過，無法直接作廢發票",
+      "expect": { "code": "CONFLICT", "reason": "void_blocked_by_allowance" }
+    },
+    {
+      "name": "re-void an already-voided allowance",
+      "rtnCode": "2000063",
+      "rtnMsg": "該折讓單已作廢過，請確認",
+      "expect": { "code": "CONFLICT", "reason": "already_voided" }
+    },
+    {
+      "name": "unknown allowance",
+      "rtnCode": "2000039",
+      "rtnMsg": "查無折讓單資料，請確認!",
+      "expect": { "code": "NOT_FOUND", "reason": null }
+    },
+    {
+      "name": "cancel an already-agreed online allowance",
+      "rtnCode": "5070250",
+      "rtnMsg": "無法取消已經同意的線上折讓單",
+      "expect": { "code": "CONFLICT", "reason": null }
+    },
+    {
+      "name": "duplicate custom order number",
+      "rtnCode": "0",
+      "rtnMsg": "自訂編號不可重複",
+      "expect": { "code": "CONFLICT", "reason": "duplicate_order" }
+    },
+    {
+      "name": "duplicate custom order number — live wording uses 重覆 (覆, not 複)",
+      "rtnCode": "5070357",
+      "rtnMsg": "B2C開立發票 自訂編號重覆，請重新設定",
+      "expect": { "code": "CONFLICT", "reason": "duplicate_order" }
+    },
+    {
+      "name": "re-void an already-voided invoice — live wording (已被作廢過)",
+      "rtnCode": "5070453",
+      "rtnMsg": "B2C作廢發票 該發票已被作廢過",
+      "expect": { "code": "CONFLICT", "reason": "already_voided" }
+    },
+    {
+      "name": "merchant id not found",
+      "rtnCode": "0",
+      "rtnMsg": "特店編號不存在",
+      "expect": { "code": "AUTH", "reason": "not_enrolled" }
+    },
+    {
+      "name": "data decryption error (wrong key)",
+      "rtnCode": "0",
+      "rtnMsg": "資料解密錯誤，請確認金鑰",
+      "expect": { "code": "AUTH", "reason": "credentials_invalid" }
+    },
+    {
+      "name": "signature verification failed",
+      "rtnCode": "0",
+      "rtnMsg": "簽章驗證失敗",
+      "expect": { "code": "AUTH", "reason": "credentials_invalid" }
+    },
+    {
+      "name": "platform merchant id not found",
+      "rtnCode": "0",
+      "rtnMsg": "平台商編號不存在",
+      "expect": { "code": "AUTH", "reason": "not_enrolled" }
+    },
+    {
+      "name": "system busy",
+      "rtnCode": "0",
+      "rtnMsg": "系統忙碌中，請稍後再試",
+      "expect": { "code": "PROVIDER", "reason": "rate_limited" }
+    },
+    {
+      "name": "amount mismatch (unrecognised business error defaults to VALIDATION, no reason)",
+      "rtnCode": "0",
+      "rtnMsg": "驗證發票金額發現錯誤，與商品合計金額不符",
+      "expect": { "code": "VALIDATION", "reason": null }
+    }
+  ]
+}

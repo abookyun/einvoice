@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "provider": "ecpay",
+  "cases": [
+    {
+      "name": "issue: B2C, member carrier, taxable, tax-inclusive",
+      "operation": "issue",
+      "input": {
+        "orderId": "ORDER_1",
+        "buyer": { "email": "b@x.com" },
+        "items": [{ "description": "商品一", "quantity": 1, "unitPrice": 100, "amount": 100 }],
+        "amount": { "salesAmount": 100, "taxAmount": 0, "totalAmount": 100 },
+        "taxType": "TAXABLE",
+        "priceMode": "TAX_INCLUSIVE",
+        "carrier": { "type": "MEMBER" }
+      },
+      "expect": {
+        "endpoint": "/B2CInvoice/Issue",
+        "data": {
+          "RelateNumber": "ORDER_1",
+          "CarrierType": "1",
+          "Print": "0",
+          "Donation": "0",
+          "TaxType": "1",
+          "SalesAmount": 100,
+          "InvType": "07",
+          "Items": [{ "ItemName": "商品一", "ItemCount": 1, "ItemPrice": 100, "ItemAmount": 100 }]
+        }
+      }
+    },
+    {
+      "name": "issue: tax type ZERO_RATED maps to TaxType 2 (with clearance mark)",
+      "operation": "issue",
+      "input": {
+        "orderId": "ORDER_1",
+        "buyer": { "email": "b@x.com" },
+        "items": [{ "description": "商品一", "quantity": 1, "unitPrice": 100, "amount": 100 }],
+        "amount": { "salesAmount": 100, "taxAmount": 0, "totalAmount": 100 },
+        "taxType": "ZERO_RATED",
+        "priceMode": "TAX_INCLUSIVE",
+        "carrier": { "type": "MEMBER" },
+        "providerOptions": { "clearanceMark": "1" }
+      },
+      "expect": {
+        "endpoint": "/B2CInvoice/Issue",
+        "data": { "TaxType": "2" }
+      }
+    },
+    {
+      "name": "issue: tax type TAX_FREE maps to TaxType 3",
+      "operation": "issue",
+      "input": {
+        "orderId": "ORDER_1",
+        "buyer": { "email": "b@x.com" },
+        "items": [{ "description": "商品一", "quantity": 1, "unitPrice": 100, "amount": 100 }],
+        "amount": { "salesAmount": 100, "taxAmount": 0, "totalAmount": 100 },
+        "taxType": "TAX_FREE",
+        "priceMode": "TAX_INCLUSIVE",
+        "carrier": { "type": "MEMBER" }
+      },
+      "expect": {
+        "endpoint": "/B2CInvoice/Issue",
+        "data": { "TaxType": "3" }
+      }
+    },
+    {
+      "name": "issue: B2B 統編 buyer sends CustomerIdentifier + Print=1 + empty CarrierType",
+      "operation": "issue",
+      "input": {
+        "orderId": "ORDER_1",
+        "buyer": {
+          "ubn": "53538851",
+          "name": "測試公司",
+          "address": "台北市測試路1號",
+          "email": "b@x.com"
+        },
+        "items": [{ "description": "商品一", "quantity": 1, "unitPrice": 100, "amount": 100 }],
+        "amount": { "salesAmount": 100, "taxAmount": 0, "totalAmount": 100 },
+        "taxType": "TAXABLE",
+        "priceMode": "TAX_INCLUSIVE"
+      },
+      "expect": {
+        "endpoint": "/B2CInvoice/Issue",
+        "data": {
+          "CustomerIdentifier": "53538851",
+          "Print": "1",
+          "CarrierType": ""
+        }
+      }
+    },
+    {
+      "name": "issue: item remark maps to ItemRemark, omitted when absent",
+      "operation": "issue",
+      "input": {
+        "orderId": "ORDER_1",
+        "buyer": { "email": "b@x.com" },
+        "items": [
+          { "description": "有備註", "quantity": 1, "unitPrice": 60, "amount": 60, "remark": "備註1" },
+          { "description": "無備註", "quantity": 1, "unitPrice": 40, "amount": 40 }
+        ],
+        "amount": { "salesAmount": 100, "taxAmount": 0, "totalAmount": 100 },
+        "taxType": "TAXABLE",
+        "priceMode": "TAX_INCLUSIVE",
+        "carrier": { "type": "MEMBER" }
+      },
+      "expect": {
+        "endpoint": "/B2CInvoice/Issue",
+        "data": {
+          "Items": [
+            { "ItemName": "有備註", "ItemRemark": "備註1" },
+            { "ItemName": "無備註" }
+          ]
+        },
+        "itemsAbsent": [{ "index": 1, "keys": ["ItemRemark"] }]
+      }
+    }
+  ]
+}

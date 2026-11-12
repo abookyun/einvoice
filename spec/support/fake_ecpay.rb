@@ -22,6 +22,21 @@ class FakeECPay
 
   attr_reader :requests
 
+  # 註銷 has no endpoint in the adapter, so a spec marks an invoice by hand.
+  def cancel!(number)
+    @invoices.fetch(number)["cancelled"] = true
+  end
+
+  # GetIssue then answers with this IIS_Tax_Rate.
+  def report_tax_rate!(number, rate)
+    @invoices.fetch(number)["tax_rate"] = rate
+  end
+
+  # GetIssue then answers without an issue date, as a broken response would.
+  def drop_issue_date!(number)
+    @invoices.fetch(number)["issued_at"] = ""
+  end
+
   def initialize
     @invoices = {}
     @by_relate = {}
@@ -114,13 +129,27 @@ class FakeECPay
             "IIS_Customer_Email" => stored["CustomerEmail"].to_s,
             "IIS_Category" => stored["CustomerIdentifier"].to_s.empty? ? "B2C" : "B2B",
             "IIS_Tax_Type" => stored["TaxType"],
+            "IIS_Tax_Rate" => invoice.fetch("tax_rate") { tax_rate(stored) },
             "IIS_Tax_Amount" => 0,
             "IIS_Sales_Amount" => invoice["sales"],
             "IIS_Create_Date" => invoice["issued_at"],
             "IIS_Random_Number" => invoice["random"],
+            "IIS_Issue_Status" => invoice["cancelled"] ? "0" : "1",
             "IIS_Invalid_Status" => invoice["voided"] ? "1" : "0",
             "IIS_Remain_Allowance_Amt" => invoice["remaining"],
             "Items" => Array(stored["Items"]).map { |item| queried_item(item) })
+  end
+
+  # The rate by TaxType, and by SpecialTaxType for special tax (b2c.md 6.3).
+  SPECIAL_RATES = { "1" => 0.25, "2" => 0.15, "3" => 0.02, "4" => 0.01, "5" => 0.05, "6" => 0.05, "7" => 0.05,
+                    "8" => 0 }.freeze
+
+  def tax_rate(stored)
+    case stored["TaxType"].to_s
+    when "1", "9" then 0.05
+    when "4" then SPECIAL_RATES.fetch(stored["SpecialTaxType"].to_s, 0)
+    else 0
+    end
   end
 
   def invalid(data)

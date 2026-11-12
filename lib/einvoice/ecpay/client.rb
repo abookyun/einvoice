@@ -34,11 +34,18 @@ module Einvoice
         @hash_key = hash_key.to_s
         @hash_iv = hash_iv.to_s
         @mode = mode
-        @base_url = base_url || BASE_URL.fetch(mode) do
+        @base_url = Redaction.base_url!(base_url || BASE_URL.fetch(mode) do
           raise ValidationError.new("Unknown ECPay mode: #{mode.inspect}", provider: PROVIDER)
-        end
+        end, provider: PROVIDER)
         @timeout = timeout
       end
+
+      # The HashKey and HashIV stay out of logs and consoles.
+      def inspect
+        "#<#{self.class.name} merchant_id=#{@merchant_id.inspect} mode=#{@mode.inspect} " \
+          "base_url=#{@base_url.inspect} hash_key=#{Redaction::FILTERED} hash_iv=#{Redaction::FILTERED}>"
+      end
+      alias to_s inspect
 
       # POST +data+ to +path+ and return the decrypted business payload.
       #
@@ -83,11 +90,19 @@ module Einvoice
         http.read_timeout = @timeout
 
         response = http.request(post_request(uri, body))
+        check_rate_limit!(response)
         parse_json(response)
-      rescue Einvoice::Error
-        raise
-      rescue StandardError => e
+      rescue *Error::NETWORK_ERRORS => e
         raise NetworkError.new("ECPay request failed: #{e.message}", provider: PROVIDER, cause: e)
+      end
+
+      # ECPay answers HTTP 403 when a merchant calls too often, and asks it to wait
+      # 30 minutes. The caller can retry later.
+      def check_rate_limit!(response)
+        return unless response.code.to_i == 403
+
+        raise NetworkError.new("ECPay returned HTTP 403: too many calls, wait 30 minutes",
+                               provider: PROVIDER, reason: Reason::RATE_LIMITED, raw_code: response.code)
       end
 
       def post_request(uri, body)
@@ -97,9 +112,15 @@ module Einvoice
         request
       end
 
+      # ECPay answers some errors with HTTP 500 and a normal envelope (a wrong
+      # HashKey gives TransCode 110), so the body decides when it can be read.
+      # Only a body that is not JSON falls back to the HTTP status.
       def parse_json(response)
         JSON.parse(response.body.to_s)
       rescue JSON::ParserError => e
+        status_error = NetworkError.for_status(response, provider: PROVIDER)
+        raise status_error if status_error
+
         raise ProviderError.new(
           "ECPay returned a non-JSON response (HTTP #{response.code})",
           provider: PROVIDER, raw_code: response.code, cause: e

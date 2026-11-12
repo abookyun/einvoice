@@ -46,5 +46,13 @@ module Einvoice
     def query(_input)
       raise NotImplementedError, "#{self.class} must implement #query"
     end
+
+    # Whether a carrier is registered with the MOF. Takes a {Carrier} or a Hash
+    # of its fields. Raises UnsupportedError unless the provider declares
+    # CARRIER_VALIDATION, or when it cannot check this type of carrier.
+    def validate_carrier(_carrier)
+      assert_supports!(Capability::CARRIER_VALIDATION)
+      raise NotImplementedError, "#{self.class} must implement #validate_carrier"
+    end
   end
 end

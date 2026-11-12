@@ -26,8 +26,8 @@ module Einvoice
         CarrierType::MOBILE_BARCODE => "3"       # 手機條碼
       }.freeze
 
-      # ECPay caps 作廢/折讓 reasons at 20 characters, and 自訂編號 at 50.
-      MAX_REASON_LENGTH = 20
+      # ECPay caps 自訂編號 at 50 characters. Input checks the 20-character
+      # reason limit, which ECPay shares with the MIG.
       MAX_RELATE_NUMBER_LENGTH = 50
       # Default unit (單位) when an item does not name one; ItemWord is required.
       DEFAULT_UNIT = "式"
@@ -91,13 +91,21 @@ module Einvoice
         end
       end
 
+      # The +Items+ of an Allowance. ECPay wants tax-included prices and amounts,
+      # which the core's breakdown has.
+      def allowance_items(parsed)
+        lines = parsed.tax_breakdown(provider: Client::PROVIDER).lines
+        items(parsed.items, parsed.tax_type).zip(lines).map do |row, line|
+          row.merge("ItemPrice" => line.gross_unit_price, "ItemTaxType" => TAX_TYPE.fetch(line.tax_type),
+                    "ItemAmount" => line.gross_amount)
+        end
+      end
+
       # An invoice whose items disagree on 課稅別 is a 混合稅率 (9) invoice; otherwise
       # the invoice-level tax type stands.
       def tax_type(parsed)
-        kinds = parsed.items.map { |item| item.tax_type || parsed.tax_type }.uniq
-        return MIXED_TAX_CODE if kinds.size > 1
-
-        TAX_TYPE.fetch(kinds.first || parsed.tax_type)
+        type = TaxType.of(parsed.items, parsed.tax_type)
+        type == TaxType::MIXED ? MIXED_TAX_CODE : TAX_TYPE.fetch(type)
       end
 
       # Field rules for a built payload. Each was checked against the live API; the
@@ -174,14 +182,25 @@ module Einvoice
           data["Items"].any? { |item| item["ItemTaxType"] == "2" }
       end
 
-      # ECPay rejects a 作廢/折讓 reason longer than 20 characters.
-      def check_reason!(reason, field)
-        return if reason.to_s.length <= MAX_REASON_LENGTH
+      # The sum of ItemAmount has to equal AllowanceAmount [doc 7901], and on
+      # each item ItemPrice × ItemCount may differ from ItemAmount by 1 at most.
+      def check_allowance!(data)
+        errors = []
+        total = data["Items"].sum { |item| item["ItemAmount"].to_r }
+        unless total.round == data["AllowanceAmount"]
+          errors << "AllowanceAmount (#{data['AllowanceAmount']}) must equal the item total (#{total.round})"
+        end
+        data["Items"].each_with_index do |item, index|
+          product = item["ItemPrice"].to_r * item["ItemCount"].to_r
+          next if (product - item["ItemAmount"].to_r).abs <= 1
 
-        raise ValidationError.new(
-          "#{field} must be #{MAX_REASON_LENGTH} characters or fewer, got #{reason.to_s.length}",
-          provider: Client::PROVIDER
-        )
+          errors << "Items[#{index}]: ItemPrice × ItemCount (#{Number.plain(product)}) must be within 1 of " \
+                    "ItemAmount (#{item['ItemAmount']})"
+        end
+        return if errors.empty?
+
+        raise ValidationError.new("Invalid ECPay allowance payload — #{errors.join('; ')}",
+                                  provider: Client::PROVIDER)
       end
 
       def string_keys(hash)

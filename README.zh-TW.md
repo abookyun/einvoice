@@ -49,13 +49,44 @@ result = provider.issue(
 result.invoice_number   # => "MK10000000"
 result.status           # => :issued
 
-invoice = provider.query(order_id: "ORDER_1")
+invoice = provider.query(invoice: result.reference)
 invoice.status          # => :issued
 
-provider.void(invoice_number: result.invoice_number, reason: "客戶取消")
+provider.void(invoice: result.reference, reason: "客戶取消")
 ```
 
-輸入可以直接傳一般的 Hash，key 用字串或 symbol 都可以。列舉欄位可以傳標準的 symbol（`:taxable`），也可以傳傳輸格式的字串（`"TAXABLE"`）。在送出任何網路請求之前，輸入會先經過檢查，並轉換成不可變的 value object。格式錯誤的請求會在本地端丟出 `Einvoice::ValidationError`。
+`result.reference` 是一個 `InvoiceReference`。它記錄之後作廢、折讓或查詢這張發票時，加值中心會要的資料：號碼、`invoice_datetime`、`random_code`、`order_id`、`total_amount`、`buyer_ubn`，以及它的 `tax_type` 和 `tax_rate`。請把 `result.reference.to_h` 和訂單一起存起來。它只包含 JSON 安全的值（`invoice_datetime` 是 UTC+8 的 ISO 8601 字串），可以直接存進 JSON 欄位。之後原樣用 `invoice:` 傳回來，或直接傳 reference 本身。存起來的時間必須帶時區：`"2026-08-01 10:00"` 會被拒絕，不會被當成錯的時區；只有日期的 `"2026-08-01"` 視為台北當天。也可以只傳發票號碼，但如果加值中心需要更多資料，會丟出 `ValidationError` 並說明缺少哪個欄位。沒有發票號碼時，可以在宣告 `QUERY_BY_ORDER_ID` 的加值中心用 `invoice: { order_id: "ORDER_1" }` 查詢。`void_allowance` 收 `allowance:`，也就是 `AllowanceResult#reference` 回傳的 `AllowanceReference`。
+
+輸入可以直接傳一般的 Hash，key 用字串或 symbol 都可以。列舉欄位可以傳標準的 symbol（`:taxable`），也可以傳傳輸格式的字串（`"TAXABLE"`）。在送出任何網路請求之前，輸入會先經過檢查，並轉換成不可變的 value object。格式錯誤的請求會在本地端丟出 `Einvoice::ValidationError`。用 `.new` 自己建立的 value object 也會經過同樣的檢查。
+
+檢查的規則：
+
+- 買方的 `ubn` 是 8 位數字，也就是企業的統一編號。（MIG 表 4-7 允許 8 到 10 位的 BAN，9 位和 10 位的形式不用在買方。）B2B 發票一定要有統編；明確指定 `category` 時，必須和統編一致。
+- 總計是整數，而且不能是負數。品項的數量、單價、金額是數字，最多 7 位小數。
+- 手機條碼是 `/` 加 7 個字元。自然人憑證是 2 個英文字母加 14 個數字。這些格式來自加值中心的文件，MIG 只列出載具類別。
+- `tax_rate` 是小數，例如 `0.05`，而且必須是 MIG 規定的稅率。開立時的預設值由品項決定，不看表頭：有應稅品項時是 `0.05`，否則是 `0`。有特種稅額品項時一定要給。應稅品項的稅率不能是 `0`。
+- 金額必須和品項一致（見下一節）。
+- 作廢原因最多 20 個字。作廢折讓的原因沒給時，預設是 `作廢折讓`。
+
+### 金額與稅額
+
+稅額由 core 依品項計算。`price_mode` 說明品項金額是否含稅，`tax_type` 是整張發票的稅別（品項可以有自己的），`tax_rate` 是稅率。計算結果是 `input.tax_breakdown`：每一列的未稅金額、稅額、含稅金額，以及 MIG 的各項合計。adapter 讀取它，不自己計算稅額。core 不會改動你的品項。
+
+你給的 `amount` 會拿來和它核對。發票照 F0401：買方是消費者時，稅額含在 `sales_amount` 裡，`tax_amount` 是 `0`。買方是營業人時，`tax_amount` 是 `round(應稅銷售額 × tax_rate)`：
+
+```ruby
+amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }  # 含稅 100，開給營業人
+```
+
+折讓照 G0401：`sales_amount` 不含稅，買方是消費者時也一樣。折讓的 `tax_type` 和 `tax_rate` 從發票的 reference 取得，所以傳 `issued.reference` 即可，也可以自己給。沒有預設值，所以零稅率的發票不會被折讓出 5% 的稅。原發票是混合稅時，每個品項都要給 `tax_type`。
+
+```ruby
+provider.allowance(
+  invoice: issued.reference, allowance_id: "AL_1", price_mode: "TAX_INCLUSIVE",
+  items: [{ description: "退貨", quantity: 1, unit_price: 100, amount: 100 }],
+  amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }
+)
+```
 
 ### 錯誤
 
@@ -64,18 +95,24 @@ provider.void(invoice_number: result.invoice_number, reason: "客戶取消")
 - 固定不變的 `#code`。
 - 加值中心原始的 `#raw_code` 和 `#raw_message`。
 - 選填的 `#reason`，說明呼叫端接下來該怎麼處理。
+- `#group`，說明是哪一方失敗：`:invoice`（請求違反財政部的規則，或發票的狀態不對）或 `:provider`（帳號、連線，或加值中心自己的服務）。
 
 可以只 rescue 特定類別，也可以一次 rescue 全部：
 
 ```ruby
 begin
-  provider.void(invoice_number: "AB12345678", reason: "customer cancelled")
+  provider.void(invoice: invoice.reference, reason: "customer cancelled")
 rescue Einvoice::ConflictError => e
   e.reason   # => :already_voided  (idempotent — treat as success)
 rescue Einvoice::Error => e
   e.code     # => :network, :auth, :not_found, …
 end
 ```
+
+### 帳號金鑰與買方資料
+
+- 結果物件的 `inspect`、`to_s` 和 `pp` 會把 `raw` 顯示成 `[FILTERED]`，因為 `raw` 是加值中心的回應，裡面有買方的資料。需要時，請直接讀 `#raw`。`Buyer` 的姓名、email、地址和電話也會顯示成 `[FILTERED]`，不論它在哪個輸入或結果裡；`ubn` 照常顯示。adapter 的 client 也會把金鑰顯示成 `[FILTERED]`。
+- `base_url` 必須使用 https。只有 localhost 可以用 http，方便測試。
 
 ### Capabilities
 
@@ -111,9 +148,11 @@ provider = Einvoice::ECPay::Provider.new(**Einvoice::ECPay::SANDBOX)
 
 - **紙本或電子由 adapter 判斷。** 有載具或捐贈的發票是電子發票（`Print=0`），其他的都會列印。列印時 ECPay 要求買方名稱和地址。
 - **混合稅率也由 adapter 判斷。** 如果品項的 `tax_type` 不一致，就會開成混合稅率（TaxType 9）發票，不用另外指定。
-- **作廢和折讓需要發票的開立日期**，但 unified 輸入沒有這個欄位。預設是今天（Asia/Taipei）。如果是較早開立的發票，請傳 `provider_options: { invoice_date: "2026-08-01" }`，或改用 `order_id` 查詢。
+- **作廢、折讓、用號碼查詢都需要發票的開立日期**，從 `invoice.invoice_datetime` 取得。如果 reference 沒有日期但有 `order_id`，adapter 會先查詢補上；查詢失敗時丟出 `ProviderError`，`reason` 是 `:lookup_failed`。只有號碼是不夠的。
+- **作廢折讓需要發票號碼**，所以請傳 `AllowanceReference`，不要只傳折讓單號。
 - **不支援外幣。** ECPay 的 B2C API 沒有外幣欄位，所以 `currency` 不是 TWD 時會丟出 `UnsupportedError`，不會被當成 TWD 開立。
-- **載具驗證**：`validate_mobile_barcode("/ABC1234")`、`validate_love_code("168001")`、`love_code_organ_name("168001")`。這些方法會詢問 ECPay，所以需要這個 adapter 和它的帳號。捐贈碼（愛心碼）另外可以用下面的 `Einvoice::MOF::DonationCodes`，它直接詢問財政部，不需要 adapter，也不需要帳號。
+- **應稅發票固定是 5%。** ECPay 依課稅別決定稅率，所以其他的 `tax_rate` 會丟出 `UnsupportedError`。
+- **載具驗證**：`validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })`（`CARRIER_VALIDATION` 對應的 `Provider` 方法；ECPay 只能檢查手機條碼）、`validate_love_code("168001")`、`love_code_organ_name("168001")`。這些方法會詢問 ECPay，所以需要這個 adapter 和它的帳號。捐贈碼（愛心碼）另外可以用下面的 `Einvoice::MOF::DonationCodes`，它直接詢問財政部，不需要 adapter，也不需要帳號。
 - **其他功能**：ECPay 另外有大約 25 個 B2C endpoint（延遲開立、字軌設定、列印、通知……）。請用 `provider.raw(path, payload)` 呼叫。它會處理封包、加密和錯誤對應。
 
 ## 財政部查詢

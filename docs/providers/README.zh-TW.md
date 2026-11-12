@@ -52,7 +52,7 @@
 
 | Reference | 欄位 |
 | --- | --- |
-| `InvoiceReference` | `number`、`invoice_datetime`、`random_code`、`order_id`、`total_amount`、`buyer_ubn`（消費者為 `nil`） |
+| `InvoiceReference` | `number`、`invoice_datetime`、`random_code`、`order_id`、`total_amount`、`buyer_ubn`（消費者為 `nil`）、`tax_type`（品項稅別不同時為 `:mixed`）、`tax_rate` |
 | `AllowanceReference` | `allowance_number`、`allowance_date`、`invoice_number` |
 
 加值中心需要某個欄位、呼叫端卻沒有給時，adapter 可以向加值中心查詢補上。補不到就丟出 `ValidationError`，並說明缺少哪個欄位。adapter 絕不用猜的值補上。查詢本身失敗時，見下方的錯誤。
@@ -65,15 +65,24 @@
 | `allowance_date` | `Date` | `AllowanceDate` |
 | `cancel_datetime` | `Time`，UTC+8。加值中心沒有回傳時為 `nil` | `CancelDate` 和 `CancelTime` |
 
-**金額。** 發票照 F0401。買方是消費者時，`sales_amount` 含稅，`tax_amount` 為 `0`。買方是營業人時，`sales_amount` 不含稅，`tax_amount` 是稅額。折讓照 G0401：金額不含稅。如果呼叫端給的 `tax_amount` 是 `0`，由 core 從應稅品項拆出稅額，四捨五入，尾差放在最後一個應稅品項。只有 core 計算稅額，adapter 使用它的結果。
+**金額。** 開立和折讓用同一種方式描述品項：`price_mode` 說明品項金額是否含稅，`tax_type` 是整張的稅別（品項可以有自己的），`tax_rate` 是應稅品項的稅率。折讓的 `tax_type` 和 `tax_rate` 從 input 取得，沒有時從發票的 reference 取得，沒有預設值。原發票是混合稅時，每個折讓品項都必須帶自己的 `tax_type`。
 
-**稅率。** `tax_rate` 是小數，例如 `0.05`。core 只接受 MIG 的稅率：`0`、`0.01`、`0.02`、`0.05`、`0.15`、`0.25` `[mig 表 4-18]`。應稅的預設值是 `0.05`，零稅率和免稅是 `0`。加值中心無法送出某個稅率時，adapter 丟出 `UnsupportedError`。
+core 依品項算出稅額，也就是 input 的 `#tax_breakdown`。只有 core 計算稅額，adapter 從明細讀取需要的值：
 
-**Input 檢查。** adapter 執行前，core 會先檢查：
+- 每一列有 `net_amount`、`tax`、`gross_amount`，以及 `net_unit_price` 和 `gross_unit_price`。每一列的稅額是整數，用最大餘數法分配：每列先取應分稅額的整數部分，剩下的稅額依小數部分由大到小補上，同分時先補後面的列。每列稅額是應分稅額的無條件捨去或無條件進位，所以正負號和該列金額相同。金額為負數的折扣列，稅額可能是負數。其他列的稅額都不會是負數。單價由品項的 `unit_price` 算出，四捨五入到 7 位小數，所以「單價 × 數量」和該列金額可能差一點，差距來自該列稅額的四捨五入。各家 note 寫明它的 API 容許多少差距。
+- 合計有 `sales_amount`（未稅）、`taxable_amount`、`zero_rated_amount`、`tax_free_amount`、`tax_amount` 和 `total_amount`。稅額是 `round(應稅銷售額 × tax_rate)`。
+- 零稅率和免稅的品項稅額為 `0`。
 
-- `ubn` 是 8 位數字。B2B 發票一定要有。如果呼叫端指定了 `category`，必須和 `ubn` 一致。
-- 總計是整數，而且不能是負數。品項的數量、單價、金額是數字，最多 7 位小數。
-- 手機條碼是 `/` 加 7 個字元。自然人憑證是 2 個英文字母加 14 個數字。
+呼叫端給的 `AmountSummary` 拿來和明細核對，不會用來指示 core 怎麼算，core 也不會改動呼叫端的品項。發票照 F0401：買方是消費者時，`sales_amount` 含稅，`tax_amount` 為 `0`；買方是營業人時，`tax_amount` 必須等於明細的稅額。折讓照 G0401：`sales_amount` 不含稅，`tax_amount` 是明細的稅額。
+
+**稅率。** `tax_rate` 是小數，例如 `0.05`。core 只接受 MIG 的稅率：`0`、`0.01`、`0.02`、`0.05`、`0.15`、`0.25` `[mig 表 4-18]`。開立時的預設值由品項決定，不看表頭：有應稅品項時是 `0.05`，否則是 `0`。特種稅額品項沒有預設值。應稅品項的稅率不能是 `0`。加值中心無法送出某個稅率時，adapter 丟出 `UnsupportedError`。
+
+**Input 檢查。** adapter 執行前，core 會先檢查。用 `.new` 直接建立的 value object 也會經過和 Hash 一樣的檢查。
+
+- `ubn` 是 8 位數字，也就是企業的統一編號。MIG 表 4-7 允許 8 到 10 位的 BAN，但 9 位和 10 位的形式不用在這裡的買方。B2B 發票一定要有 `ubn`。如果呼叫端指定了 `category`，必須和 `ubn` 一致。
+- 總計是整數，而且不能是負數。品項的數量、單價、金額是數字，最多 7 位小數。發票品項可以是負數，例如折扣列。折讓品項不可以是負數（MIG 4.1）。
+- 金額和品項一致，規則見上面的「金額」。
+- 手機條碼是 `/` 加 7 個字元。自然人憑證是 2 個英文字母加 14 個數字。這些格式來自 ECPay 和 ezPay 的文件，MIG 只列出載具類別。
 - 作廢原因是 1 到 20 個字元。作廢折讓的原因可以不給，沒給時 core 補上 `作廢折讓`。
 - 捐贈和載具可以同時給，MIG 允許這樣做。
 
@@ -88,7 +97,8 @@
 
 - adapter 為了補上缺少的欄位而自己發出的查詢，屬於加值中心這一組。查詢失敗時，adapter 丟出帶有 `Reason::LOOKUP_FAILED` 的 `ProviderError`。錯誤訊息會指出它需要哪個欄位，`cause` 是查詢本身的錯誤。所以 `NotFoundError` 一定是指這次呼叫的那張發票。
 - 遇到我們不認得的錯誤代碼時，每家加值中心有自己的預設類別。第 6.4 節寫明預設類別和依據。
-- HTTP 5xx 和 429 是 `NetworkError`，呼叫端可以重試。
+- body 不是加值中心的回應時，HTTP 5xx 和 429 是 `NetworkError`，呼叫端可以重試。adapter 讀得懂的 body，不管 HTTP 狀態是什麼，都依 body 決定錯誤。例如 ECPay 金鑰錯誤時，回的是 HTTP 500 加上正常的 envelope。
+- client 只 rescue 連線錯誤。adapter 自己的 bug 不是 `NetworkError`。
 - `Reason::RETRY_LATER` 表示加值中心說「現在不行，晚一點再試」，例如發票上傳前就作廢。
 
 **Capability。**
@@ -96,7 +106,7 @@
 - `QUERY_BY_ORDER_ID` 表示加值中心可以只靠呼叫端知道的資料找到發票，不需要發票號碼。呼叫端傳一個帶有 `order_id` 的 `InvoiceReference`；加值中心需要時，再加上 `total_amount`。
 - `CARRIER_VALIDATION` 表示 adapter 實作了 `Provider#validate_carrier`。
 
-**連線。** `base_url` 一定要用 https，只有 localhost 可以用 http。
+**連線。** `base_url` 一定要用 https，只有 localhost 可以用 http。也不能帶帳號或密碼，因為 `inspect` 會顯示它。
 
 ## 來源與可信度
 

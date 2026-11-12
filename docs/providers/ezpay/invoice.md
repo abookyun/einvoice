@@ -295,7 +295,7 @@ The unified rules are in [the unified model](../README.md#the-unified-model).
 - Item prices exclude tax for B2B, and include tax for B2C. So for B2C, the item total and `TotalAmt` include tax, but `Amt` does not.
 - ezPay only checks `ItemAmt = ItemCount × ItemPrice` and `TotalAmt = Amt + TaxAmt`. The rest is up to the caller `[inv 三]`.
 
-For B2B, the unified amount already has this shape: send `sales_amount`, `tax_amount` and `total_amount`. For B2C, the unified amount has `tax 0` (F0401). The adapter splits the tax with the core's tax helper: `TaxAmt` is the tax of the taxable items, and `Amt = TotalAmt - TaxAmt`.
+For B2B, the unified amount already has this shape: send `sales_amount`, `tax_amount` and `total_amount`. For B2C, the unified amount has `tax 0` (F0401). The adapter takes the split from the core's `tax_breakdown`: `TaxAmt` is its `tax_amount`, and `Amt` is its `sales_amount`. It does not compute tax itself.
 
 The query shows the same split for B2C: `Amt 1333`, `TaxAmt 67`, `TotalAmt 1400` `[inv 八(二)]`.
 
@@ -308,10 +308,10 @@ The query shows the same split for B2C: `Amt 1333`, `TaxAmt 67`, `TotalAmt 1400`
 
 The adapter picks the form by the buyer of the original invoice, from `invoice.buyer_ubn`:
 
-- **A consumer** (`buyer_ubn` is `nil`): prices with tax. `ItemAmt` is each item's amount plus its tax from the core, and `ItemTaxAmt` is `0`. The "cannot deduct" rule does not matter, because a consumer does not deduct business tax. Prices with tax also divide well: two items of 50 stay 50 each.
-- **A business**: prices without tax, the shape the core gives (G0401). `ItemAmt` is each item's amount without tax, and `ItemTaxAmt` is its tax from the core.
+- **A consumer** (`buyer_ubn` is `nil`): prices with tax. `ItemAmt` is each line's `gross_amount` from the core's breakdown, and `ItemTaxAmt` is `0`. The "cannot deduct" rule does not matter, because a consumer does not deduct business tax. Prices with tax also divide well: two items of 50 stay 50 each.
+- **A business**: prices without tax (G0401). `ItemAmt` is each line's `net_amount`, and `ItemTaxAmt` is its `tax`.
 
-`TotalAmt` is `amount.total_amount` in both forms. `ItemPrice` is `ItemAmt / ItemCount`. It must be an integer, or the adapter raises `ValidationError`. Without tax, this can happen: 2 items for 95 (see 7).
+`TotalAmt` is `amount.total_amount` in both forms. `ItemPrice` is the line's `gross_unit_price` or `net_unit_price`. ezPay wants `ItemAmt = ItemCount × ItemPrice` exactly, in integers, so the adapter raises `ValidationError` when the breakdown's unit price and amount do not agree. Without tax, this can happen: 2 items for 95 (see 7).
 
 **Integers.** Item counts and prices are integers. The unified model allows decimals, so check before the call.
 
@@ -366,7 +366,7 @@ The query has no allowance data and no cancelled status. So the adapter never re
 ### 4.8 Contract and live tests
 
 - **References.** The contract passes the reference from `issue` to the next steps. It has `random_code` and `order_id`, so query and allowance work.
-- **Unknown invoice.** The contract queries an unknown invoice with a reference that has a random code. The query reaches ezPay and comes back as `INV20006` (`NotFoundError`).
+- **Unknown invoice.** The contract queries an unknown invoice with the reference the adapter's spec passes as `unknown_reference`. For ezPay it needs a random code, for example `{ number: "ZZ00000000", random_code: "0000" }`. The query reaches ezPay and comes back as `INV20006` (`NotFoundError`).
 - **Void right after issue.** The contract voids an invoice it has just issued. Live, ezPay refuses until the next day's upload (`LIB10009`). The fake voids at once. A live spec cannot test voids in one run.
 - **Credit a voided invoice.** This test voids first, so it has the same problem live. ezPay has no documented code for "allowance on a voided invoice". The adapter reads `LIB10005` on an allowance as `ALLOWANCE_BLOCKED_BY_VOID` (6.4, see 7).
 - **Unknown allowance.** ezPay has no documented code for "allowance not found". The adapter reads `IAI10002` (query failed) on an allowance void as `NotFoundError` (6.4, see 7).

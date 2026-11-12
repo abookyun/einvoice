@@ -280,7 +280,7 @@ Result: `allowance_number` from the input, `cancel_datetime` `nil`.
 | Unified | ECPay | Rule or default |
 | --- | --- | --- |
 | `invoice.order_id` | `RelateNumber` | Used when present |
-| `invoice.number` | `InvoiceNo` | Only without an order id |
+| `invoice.number` | `InvoiceNo` | Only without an order id. The result is not checked against it (8.2) |
 | `invoice.invoice_datetime` | `InvoiceDate` | With `InvoiceNo` only. Required with it |
 
 Result:
@@ -305,12 +305,12 @@ The unified rules are in [the unified model](../README.md#the-unified-model).
 
 - The adapter sends `amount.total_amount` as `SalesAmount`, for both B2C and B2B. It is the amount with tax included `[doc 7896]`. `sales_amount` and `tax_amount` are not sent. ECPay computes the tax: `round(SalesAmount / 1.05 × 0.05)`. For mixed tax, it uses the sum of the taxable items `[doc 7896]`.
 - With `vat` `1`, `SalesAmount` must equal the rounded sum of `ItemAmount`, or ECPay returns `5000022` `[live]`. The adapter checks this before the call.
-- With `vat` `0`, ECPay computes the total itself.
+- With `vat` `0`, ECPay computes the total itself. This is not marked `[live]`, and 5.1 says otherwise (8.1).
 - Item amounts may have up to 7 digits after the point. Only the sum is rounded `[doc 7896]`.
 
 **Allowance.**
 
-- After the core, each allowance item has an amount without tax and its own tax (G0401). ECPay wants amounts with tax `[doc 7901]`. So `ItemAmount` is the item amount plus its tax, and `AllowanceAmount` is `amount.total_amount`.
+- ECPay wants prices and amounts with tax `[doc 7901]`. `ItemPrice` is each line's `gross_unit_price` and `ItemAmount` its `gross_amount`, from the core's `tax_breakdown`. `AllowanceAmount` is `amount.total_amount`.
 - `ItemAmount` may differ from `ItemPrice × ItemCount` by at most 1. The sum of `ItemAmount` must equal `AllowanceAmount`. The adapter checks this before the call.
 - ECPay splits out the tax again for the MOF (4.7).
 
@@ -367,7 +367,7 @@ Seen live `[live]`: a voided invoice has `IIS_Invalid_Status` `1` and `IIS_Remai
 ### 4.8 Contract and live tests
 
 - **Offline contract.** `spec/einvoice/ecpay/provider_spec.rb` runs the shared contract against `spec/support/fake_ecpay.rb`. The fake speaks the real envelope, encryption and `RtnCode`s.
-- **Unknown numbers.** ECPay checks the format first, so the contract gets `unknown_invoice_number: "ZZ00000000"` and `unknown_allowance_number: "9999999999999999"`.
+- **Unknown numbers.** ECPay checks the format first, so the contract gets `unknown_reference: { number: "ZZ00000000", invoice_datetime: <today> }` and `unknown_allowance_number: "9999999999999999"`.
 - **References.** The contract passes the reference from `issue` to the next steps, so `invoice_datetime` is always there.
 - **Shared fixtures.** Another SDK publishes wire fixtures for this API. The spec runs a copy of them from `spec/fixtures/shared/ecpay/`. Cases where the unified model differs on purpose are skipped, with the reason.
 - **Live specs.** `spec/einvoice/ecpay/live_spec.rb` runs against stage with `ECPAY_LIVE=1`. The stage account is shared with every other developer, so each run builds a unique order id (`RB` + time + a random number).
@@ -522,7 +522,7 @@ Response fields that the unified model uses:
 | `IIS_Category` | `B2B` with a 統一編號, `B2C` without |
 | `IIS_Type` | `07` / `08` |
 | `IIS_Tax_Type` | `1`, `2`, `3`, `4`, `9` |
-| `IIS_Tax_Rate` | Rate, 2 decimals |
+| `IIS_Tax_Rate` | Rate, 2 decimals. The adapter reads it for a `SPECIAL` invoice only. Other tax types have a fixed rate |
 | `IIS_Tax_Amount` | Tax. **Only for a B2B invoice.** For B2C it is `0`, because the tax is inside the amount |
 | `IIS_Sales_Amount` | Invoice amount, tax included |
 | `IIS_Create_Date` | Issue time, `yyyy-MM-dd HH:mm:ss` |
@@ -653,3 +653,11 @@ ECPay writes both 重複 and 重覆, and both 已作廢 and 已被作廢. Match 
 3. **Card carriers.** EasyCard and iPASS (`4`, `5`) have no unified `CarrierType`.
 4. **The B2B API.** ECPay also has a B2B invoice API. Is it the MIG exchange flow? Do we need it?
 5. **The body of a 403.** What does ECPay send? The adapter does not need it, but a sample would make the fake more real.
+
+## 8. Known issues
+
+A review of the 2.0 code found these. They wait for the next rework of the adapter.
+
+1. **`ItemAmount` with `vat` `0`.** For an issue, the adapter sends each item's `amount` as `ItemAmount`. With `vat` `0` that amount excludes tax. But 5.1 says that `ItemAmount` includes tax, and that `ItemPrice × ItemCount × 1.05 = ItemAmount` with `vat` `0` and `TaxType` `1` `[doc 7896]`. 4.3 says that ECPay computes the total itself with `vat` `0`, but that is not marked `[live]`, and the adapter skips its own total check then. The allowance already sends `gross_amount` from the core's breakdown. A live test should show which one is right.
+2. **A query by order id does not check the number.** When the reference has both an order id and a number, the adapter queries by `RelateNumber` only. It does not compare the `IIS_Number` it gets back with `invoice.number`. If ECPay lets an order id be used again, for example after a void, the query can return another invoice, and no error is raised. The fix is to query by number when there is one, or to raise when the numbers differ.
+3. **`love_code_organ_name` has its own pattern.** It checks the code with `/\A\d{3,7}\z/`, not with `Donation::CODE_FORMAT`. The two are the same today. If the MIG changes the shape of a 愛心碼, this check will not follow.

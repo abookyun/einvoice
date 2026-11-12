@@ -80,7 +80,7 @@ RSpec.describe Einvoice::ECPay::Client do
                                          ))
 
       expect { client.request("/B2CInvoice/Issue", {}) }
-        .to raise_error(Einvoice::ValidationError) { |error|
+        .to raise_error(Einvoice::AuthError) { |error|
           expect(error.reason).to eq(Einvoice::Reason::STALE_TIMESTAMP)
         }
     end
@@ -92,10 +92,33 @@ RSpec.describe Einvoice::ECPay::Client do
     end
 
     it "reports a non-JSON response with its status rather than a parse error" do
+      stub_request(:post, url).to_return(status: 200, body: "<html>maintenance</html>")
+
+      expect { client.request("/B2CInvoice/Issue", {}) }
+        .to raise_error(Einvoice::ProviderError, /non-JSON response \(HTTP 200\)/)
+    end
+
+    it "reads HTTP 403 as a rate limit the caller can wait out" do
+      stub_request(:post, url).to_return(status: 403, body: "Forbidden")
+
+      expect { client.request("/B2CInvoice/Issue", {}) }
+        .to raise_error(Einvoice::NetworkError) { |error|
+          expect(error.reason).to eq(Einvoice::Reason::RATE_LIMITED)
+          expect(error.raw_code).to eq("403")
+        }
+    end
+
+    it "reports a gateway page with HTTP 5xx as a network error" do
       stub_request(:post, url).to_return(status: 502, body: "<html>bad gateway</html>")
 
       expect { client.request("/B2CInvoice/Issue", {}) }
-        .to raise_error(Einvoice::ProviderError, /non-JSON response \(HTTP 502\)/)
+        .to raise_error(Einvoice::NetworkError, /HTTP 502/)
+    end
+
+    it "does not report a bug in the adapter as a network error" do
+      allow(Net::HTTP).to receive(:new).and_raise(NoMethodError, "bug")
+
+      expect { client.request("/B2CInvoice/Issue", {}) }.to raise_error(NoMethodError)
     end
 
     it "wraps a connection failure as a network error" do

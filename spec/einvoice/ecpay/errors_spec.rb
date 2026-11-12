@@ -7,11 +7,6 @@ RSpec.describe Einvoice::ECPay::Errors do
         .to eq([:auth, Einvoice::Reason::CREDENTIALS_INVALID])
     end
 
-    it "reads a rejected timestamp as a stale clock the caller can fix" do
-      expect(described_class.classify_transport(104))
-        .to eq([:validation, Einvoice::Reason::STALE_TIMESTAMP])
-    end
-
     it "falls back to a provider error for anything else" do
       expect(described_class.classify_transport(999)).to eq([:provider, nil])
     end

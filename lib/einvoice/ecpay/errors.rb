@@ -15,10 +15,12 @@ module Einvoice
     # signal. Classification therefore tries the table of codes confirmed against
     # the live stage API first, then falls back to matching the message.
     module Errors
-      # Transport-level codes seen live (2026-08-15, stage).
+      # Transport-level codes. 110 was seen live (2026-08-15, stage). 104 and 115
+      # come from the shared wire fixtures. Any other code is a ProviderError.
       TRANSPORT = {
-        104 => [:validation, Reason::STALE_TIMESTAMP],  # Timestamp is over 10 minutes...
-        110 => [:auth, Reason::CREDENTIALS_INVALID]     # The parameter [Data] decrypt fail.
+        104 => [:auth, Reason::STALE_TIMESTAMP],        # Timestamp is over 10 minutes...
+        110 => [:auth, Reason::CREDENTIALS_INVALID],    # The parameter [Data] decrypt fail.
+        115 => [:auth, Reason::NOT_ENROLLED]            # B2C/B2B功能尚未開通
       }.freeze
 
       # Business codes confirmed by driving the stage API (2026-08-15). Kept small
@@ -32,7 +34,11 @@ module Einvoice
         5_070_357 => [:conflict, Reason::DUPLICATE_ORDER],         # 自訂編號重覆
         5_070_450 => [:conflict, Reason::VOID_BLOCKED_BY_ALLOWANCE], # 該發票已被折讓過
         5_070_453 => [:conflict, Reason::ALREADY_VOIDED],          # 該發票已被作廢過
-        9_000_001 => [:network, nil]                               # 呼叫財政部API失敗
+        9_000_001 => [:network, nil],                              # 呼叫財政部API失敗
+        # From the shared wire fixtures.
+        4_000_001 => [:not_found, nil],                            # 不存在此交易單號
+        1_100_040 => [:number_exhausted, nil],                     # 發票字軌已用完
+        5_070_250 => [:conflict, nil]                              # 線上折讓已同意，不可作廢
       }.freeze
 
       # 財政部 upstream trouble is transient and retryable — never the caller's input.

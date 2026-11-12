@@ -42,18 +42,19 @@ module Einvoice
       MAX_PAGES = 100
 
       def initialize(base_url: BASE_URL, timeout: 30)
-        @base_url = base_url
+        @base_url = Redaction.base_url!(base_url, provider: PROVIDER)
         @timeout = timeout
       end
 
       # The registered organisation for a 愛心碼, or +nil+ when the code is not in
       # the dataset. Raises {ValidationError} if it isn't 3–7 digits.
+      #
+      # The donateCode filter is not in the OpenAPI file, so its match rule is
+      # not known. Only a row with exactly this code counts.
       def lookup(code)
         assert_format!(code)
-        rows = get(donateCode: code)
-        return nil if rows.empty?
-
-        build(rows.first)
+        row = get(donateCode: code).find { |r| r["donateCode"].to_s == code.to_s }
+        row && build(row)
       end
 
       # Whether a 愛心碼 is registered.
@@ -116,9 +117,7 @@ module Einvoice
         response = http.request(Net::HTTP::Get.new(uri.request_uri))
         check!(response)
         response
-      rescue Einvoice::Error
-        raise
-      rescue StandardError => e
+      rescue *Error::NETWORK_ERRORS => e
         raise NetworkError.new("財政部 request failed: #{e.message}", provider: PROVIDER, cause: e)
       end
 
@@ -127,6 +126,7 @@ module Einvoice
       def check!(response)
         case response.code.to_i
         when 200 then nil
+        when 429, 500..599 then raise NetworkError.for_status(response, provider: PROVIDER)
         when 401, 403
           raise AuthError.new(
             "財政部 now requires credentials for the donation-code dataset (HTTP #{response.code})",

@@ -282,7 +282,7 @@ adapter 另外對應了兩個檢查：`/B2CInvoice/CheckBarcode`（手機條碼�
 | Unified | ECPay | 規則或預設值 |
 | --- | --- | --- |
 | `invoice.order_id` | `RelateNumber` | 有就使用 |
-| `invoice.number` | `InvoiceNo` | 沒有訂單編號時才用 |
+| `invoice.number` | `InvoiceNo` | 沒有訂單編號時才用。查詢結果不會和它比對（8.2） |
 | `invoice.invoice_datetime` | `InvoiceDate` | 只和 `InvoiceNo` 一起送，此時必填 |
 
 結果：
@@ -307,12 +307,12 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 
 - B2C 和 B2B 都把 `amount.total_amount` 當成 `SalesAmount` 送出，也就是含稅金額 `[doc 7896]`。`sales_amount` 和 `tax_amount` 不送出。稅額由 ECPay 計算：`round(SalesAmount / 1.05 × 0.05)`。混合稅率時，用應稅品項的合計計算 `[doc 7896]`。
 - `vat` 為 `1` 時，`SalesAmount` 必須等於 `ItemAmount` 加總後四捨五入的值，否則 ECPay 回傳 `5000022` `[live]`。adapter 在呼叫前會檢查。
-- `vat` 為 `0` 時，總計由 ECPay 自己計算。
+- `vat` 為 `0` 時，總計由 ECPay 自己計算。這一點沒有標 `[live]`，而且 5.1 的說法不同（8.1）。
 - 品項金額最多可以有 7 位小數，只有加總會四捨五入 `[doc 7896]`。
 
 **折讓。**
 
-- 經過 core 處理後，每個折讓品項都有不含稅的金額，以及自己的稅額（G0401）。ECPay 要的是含稅金額 `[doc 7901]`。所以 `ItemAmount` 是品項金額加上它的稅額，`AllowanceAmount` 是 `amount.total_amount`。
+- ECPay 要的是含稅的單價和金額 `[doc 7901]`。`ItemPrice` 是 core `tax_breakdown` 中每一列的 `gross_unit_price`，`ItemAmount` 是它的 `gross_amount`。`AllowanceAmount` 是 `amount.total_amount`。
 - `ItemAmount` 和 `ItemPrice × ItemCount` 最多可以差 1。`ItemAmount` 的加總必須等於 `AllowanceAmount`。adapter 在呼叫前會檢查。
 - ECPay 會再替財政部把稅額拆出來（4.7）。
 
@@ -369,7 +369,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 ### 4.8 Contract 與 live 測試
 
 - **離線 contract。** `spec/einvoice/ecpay/provider_spec.rb` 對 `spec/support/fake_ecpay.rb` 執行 shared contract。fake 使用真實的外層格式、加密方式和 `RtnCode`。
-- **不存在的號碼。** ECPay 會先檢查格式，所以 contract 收到 `unknown_invoice_number: "ZZ00000000"` 和 `unknown_allowance_number: "9999999999999999"`。
+- **不存在的號碼。** ECPay 會先檢查格式，所以 contract 收到 `unknown_reference: { number: "ZZ00000000", invoice_datetime: <今天> }` 和 `unknown_allowance_number: "9999999999999999"`。
 - **Reference。** contract 會把 `issue` 回傳的 reference 傳給後面的步驟，所以一定有 `invoice_datetime`。
 - **共用 fixture。** 另一個 SDK 公開了這個 API 的 wire fixture。spec 會執行放在 `spec/fixtures/shared/ecpay/` 的副本。unified model 刻意不同的 case 會跳過，並寫出原因。
 - **Live spec。** `spec/einvoice/ecpay/live_spec.rb` 在設定 `ECPAY_LIVE=1` 時對 stage 執行。stage 帳號和所有開發者共用，所以每次執行都會產生不重複的訂單編號（`RB` 加上時間和亂數）。
@@ -524,7 +524,7 @@ unified model 會用到的回應欄位：
 | `IIS_Category` | 有統一編號為 `B2B`，沒有為 `B2C` |
 | `IIS_Type` | `07` / `08` |
 | `IIS_Tax_Type` | `1`、`2`、`3`、`4`、`9` |
-| `IIS_Tax_Rate` | 稅率，2 位小數 |
+| `IIS_Tax_Rate` | 稅率，2 位小數。adapter 只在 `SPECIAL` 發票讀取它。其他稅別的稅率是固定的 |
 | `IIS_Tax_Amount` | 稅額。**只有 B2B 發票才有值。** B2C 為 `0`，因為稅額包含在金額裡 |
 | `IIS_Sales_Amount` | 發票金額，含稅 |
 | `IIS_Create_Date` | 開立時間，`yyyy-MM-dd HH:mm:ss` |
@@ -655,3 +655,11 @@ ECPay 會寫「重複」也會寫「重覆」，會寫「已作廢」也會寫�
 3. **卡片載具。** 悠遊卡和一卡通（`4`、`5`）沒有對應的 unified `CarrierType`。
 4. **B2B API。** ECPay 另外有 B2B 發票 API。它走的是 MIG 的交換流程嗎？我們需要它嗎？
 5. **403 的 body。** ECPay 會送什麼？adapter 用不到，但有樣本可以讓 fake 更貼近真實。
+
+## 8. 已知問題
+
+這些是審查 2.0 程式碼時發現的問題，留到下次重整 adapter 時處理。
+
+1. **`vat` 為 `0` 時的 `ItemAmount`。** 開立發票時，adapter 把每個品項的 `amount` 送成 `ItemAmount`。`vat` 為 `0` 時，這個金額不含稅。但 5.1 說 `ItemAmount` 含稅，而且 `vat` 為 `0`、`TaxType` 為 `1` 時，`ItemPrice × ItemCount × 1.05 = ItemAmount` `[doc 7896]`。4.3 說 `vat` 為 `0` 時總計由 ECPay 自己計算，但這一點沒有標 `[live]`，而且 adapter 這時會跳過自己的總計檢查。折讓已經改送核心計算出的 `gross_amount`。需要用 live 測試確認哪一邊才對。
+2. **用訂單編號查詢時不比對發票號碼。** reference 同時有訂單編號和發票號碼時，adapter 只用 `RelateNumber` 查詢，不會比對回傳的 `IIS_Number` 和 `invoice.number`。如果 ECPay 允許重複使用訂單編號（例如作廢之後），查詢可能回傳另一張發票，而且不會出錯。修正方式是有發票號碼時用號碼查詢，或在號碼不同時丟出錯誤。
+3. **`love_code_organ_name` 用自己的格式。** 它用 `/\A\d{3,7}\z/` 檢查愛心碼，而不是 `Donation::CODE_FORMAT`。兩者目前相同。如果 MIG 改了愛心碼的格式，這個檢查不會跟著改。
