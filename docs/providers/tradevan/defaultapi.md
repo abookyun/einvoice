@@ -4,9 +4,9 @@ English | [繁體中文](defaultapi.zh-TW.md)
 
 ## 1. Status and sources
 
-> **Trust:** no public docs and no account. The API runs in production through the 1.x client (`[prod]`). An experimental 2.x adapter is in progress. It can only be tested against our fake, and nothing here was run against the live API in 2026. Section 4 and 6.4 are the mapping the adapter follows.
+> **Trust:** no public docs and no account. The API runs in production through the 1.x client (`[prod]`). The 2.x adapter is experimental. It passes the shared contract against our fake only, and nothing here was run against the live API in 2026. Section 4 and 6.4 describe what the adapter does.
 
-This is the API that the 1.x client wraps. All paths start with `/DEFAULTAPI/`. The 2.x adapter will be `Einvoice::Tradevan::DefaultAPI::Provider`, marked experimental.
+This is the API that the 1.x client wraps. All paths start with `/DEFAULTAPI/`. The 2.x adapter is `Einvoice::Tradevan::DefaultAPI::Provider`, marked experimental.
 
 The API document belongs to 關貿網路 Tradevan. Tradevan does not publish it, and it declined to send us a newer version. So there is no public link. We built this note from what the 1.x line has, and from one production report. Nobody in this project has a Tradevan account today, so nothing here is verified against the live API in 2026.
 
@@ -192,7 +192,7 @@ The allowance takes the invoice date from the reference, or from the same query.
 | `tax_rate` | (none) | Not sent. A taxable invoice with a rate other than `0.05`: `UnsupportedError` |
 | `items[]` | `itemList` | See below |
 | `remark` | (none) | `mainRemark` exists only for type `G`. Dropped |
-| `price_mode` `TAX_EXCLUSIVE` | (none) | `itemTotal` includes tax, so this is a `ValidationError` |
+| `price_mode` | (none) | Not sent. `itemTotal` includes tax, so every price mode is sent with tax (4.3) |
 | `currency` | (none) | Not TWD: `UnsupportedError` |
 
 Items:
@@ -203,8 +203,8 @@ Items:
 | (index) | `serialNumber` | 4 digits: `0001`, `0002`, … |
 | `description` | `productName` | Max 300 |
 | `quantity` | `qty` | Written without a trailing `.0`. See 7, question 4 |
-| `unit_price` | `price` | |
-| `amount` | `itemTotal` | Tax included |
+| `unit_price` | `price` | The line's `gross_unit_price` from the core's `tax_breakdown` |
+| `amount` | `itemTotal` | The line's `gross_amount`, tax included |
 | `tax_type` | `taxType` | `T`, `Z`, `O` (6.1) |
 
 Result:
@@ -244,7 +244,7 @@ Result: `invoice_number` from the input, `status` `VOIDED` after `voidStatus` `Y
 | `invoice.invoice_datetime`, else the query | `itemList[].invoiceDate` | M. `yyyyMMdd` in UTC+8 |
 | `items[]` | `itemList[]` | As for issue. `itemExclude` is the item amount without tax, `tax` its tax, and `itemTotal` the two together (4.3) |
 
-Result: no source shows the type `A` response. The adapter reads `allowanceNumber`, as the type `I` response has that field. If it is empty, the adapter raises `ProviderError` with the raw response. `allowance_date` is `allowanceDate` when the response has it, else `nil`.
+Result: no source shows the type `A` response. The adapter reads `allowanceNumber`, as the type `I` response has that field. If it is empty, the adapter raises `ProviderError` with the raw response. `allowance_date` is `allowanceDate` when the response has it. Else it is today in UTC+8, the `transactionDate` the adapter sent (inferred).
 
 #### `void_allowance`
 
@@ -275,6 +275,8 @@ Result, from `searchInvoiceDetail` `[readme]`:
 | `amount` | `sales = exclusiveAmount`, `tax = tax`, `total = total` |
 | `buyer` | `receiverName`, `receiverAddr`, `receiverPhone`. No email or 統一編號 in the response |
 | `items` | `detailList[]`: `productName`, `qty`, `price`, `total`, `taxType` |
+| `tax_type` | The items' `taxType`. Items with different types: `MIXED` |
+| `tax_rate` | `0.05` for `TAXABLE` and `MIXED`, `0` for `ZERO_RATED` and `TAX_FREE`. DEFAULTAPI has no rate field, and a taxable line can only be at the general rate (6.1) |
 | `reference` | Built from the fields above |
 
 ### 4.3 Amounts and tax
@@ -287,7 +289,7 @@ The unified rules are in [the unified model](../README.md#the-unified-model).
 - The header `total` must equal the sum of `itemTotal` `[rules]`. Amounts are compared as decimals, not as integers.
 - In `[readme]`, `itemTotal` 20000 and `tax` 952. The response gives `texclusiveAmount` 19048, `tax` 952, `inclusiveAmount` 20000. So Tradevan splits the tax: `20000 / 1.05 = 19047.6`, rounded to 19048.
 - The adapter sends `itemTotal` with tax, and leaves the item `tax` out. Tradevan computes the split.
-- B2B uses the same fields. `total` is `amount.total_amount`, and `itemTotal` is each line's `gross_amount` from the core's `tax_breakdown`.
+- B2C and B2B use the same fields, with any `price_mode`. `total` is `amount.total_amount`, and `itemTotal` is each line's `gross_amount` from the core's `tax_breakdown`.
 
 **Allowance.**
 
@@ -556,7 +558,7 @@ The classification. Everything in it is a guess until real failure texts are kno
 ## 7. Open questions
 
 1. What do the status codes `V` and `I` mean? An adapter that guesses wrong can report a voided invoice as issued.
-2. What does the type `A` issue response look like? Does it return an allowance number?
+2. What does the type `A` issue response look like? Does it return an allowance number and an allowance date?
 3. What failure texts does Tradevan send? Without them, errors cannot map to `NotFoundError` or `ConflictError`.
 4. Is `qty` scaled? In `[readme]` an item has `qty` 4000, `price` 5 and `itemTotal` 20000, so `qty × price = itemTotal`. In `[readme-2026]` an item has `qty` 1000, `price` 100 and `itemTotal` 100, so `qty` looks like units × 1000. `[rfc]` also calls `qty` "a ×1000 integer". The sources do not agree, and a 1.x user who moves to 2.x needs the answer.
 5. What are the test and production hosts?

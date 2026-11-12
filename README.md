@@ -199,7 +199,7 @@ provider = Einvoice::EzPay::Provider.new(
 provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
   acnt: "...", acntp: "...",
   key1: "...", key2: "...",          # 16 bytes each, server-side only
-  endpoint: "https://...",           # your Tradevan host; there is no default
+  base_url: "https://...",           # your Tradevan host; there is no default
   company_un: "12345678", org_id: "ABCDE",
   paper_print_mode: "0", invoice_alarm_mode: "4",
   invoice_paper_returned: "N", allowance_paper_returned: "N",
@@ -208,9 +208,10 @@ provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
 ```
 
 - **Experimental.** This adapter is ported from the 1.x client, its validators and its README examples. Tradevan does not publish its API docs, and nobody has run this adapter against the live API. Test it against your own account before you rely on it. The 1.x client stays on `1-x-stable`.
-- **Void and allowance need the original order id.** DEFAULTAPI identifies an invoice by its `saleIdentifier`, which the adapter builds from the order id. Pass `provider_options: { order_id: "ORDER_1" }`. An allowance also needs the original invoice date: `provider_options: { order_id:, invoice_date: }`.
+- **Void and allowance need the original order id.** DEFAULTAPI identifies an invoice by its `saleIdentifier`, which the adapter builds from the order id. An allowance also needs the invoice date. The reference from `issue` or `query` has both. Without them, the adapter queries the invoice by number first. For an invoice that the 1.x client issued, pass its identifier as `provider_options: { sale_identifier: }`.
 - **Query status is often `nil`.** The meaning of DEFAULTAPI's status codes is unknown, so the adapter does not guess. `status` is `:allowance` when the invoice has an allowance, and `nil` otherwise. The raw code is in `result.raw["status"]`.
-- **Not supported**: query by order id, the special tax rate, tax-excluded prices, and foreign currency.
+- **Prices include tax on the wire.** The adapter takes them from the core's breakdown, so any `price_mode` works. A taxable `tax_rate` must be 0.05. When the allowance response has no date, the allowance date is today (Asia/Taipei).
+- **Not supported**: query by order id, mixed tax, the special tax rate, and foreign currency.
 - **Anything else**: reach the other DEFAULTAPI endpoints through `provider.raw(path, params)`, for example `provider.raw("get/getInvoiceMarkInfo", { ... })`.
 - The details and the open questions are in [`docs/providers/tradevan/defaultapi.md`](docs/providers/tradevan/defaultapi.md).
 
