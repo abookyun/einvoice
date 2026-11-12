@@ -8,7 +8,9 @@ module Einvoice
     # The list has no code for an allowance on a voided invoice, for an
     # allowance that does not exist, or for a duplicate allowance. {CONTEXT}
     # holds our guesses for those cases, by operation, so that real codes can
-    # replace them in one place.
+    # replace them in one place. Voiding an allowance twice has no code either.
+    # The fake assumes LIB10005, which the main table already reads as
+    # ConflictError.
     module Errors
       # code => [error class code, Reason or nil]
       CODES = {

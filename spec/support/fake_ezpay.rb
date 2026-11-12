@@ -143,7 +143,10 @@ class FakeEzPay
 
   def void_allowance(fields)
     allowance = @allowances[fields["AllowanceNo"]]
-    return reply("IAI10002", "查詢失敗") unless allowance && !allowance["voided"]
+    return reply("IAI10002", "查詢失敗") unless allowance
+    # The manual has no code for this. Assumed to be the code of a voided
+    # invoice (docs, section 7).
+    return reply("LIB10005", "折讓已作廢") if allowance["voided"]
 
     allowance["voided"] = true
     @invoices[allowance["invoice"]]["remain"] += allowance["amount"]

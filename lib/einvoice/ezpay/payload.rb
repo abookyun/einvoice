@@ -22,7 +22,8 @@ module Einvoice
       CONSUMER_NAME = "消費者"
       DEFAULT_UNIT = "個"
       VOID_ALLOWANCE_REASON = "作廢折讓"
-      TAX_RATE = Rational(5, 100)
+      # The rates TaxRate takes, as a percent (docs, section 4.2).
+      TAX_RATES = { 0r => "0", Rational(5, 100) => "5" }.freeze
       ITEM_SEPARATOR = "|"
       ORDER_ID = /\A[A-Za-z0-9_]{1,20}\z/
 
@@ -40,6 +41,8 @@ module Einvoice
         mixed = types.uniq.size > 1
         check_issue!(parsed, b2b, types, mixed, options)
 
+        breakdown = parsed.tax_breakdown(provider: Client::PROVIDER)
+
         fields = {
           "MerchantOrderNo" => parsed.order_id.to_s,
           "Status" => "1",
@@ -52,11 +55,11 @@ module Einvoice
           "LoveCode" => parsed.donation&.npoban.to_s,
           "PrintFlag" => b2b || (parsed.carrier.nil? && parsed.donation.nil?) ? "Y" : "N",
           "TaxType" => mixed ? MIXED_TAX_CODE : TAX_TYPE.fetch(types.first),
-          "TaxRate" => mixed || types.first == TaxType::TAXABLE ? "5" : "0"
+          "TaxRate" => TAX_RATES.fetch(parsed.tax_rate)
         }
         fields["CustomsClearance"] = options["customs_clearance"].to_s if types.include?(TaxType::ZERO_RATED)
-        fields.merge!(issue_amounts(parsed, types, b2b, mixed))
-        fields.merge!(item_fields(parsed.items))
+        fields.merge!(issue_amounts(breakdown, mixed))
+        fields.merge!(item_fields(parsed.items, breakdown.lines, net: b2b))
         fields["ItemTaxType"] = types.map { |type| TAX_TYPE.fetch(type) }.join(ITEM_SEPARATOR) if mixed
         fields["Comment"] = parsed.remark.to_s
         fields
@@ -64,18 +67,22 @@ module Einvoice
 
       # +invoice_invalid+ fields.
       def void(parsed)
-        { "InvoiceNumber" => parsed.invoice_number.to_s, "InvalidReason" => reason!(parsed.reason) }
+        { "InvoiceNumber" => parsed.invoice.number.to_s, "InvalidReason" => reason!(parsed.reason) }
       end
 
-      # +allowance_issue+ fields. Confirmed at once (+Status+ 1).
-      def allowance(parsed)
+      # +allowance_issue+ fields. Confirmed at once (+Status+ 1). +original+
+      # has the invoice's +order_id+, and +business+ says if its buyer has a
+      # 統一編號 (section 4.3).
+      def allowance(parsed, original)
         options = string_keys(parsed.provider_options)
-        order_id = options["order_id"].to_s
-        invalid!("an ezPay allowance needs provider_options[:order_id], the invoice's order id") if order_id.empty?
+        check_rate!(parsed.tax_rate)
+        breakdown = parsed.tax_breakdown(provider: Client::PROVIDER)
+        refuse_special!(breakdown.lines.map(&:tax_type))
 
-        fields = { "InvoiceNo" => parsed.invoice_number.to_s, "MerchantOrderNo" => order_id }
-        fields.merge!(item_fields(parsed.items))
-        fields.merge!(allowance_amounts(parsed.items, parsed.amount))
+        fields = { "InvoiceNo" => parsed.invoice.number.to_s, "MerchantOrderNo" => original[:order_id].to_s }
+        fields.merge!(item_fields(parsed.items, breakdown.lines, net: original[:business]))
+        fields["ItemTaxAmt"] = breakdown.lines.map { |line| original[:business] ? line.tax : 0 }.join(ITEM_SEPARATOR)
+        fields["TotalAmt"] = parsed.amount.total_amount
         fields["TaxTypeForMixed"] = options["tax_type_for_mixed"].to_s if options.key?("tax_type_for_mixed")
         fields["BuyerEmail"] = options["buyer_email"].to_s if options.key?("buyer_email")
         fields["Status"] = "1"
@@ -84,25 +91,22 @@ module Einvoice
 
       # +allowanceInvalid+ fields.
       def void_allowance(parsed)
-        { "AllowanceNo" => parsed.allowance_number.to_s,
+        { "AllowanceNo" => parsed.allowance.allowance_number.to_s,
           "InvalidReason" => reason!(parsed.reason || VOID_ALLOWANCE_REASON) }
       end
 
-      # +invoice_search+ fields. ezPay always needs a second key: the random
-      # code with the number, or the total with the order id.
-      def query(parsed)
-        options = string_keys(parsed.provider_options)
-        number = parsed.invoice_number.to_s
-        order_id = parsed.order_id.to_s
+      # +invoice_search+ fields, by number. ezPay needs the random code with
+      # it. A query by order id needs the total, so the adapter does not offer
+      # it (section 4.6).
+      def query(reference)
+        invalid!("an ezPay query needs invoice.random_code with the number") unless queryable?(reference)
 
-        if !number.empty? && options.key?("random_code")
-          { "SearchType" => "0", "InvoiceNumber" => number, "RandomNum" => options["random_code"].to_s }
-        elsif !order_id.empty? && options.key?("total_amount")
-          { "SearchType" => "1", "MerchantOrderNo" => order_id, "TotalAmt" => options["total_amount"].to_s }
-        else
-          invalid!("ezPay needs provider_options[:random_code] with an invoice number, " \
-                   "or provider_options[:total_amount] with an order id")
-        end
+        { "SearchType" => "0", "InvoiceNumber" => reference.number.to_s, "RandomNum" => reference.random_code.to_s }
+      end
+
+      # Whether +reference+ has the two keys of a query by number.
+      def queryable?(reference)
+        !reference.number.nil? && !reference.random_code.nil?
       end
 
       # --- issue -------------------------------------------------------------
@@ -112,63 +116,41 @@ module Einvoice
         max!(parsed.remark.to_s, 200, "remark")
         max!(parsed.buyer&.email.to_s, 50, "buyer email")
         max!(parsed.buyer&.address.to_s, 100, "buyer address")
-        expected = b2b ? PriceMode::TAX_EXCLUSIVE : PriceMode::TAX_INCLUSIVE
-        unless parsed.price_mode == expected
-          invalid!("ezPay takes #{b2b ? 'tax-exclusive' : 'tax-inclusive'} prices for a #{b2b ? 'B2B' : 'B2C'} invoice")
+        refuse_special!(types)
+        if mixed && b2b
+          raise UnsupportedError.new("ezPay allows mixed tax only on a B2C invoice", provider: Client::PROVIDER)
         end
-        if types.include?(TaxType::SPECIAL)
-          raise UnsupportedError.new("ezPay adapter does not support special tax (特種稅額)",
-                                     provider: Client::PROVIDER)
-        end
-        invalid!("ezPay allows mixed tax only on a B2C invoice") if mixed && b2b
         invalid!("ezPay allows a carrier or a donation only on a B2C invoice") if b2b && (parsed.carrier || parsed.donation)
+        invalid!("ezPay does not take a carrier together with a donation") if parsed.carrier && parsed.donation
         if types.include?(TaxType::ZERO_RATED) && !options.key?("customs_clearance")
           invalid!("a zero-rated sale needs provider_options[:customs_clearance]")
         end
-        check_tax_rate!(parsed.tax_rate)
+        check_rate!(parsed.tax_rate)
       end
 
-      # The core does not define the unit of +tax_rate+. Like the note, read it
-      # as a fraction (0.05), and also accept a percent (5). Only 5% is allowed.
-      def check_tax_rate!(rate)
-        return if rate.nil?
+      def refuse_special!(types)
+        return unless types.include?(TaxType::SPECIAL)
 
-        value = Rational(rate.to_s)
-        return if value == TAX_RATE || value == 5
+        raise UnsupportedError.new("ezPay adapter does not support special tax (特種稅額)", provider: Client::PROVIDER)
+      end
 
-        raise UnsupportedError.new("ezPay adapter only supports a 5% tax rate, got #{rate.inspect}",
+      # The core has checked that +rate+ is a MIG rate. ezPay takes two of them.
+      def check_rate!(rate)
+        return if TAX_RATES.key?(rate)
+
+        raise UnsupportedError.new("ezPay takes a tax rate of 0 or 0.05 only, got #{rate.to_f}",
                                    provider: Client::PROVIDER)
-      rescue ArgumentError, ZeroDivisionError
-        invalid!("tax_rate must be a number, got #{rate.inspect}")
       end
 
-      # ezPay always splits the tax out: +Amt+ excludes it (section 4.3).
-      def issue_amounts(parsed, types, b2b, mixed)
-        amount = parsed.amount
-        sums = Hash.new(0)
-        parsed.items.zip(types).each { |item, type| sums[type] += integer!(item.amount, "item amount") }
-        total = sums.values.sum
-
-        if b2b
-          # B2B item prices exclude tax, so the items add up to the sales amount.
-          invalid!("items add up to #{total}, but amount.sales_amount is #{amount.sales_amount}") if
-            total != amount.sales_amount
-          return { "Amt" => total, "TaxAmt" => amount.tax_amount, "TotalAmt" => amount.total_amount }
-        end
-
-        invalid!("items add up to #{total}, but amount.total_amount is #{amount.total_amount}") if
-          total != amount.total_amount
-        taxable = sums[TaxType::TAXABLE]
-        tax = if amount.tax_amount.to_i.zero?
-                taxable - (taxable / (1 + TAX_RATE)).round
-              else
-                amount.tax_amount
-              end
-        fields = { "Amt" => total - tax, "TaxAmt" => tax, "TotalAmt" => total }
+      # ezPay always splits the tax out: +Amt+ excludes it (section 4.3). The
+      # split is the core's.
+      def issue_amounts(breakdown, mixed)
+        fields = { "Amt" => breakdown.sales_amount, "TaxAmt" => breakdown.tax_amount,
+                   "TotalAmt" => breakdown.total_amount }
         if mixed
-          fields["AmtSales"] = taxable - tax
-          fields["AmtZero"] = sums[TaxType::ZERO_RATED]
-          fields["AmtFree"] = sums[TaxType::TAX_FREE]
+          fields["AmtSales"] = breakdown.taxable_amount
+          fields["AmtZero"] = breakdown.zero_rated_amount
+          fields["AmtFree"] = breakdown.tax_free_amount
         end
         fields
       end
@@ -201,15 +183,20 @@ module Einvoice
 
       # --- items -------------------------------------------------------------
 
-      # Each item field is one string, items separated by +|+.
-      def item_fields(items)
-        rows = items.map { |item| item_row(item) }
+      # Each item field is one string, items separated by +|+. ezPay fixes the
+      # prices by the buyer (section 4.3): without tax for a business (+net+),
+      # with tax for a consumer. Both come from the core's lines, so the
+      # input's +price_mode+ does not matter.
+      def item_fields(items, lines, net:)
+        rows = items.zip(lines).map { |item, line| item_row(item, net ? line.net_amount : line.gross_amount) }
         %w[ItemName ItemCount ItemUnit ItemPrice ItemAmt].to_h do |field|
           [field, rows.map { |row| row[field] }.join(ITEM_SEPARATOR)]
         end
       end
 
-      def item_row(item)
+      # ezPay wants +ItemAmt = ItemCount × ItemPrice+ in whole numbers, so the
+      # price is the amount over the count, and it has to divide.
+      def item_row(item, amount)
         name = item.description.to_s
         unit = item.unit.to_s.empty? ? DEFAULT_UNIT : item.unit.to_s
         [name, unit].each { |text| invalid!("item text must not contain |: #{text.inspect}") if text.include?("|") }
@@ -217,37 +204,17 @@ module Einvoice
         limited!(unit, UNIT_LIMIT, "item unit")
 
         count = integer!(item.quantity, "item quantity")
-        price = integer!(item.unit_price, "item unit_price")
-        amount = integer!(item.amount, "item amount")
-        invalid!("item amount #{amount} is not quantity × unit_price (#{count * price})") if amount != count * price
+        invalid!("ezPay needs an item quantity above 0, got #{count}") unless count.positive?
+        amount = integer!(amount, "item amount")
+        unless (amount % count).zero?
+          invalid!("ezPay needs a whole unit price, but the item amount #{amount} does not divide by #{count}")
+        end
 
-        { "ItemName" => name, "ItemCount" => count, "ItemUnit" => unit, "ItemPrice" => price, "ItemAmt" => amount }
+        { "ItemName" => name, "ItemCount" => count, "ItemUnit" => unit, "ItemPrice" => amount / count,
+          "ItemAmt" => amount }
       end
 
       # --- allowance ---------------------------------------------------------
-
-      # The note proposes tax-inclusive prices for B2C and tax-exclusive ones
-      # for B2B (section 4.3). {AllowanceInput} has no buyer, so the adapter
-      # reads the amount instead:
-      #
-      # - +tax_amount+ 0 (the contract's B2C shape): prices include tax, and
-      #   every +ItemTaxAmt+ is 0.
-      # - +tax_amount+ above 0: prices exclude tax, and the item taxes add up
-      #   to +tax_amount+. The rounding difference goes on the last item.
-      def allowance_amounts(items, amount)
-        amounts = items.map { |item| integer!(item.amount, "item amount") }
-        if amount.tax_amount.to_i.zero?
-          invalid!("items add up to #{amounts.sum}, but amount.total_amount is #{amount.total_amount}") if
-            amounts.sum != amount.total_amount
-          taxes = amounts.map { 0 }
-        else
-          invalid!("items add up to #{amounts.sum}, but amount.sales_amount is #{amount.sales_amount}") if
-            amounts.sum != amount.sales_amount
-          taxes = amounts.map { |value| (value * TAX_RATE).round }
-          taxes[-1] += amount.tax_amount - taxes.sum
-        end
-        { "ItemTaxAmt" => taxes.join(ITEM_SEPARATOR), "TotalAmt" => amounts.sum + taxes.sum }
-      end
 
       # --- helpers -----------------------------------------------------------
 
@@ -265,13 +232,13 @@ module Einvoice
         max!(text, limit, field)
       end
 
-      # The core does not check item numbers, so a String like "lots" gets here.
+      # The core reads every number as exact, but allows decimals. ezPay does
+      # not.
       def integer!(value, field)
-        return value if value.is_a?(Integer)
-        return value.to_i if value.is_a?(Numeric) && value.finite? && value == value.to_i
-        return value.to_i if value.is_a?(String) && value.match?(/\A-?\d+\z/)
+        rational = value.to_r
+        return rational.to_i if rational.denominator == 1
 
-        invalid!("ezPay needs a whole number for #{field}, got #{value.inspect}")
+        invalid!("ezPay needs a whole number for #{field}, got #{Number.plain(rational)}")
       end
 
       def max!(value, limit, field)
