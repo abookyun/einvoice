@@ -6,7 +6,8 @@ module Einvoice
   module Amego
     # Maps the unified value model onto Amego's JSON payloads, and checks the
     # rules from docs/providers/amego/api.md locally, so a bad request fails
-    # before the network.
+    # before the network. The core has already checked the input and computed
+    # the tax, so this module only translates.
     module Payload
       # 課稅別 → Amego TaxType. 9 (混合) is derived from the items.
       TAX_TYPE = {
@@ -25,7 +26,8 @@ module Einvoice
       CONSUMER_ID = "0000000000"
       CONSUMER_NAME = "消費者"
       ALLOWANCE_TYPE = "2" # 賣方開立. Amego rejects 1 since 2025-01-01
-      TAX_RATE = Rational(5, 100)
+      # The only rates TaxRate takes (docs, section 4.2).
+      TAX_RATES = [0r, Rational(5, 100)].freeze
       MOBILE_MEMBER = /\A09\d{8}\z/
 
       MAX_ORDER_ID = 40
@@ -33,7 +35,6 @@ module Einvoice
       MAX_DESCRIPTION = 256
       MAX_ITEM_REMARK = 120
       MAX_UNIT = 6
-      MAX_REASON = 20
       MAX_ALLOWANCE_NUMBER = 16
 
       # provider_options key => f0401 field, for fields with no unified home.
@@ -53,11 +54,9 @@ module Einvoice
         b2b = parsed.resolved_category == InvoiceCategory::B2B
         exclusive = parsed.price_mode == PriceMode::TAX_EXCLUSIVE
         options = string_keys(parsed.provider_options)
-        check_issue!(parsed, b2b, exclusive, options)
-
         types = parsed.items.map { |item| item.tax_type || parsed.tax_type }
-        totals = issue_totals(parsed.items, types, b2b: b2b, exclusive: exclusive)
-        check_totals!(parsed.amount, totals, b2b)
+        check_issue!(parsed, types, b2b, exclusive, options)
+        breakdown = parsed.tax_breakdown(provider: Client::PROVIDER)
 
         data = {
           "OrderId" => parsed.order_id.to_s,
@@ -70,123 +69,100 @@ module Einvoice
           **carrier_fields(parsed.carrier, parsed.buyer),
           "NPOBAN" => parsed.donation&.npoban.to_s,
           "ProductItem" => parsed.items.zip(types).map { |item, type| issue_item(item, type) },
-          "SalesAmount" => totals[:sales],
-          "FreeTaxSalesAmount" => totals[:free],
-          "ZeroTaxSalesAmount" => totals[:zero],
+          **issue_totals(breakdown, b2b),
           "TaxType" => types.uniq.size > 1 ? MIXED_TAX_CODE : TAX_TYPE.fetch(types.first),
-          "TaxRate" => "0.05",
-          "TaxAmount" => totals[:tax],
-          "TotalAmount" => totals[:total],
+          "TaxRate" => number(parsed.tax_rate),
           "DetailVat" => exclusive ? "0" : "1"
         }
         ISSUE_OPTIONS.each { |key, field| data[field] = options[key].to_s if options.key?(key) }
         data
       end
 
-      # +f0501+ data: one invoice per call (see docs, open question 6).
+      # +f0501+ data: one invoice per call. The core checks the reason's length.
       def void(parsed)
-        reason = parsed.reason.to_s
-        max!(reason, MAX_REASON, "reason")
-        [{ "CancelInvoiceNumber" => parsed.invoice_number.to_s, "CancelReason" => reason }]
+        [{ "CancelInvoiceNumber" => parsed.invoice.number.to_s, "CancelReason" => parsed.reason.to_s }]
       end
 
       # +g0401+ data. +original+ carries the facts about the original invoice
-      # that {AllowanceInput} does not: +buyer_identifier+, +buyer_name+ and
-      # +invoice_date+ (a Date or Time).
+      # that the reference may not have: +buyer_identifier+, +buyer_name+ and
+      # +invoice_datetime+.
       def allowance(parsed, original, allowance_date)
         number = parsed.allowance_id.to_s
         max!(number, MAX_ALLOWANCE_NUMBER, "allowance_id")
-        lines = allowance_lines(parsed.items, parsed.amount)
+        breakdown = parsed.tax_breakdown(provider: Client::PROVIDER)
+        refuse_special!(breakdown.lines.map(&:tax_type))
+        check_rate!(parsed.tax_rate)
+        invoice_date = ymd(original[:invoice_datetime])
 
         [{
           "AllowanceNumber" => number,
-          "AllowanceDate" => ymd(allowance_date),
+          "AllowanceDate" => allowance_date.strftime("%Y%m%d"),
           "AllowanceType" => ALLOWANCE_TYPE,
           "BuyerIdentifier" => original[:buyer_identifier].to_s,
           "BuyerName" => original[:buyer_name].to_s,
-          "ProductItem" => lines[:items].map do |line|
-            line.merge("OriginalInvoiceNumber" => parsed.invoice_number.to_s,
-                       "OriginalInvoiceDate" => ymd(original[:invoice_date]))
+          "ProductItem" => parsed.items.zip(breakdown.lines).map do |item, line|
+            allowance_item(item, line).merge("OriginalInvoiceNumber" => parsed.invoice.number.to_s,
+                                             "OriginalInvoiceDate" => invoice_date)
           end,
-          "TaxAmount" => lines[:tax],
-          "TotalAmount" => lines[:sales]
+          "TaxAmount" => breakdown.tax_amount,
+          "TotalAmount" => breakdown.sales_amount
         }]
       end
 
       # +g0501+ data.
       def void_allowance(parsed)
-        [{ "CancelAllowanceNumber" => parsed.allowance_number.to_s }]
+        [{ "CancelAllowanceNumber" => parsed.allowance.allowance_number.to_s }]
       end
 
-      # +invoice_query+ data. The order id wins when both are given.
-      def query(parsed)
-        if parsed.order_id.to_s.empty?
-          { "type" => "invoice", "invoice_number" => parsed.invoice_number.to_s }
+      # +invoice_query+ data. The order id wins when the reference has both.
+      def query(reference)
+        if reference.order_id.nil?
+          { "type" => "invoice", "invoice_number" => reference.number.to_s }
         else
-          { "type" => "order", "order_id" => parsed.order_id.to_s }
+          { "type" => "order", "order_id" => reference.order_id.to_s }
         end
       end
 
       # --- issue -------------------------------------------------------------
 
-      def check_issue!(parsed, b2b, exclusive, options)
+      def check_issue!(parsed, types, b2b, exclusive, options)
         max!(parsed.order_id.to_s, MAX_ORDER_ID, "order_id")
         max!(parsed.remark.to_s, MAX_REMARK, "remark")
         if exclusive && !b2b
           invalid!("Amego takes tax-exclusive prices only for a B2B invoice")
         end
-        check_tax_rate!(parsed.tax_rate)
-
-        types = parsed.items.map { |item| item.tax_type || parsed.tax_type }
-        if types.include?(TaxType::SPECIAL)
-          raise UnsupportedError.new("Amego adapter does not support special tax (特種稅額)",
-                                     provider: Client::PROVIDER)
-        end
+        refuse_special!(types)
+        check_rate!(parsed.tax_rate)
         return unless types.include?(TaxType::ZERO_RATED)
         return if options.key?("customs_clearance_mark") && options.key?("zero_tax_rate_reason")
 
         invalid!("a zero-rated sale needs provider_options customs_clearance_mark and zero_tax_rate_reason")
       end
 
-      # The core does not define the unit of +tax_rate+, so accept only the
-      # general 5% rate, written as 0.05 or as 5.
-      def check_tax_rate!(rate)
-        return if rate.nil?
+      def refuse_special!(types)
+        return unless types.include?(TaxType::SPECIAL)
 
-        # Through a String, so that the Float 0.05 reads as exactly 5/100.
-        value = Rational(rate.to_s)
-        return if value == TAX_RATE || value == 5
-
-        raise UnsupportedError.new("Amego adapter only supports a 5% tax rate, got #{rate.inspect}",
+        raise UnsupportedError.new("Amego adapter does not support special tax (特種稅額)",
                                    provider: Client::PROVIDER)
-      rescue ArgumentError, ZeroDivisionError
-        invalid!("tax_rate must be a number, got #{rate.inspect}")
       end
 
-      # The totals from Amego's formula (docs, section 4.3).
-      def issue_totals(items, types, b2b:, exclusive:)
-        sum = ->(type) { items.zip(types).sum(Rational(0)) { |item, t| t == type ? decimal!(item.amount, "item amount") : 0 } }
-        sales = sum.call(TaxType::TAXABLE).round
-        free = sum.call(TaxType::TAX_FREE).round
-        zero = sum.call(TaxType::ZERO_RATED).round
+      # The core has checked that +rate+ is a MIG rate. Amego takes two of them.
+      def check_rate!(rate)
+        return if TAX_RATES.include?(rate)
 
-        tax = 0
-        if exclusive
-          tax = (sales * TAX_RATE).round
-        elsif b2b
-          tax = sales - (sales / (1 + TAX_RATE)).round
-          sales -= tax
-        end
-        { sales: sales, free: free, zero: zero, tax: tax, total: sales + free + zero + tax }
+        raise UnsupportedError.new("Amego takes a tax rate of 0 or 0.05 only, got #{number(rate)}",
+                                   provider: Client::PROVIDER)
       end
 
-      def check_totals!(amount, totals, b2b)
-        if totals[:total] != amount.total_amount
-          invalid!("items add up to #{totals[:total]}, but amount.total_amount is #{amount.total_amount}")
-        end
-        return unless b2b && totals[:tax] != amount.tax_amount
-
-        invalid!("Amego computes a tax of #{totals[:tax]}, but amount.tax_amount is #{amount.tax_amount}")
+      # The MIG totals from the core's breakdown (docs, section 4.3). A B2C
+      # invoice keeps the tax inside SalesAmount, as F0401 does.
+      def issue_totals(breakdown, b2b)
+        sales = breakdown.taxable_amount
+        tax = breakdown.tax_amount
+        sales, tax = sales + tax, 0 unless b2b
+        { "SalesAmount" => sales, "FreeTaxSalesAmount" => breakdown.tax_free_amount,
+          "ZeroTaxSalesAmount" => breakdown.zero_rated_amount, "TaxAmount" => tax,
+          "TotalAmount" => breakdown.total_amount }
       end
 
       def buyer_name(buyer, b2b)
@@ -224,10 +200,10 @@ module Einvoice
         max!(item.unit.to_s, MAX_UNIT, "item unit")
         {
           "Description" => description,
-          "Quantity" => number(item.quantity, "item quantity"),
+          "Quantity" => number(item.quantity),
           "Unit" => item.unit.to_s,
-          "UnitPrice" => number(item.unit_price, "item unit_price"),
-          "Amount" => number(item.amount, "item amount"),
+          "UnitPrice" => number(item.unit_price),
+          "Amount" => number(item.amount),
           "Remark" => item.remark.to_s,
           "TaxType" => TAX_TYPE.fetch(type)
         }
@@ -236,94 +212,42 @@ module Einvoice
       # --- allowance ---------------------------------------------------------
 
       # Amego wants allowance amounts without tax, and an integer +Tax+ on each
-      # item (docs, section 4.3).
-      #
-      # The unified +amount+ has two shapes, and the core does not say which
-      # one an allowance uses (docs, open question 7):
-      #
-      # - +tax_amount+ 0 (the contract's B2C shape): the item amounts include
-      #   the tax. Split it out of each taxable item.
-      # - +tax_amount+ above 0: the caller split it already. The item amounts
-      #   exclude tax, and the item taxes must add up to +tax_amount+.
-      #
-      # Either way, the rounding difference goes on the last taxable item.
-      def allowance_lines(items, amount)
-        split = amount.tax_amount.to_i.zero?
-        taxes = items.map do |item|
-          next 0 unless taxable?(item)
-
-          value = decimal!(item.amount, "item amount")
-          split ? (value - (value / (1 + TAX_RATE))).round : (value * TAX_RATE).round
-        end
-
-        target = split ? split_tax(items) : amount.tax_amount.to_i
-        last = items.rindex { |item| taxable?(item) }
-        taxes[last] += target - taxes.sum if last
-
-        lines = items.zip(taxes).map { |item, tax| allowance_item(item, tax, split) }
-        sales = lines.sum(Rational(0)) { |line| line["Amount"].to_r }
-        { items: lines, tax: target, sales: sales.round }
-      end
-
-      def split_tax(items)
-        total = items.select { |item| taxable?(item) }.sum(Rational(0)) { |item| decimal!(item.amount, "item amount") }
-        (total - (total / (1 + TAX_RATE)).round).round
-      end
-
-      def allowance_item(item, tax, split)
+      # item (docs, section 4.3). Both come from the core's line. The unit price
+      # is the amount over the quantity, so +UnitPrice × Quantity+ is +Amount+.
+      # That is what the live test sent. The docs do not say if Amego takes a
+      # gap, as the core's +net_unit_price+ can have.
+      def allowance_item(item, line)
         description = item.description.to_s
         max!(description, MAX_DESCRIPTION, "item description")
-        amount = decimal!(item.amount, "item amount")
-        amount -= tax if split
-        quantity = decimal!(item.quantity, "item quantity")
-        unit_price = quantity.zero? ? amount : amount / quantity
         {
           "OriginalDescription" => description,
           "Quantity" => number(item.quantity),
-          "UnitPrice" => number(unit_price),
-          "Amount" => number(amount),
-          "Tax" => tax,
-          "TaxType" => TAX_TYPE.fetch(item.tax_type || TaxType::TAXABLE)
+          "UnitPrice" => number(unit_price(line.net_amount, item.quantity)),
+          "Amount" => number(line.net_amount),
+          "Tax" => line.tax,
+          "TaxType" => TAX_TYPE.fetch(line.tax_type)
         }
       end
 
-      def taxable?(item)
-        (item.tax_type || TaxType::TAXABLE) == TaxType::TAXABLE
+      def unit_price(amount, quantity)
+        quantity = quantity.to_r
+        quantity.zero? ? amount.to_r : amount.to_r / quantity
       end
 
       # --- helpers -----------------------------------------------------------
 
-      # Amego takes up to 7 decimals. Whole numbers go out without a point.
-      def number(value, field = "amount")
-        rational = decimal!(value, field)
+      # Amego takes up to 7 decimals. Whole numbers go out without a point. The
+      # core has already read every number as exact.
+      def number(value)
+        rational = value.to_r
         return rational.to_i.to_s if rational.denominator == 1
 
         format("%.7f", rational.round(7)).sub(/0+\z/, "")
       end
 
-      # Date, Time or "Ymd" → "Ymd" in Taipei time.
-      def ymd(value)
-        case value
-        when Time then value.getlocal("+08:00").strftime("%Y%m%d")
-        when Date then value.strftime("%Y%m%d")
-        else
-          string = value.to_s.delete("-/")
-          invalid!("invoice date must be a Date, a Time or YYYYMMDD, got #{value.inspect}") unless
-            string.match?(/\A\d{8}\z/)
-          string
-        end
-      end
-
-      # A number as an exact Rational. The core does not check item numbers, so
-      # a String like "lots" can get here, and String#to_r would read it as 0.
-      def decimal!(value, field)
-        case value
-        when Integer, Rational then value.to_r
-        when Float then value.finite? ? Rational(value.to_s) : invalid!("#{field} must be a number, got #{value.inspect}")
-        when Numeric then value.to_r
-        when /\A-?\d+(\.\d+)?\z/ then Rational(value)
-        else invalid!("#{field} must be a number, got #{value.inspect}")
-        end
+      # A Time → "Ymd" in Taipei time.
+      def ymd(time)
+        Taipei.date(time, provider: Client::PROVIDER).strftime("%Y%m%d")
       end
 
       def max!(value, limit, field)

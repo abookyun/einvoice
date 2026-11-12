@@ -57,17 +57,27 @@ RSpec.describe "Amego live API", :live do
 
     expect(issued.invoice_number).to match(/\A[A-Z]{2}\d{8}\z/)
     expect(issued.random_code).to match(/\A\d{4}\z/)
-    expect(issued.invoice_date).to be_within(300).of(Time.now)
+    expect(issued.invoice_datetime).to be_within(300).of(Time.now)
 
-    found = provider.query({ order_id: order })
+    found = provider.query({ invoice: { order_id: order } })
     expect(found.invoice_number).to eq(issued.invoice_number)
     expect(found.order_id).to eq(order)
     expect(found.amount).to eq(Einvoice::AmountSummary.new(sales_amount: 100, tax_amount: 0, total_amount: 100))
     # The space survives the form encoding, and the sign was accepted with it.
     expect(found.items.first.description).to eq("整合 測試 商品")
     expect(found.status).to eq(Einvoice::InvoiceStatus::ISSUED)
+    expect(found.reference).to have_attributes(tax_type: Einvoice::TaxType::TAXABLE, tax_rate: Rational(5, 100))
 
-    expect(provider.query({ invoice_number: issued.invoice_number }).invoice_number).to eq(issued.invoice_number)
+    expect(provider.query({ invoice: issued.reference }).invoice_number).to eq(issued.invoice_number)
+  end
+
+  # Amego takes TaxRate 0 for an invoice with no taxed item (docs, section 4.2).
+  it "issues a tax-free invoice with a rate of 0" do
+    order = unique_id("RB")
+    provider.issue(issue_input(order, tax_type: "TAX_FREE"))
+
+    found = provider.query({ invoice: { order_id: order } })
+    expect(found.reference).to have_attributes(tax_type: Einvoice::TaxType::TAX_FREE, tax_rate: 0)
   end
 
   it "issues a B2B invoice with the tax split out" do
@@ -77,7 +87,7 @@ RSpec.describe "Amego live API", :live do
                                                 amount: 1050 }],
                                       amount: { sales_amount: 1000, tax_amount: 50, total_amount: 1050 }))
 
-    found = provider.query({ order_id: order })
+    found = provider.query({ invoice: { order_id: order } })
     expect(found.amount).to eq(Einvoice::AmountSummary.new(sales_amount: 1000, tax_amount: 50, total_amount: 1050))
     expect(found.buyer.ubn).to eq("28080623")
   end
@@ -89,32 +99,33 @@ RSpec.describe "Amego live API", :live do
     number = unique_id("AL")
 
     allowance = retry_queued do
-      provider.allowance({ invoice_number: issued.invoice_number, allowance_id: number,
+      provider.allowance({ invoice: issued.reference, allowance_id: number,
                            items: [{ description: "整合測試商品", quantity: 1, unit_price: 99, amount: 99 }],
-                           amount: { sales_amount: 99, tax_amount: 0, total_amount: 99 } })
+                           amount: { sales_amount: 94, tax_amount: 5, total_amount: 99 },
+                           price_mode: "TAX_INCLUSIVE" })
     end
     expect(allowance.allowance_number).to eq(number)
 
     cancelled = retry_queued do
-      provider.void_allowance({ invoice_number: issued.invoice_number, allowance_number: number })
+      provider.void_allowance({ allowance: allowance.reference })
     end
     expect(cancelled.allowance_number).to eq(number)
   end
 
   it "voids an invoice, and refuses a second void" do
     issued = provider.issue(issue_input(unique_id("RB")))
-    voided = retry_queued { provider.void({ invoice_number: issued.invoice_number, reason: "整合測試作廢" }) }
+    voided = retry_queued { provider.void({ invoice: issued.reference, reason: "整合測試作廢" }) }
     expect(voided.status).to eq(Einvoice::InvoiceStatus::VOIDED)
 
-    expect { provider.void({ invoice_number: issued.invoice_number, reason: "整合測試作廢" }) }
+    expect { provider.void({ invoice: issued.reference, reason: "整合測試作廢" }) }
       .to raise_error(Einvoice::ConflictError)
   end
 
   it "maps unknown invoices and allowances to NotFoundError" do
-    expect { provider.query({ invoice_number: "ZZ00000000" }) }.to raise_error(Einvoice::NotFoundError)
-    expect { provider.void({ invoice_number: "ZZ00000000", reason: "整合測試" }) }
+    expect { provider.query({ invoice: "ZZ00000000" }) }.to raise_error(Einvoice::NotFoundError)
+    expect { provider.void({ invoice: "ZZ00000000", reason: "整合測試" }) }
       .to raise_error(Einvoice::NotFoundError)
-    expect { provider.void_allowance({ invoice_number: "ZZ00000000", allowance_number: "NOPE0000000000" }) }
+    expect { provider.void_allowance({ allowance: "NOPE0000000000" }) }
       .to raise_error(Einvoice::NotFoundError)
   end
 end

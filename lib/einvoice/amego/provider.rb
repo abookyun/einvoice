@@ -13,10 +13,11 @@ module Einvoice
     #
     # - A void is queued. Amego accepts it at once, but a query right after it
     #   can still report the invoice as issued.
-    # - An allowance needs the original invoice's buyer and date, which
-    #   {AllowanceInput} does not carry. The adapter queries the invoice for
-    #   them, unless +provider_options+ gives +buyer_identifier+, +buyer_name+
-    #   and +invoice_date+. The query only works within 180 days.
+    # - An allowance needs the original invoice's buyer and date. The reference
+    #   has the date and the 統一編號, but not the buyer's name, so the adapter
+    #   queries the invoice for it, unless +provider_options+ gives +buyer_name+
+    #   and the reference has +invoice_datetime+. The query only works within
+    #   180 days.
     class Provider < ::Einvoice::Provider
       CAPABILITIES = Set[
         Capability::ISSUE,
@@ -64,10 +65,13 @@ module Einvoice
 
         IssueInvoiceResult.new(
           invoice_number: result["invoice_number"].to_s,
-          invoice_date: unix_time(result["invoice_time"]),
+          invoice_datetime: unix_time(result["invoice_time"]),
           random_code: result["random_number"].to_s,
           order_id: parsed.order_id,
           total_amount: parsed.amount.total_amount,
+          buyer_ubn: parsed.buyer&.ubn,
+          tax_type: TaxType.of(parsed.items, parsed.tax_type),
+          tax_rate: parsed.tax_rate,
           status: InvoiceStatus::ISSUED,
           raw: result
         )
@@ -77,27 +81,22 @@ module Einvoice
       def void(input)
         parsed = Input.void(input, provider: name)
         result = @client.request("/json/f0501", Payload.void(parsed))
-        VoidInvoiceResult.new(invoice_number: parsed.invoice_number, status: InvoiceStatus::VOIDED, raw: result)
+        VoidInvoiceResult.new(invoice_number: parsed.invoice.number, status: InvoiceStatus::VOIDED, raw: result)
       end
 
       # 開立折讓 (+g0401+). The seller assigns the allowance number, so the
-      # result's +allowance_number+ is the input's +allowance_id+.
-      #
-      # +AllowanceInput#date+ is not used: the core does not say yet whether it
-      # is the allowance date or the invoice date. Pass +allowance_date+ in
-      # +provider_options+ to set the allowance date. It defaults to today in
-      # Taipei.
+      # result's +allowance_number+ is the input's +allowance_id+. The allowance
+      # date is today in Taipei.
       def allowance(input)
         parsed = Input.allowance(input, provider: name)
-        options = (parsed.provider_options || {}).to_h.transform_keys(&:to_s)
-        allowance_date = options["allowance_date"] || today
-        data = Payload.allowance(parsed, original_invoice(parsed.invoice_number, options), allowance_date)
+        allowance_date = Taipei.date(@clock.call)
+        data = Payload.allowance(parsed, original_invoice(parsed), allowance_date)
         result = @client.request("/json/g0401", data)
 
         AllowanceResult.new(
           allowance_number: parsed.allowance_id.to_s,
-          invoice_number: parsed.invoice_number,
-          allowance_date: taipei_midnight(data.first["AllowanceDate"]),
+          invoice_number: parsed.invoice.number,
+          allowance_date: allowance_date,
           total_amount: parsed.amount.total_amount,
           raw: result
         )
@@ -107,14 +106,15 @@ module Einvoice
       def void_allowance(input)
         parsed = Input.void_allowance(input, provider: name)
         result = @client.request("/json/g0501", Payload.void_allowance(parsed))
-        VoidAllowanceResult.new(allowance_number: parsed.allowance_number, raw: result)
+        VoidAllowanceResult.new(allowance_number: parsed.allowance.allowance_number, raw: result)
       end
 
-      # 查詢發票 (+invoice_query+), by order id or by invoice number, within 180
-      # days of the invoice.
+      # 查詢發票 (+invoice_query+), by order id when the reference has one, else
+      # by invoice number. Within 180 days of the invoice.
       def query(input)
-        parsed = Input.query(input, provider: name)
-        build_query_result(fetch_invoice(Payload.query(parsed)))
+        reference = Input.query(input, provider: name).invoice
+        assert_supports!(Capability::QUERY_BY_ORDER_ID) if reference.order_id
+        build_query_result(fetch_invoice(Payload.query(reference)))
       end
 
       private
@@ -126,33 +126,61 @@ module Einvoice
         raise ProviderError.new("Amego returned no invoice data", provider: name, raw: data)
       end
 
-      # The original invoice's buyer and date, from +provider_options+ when it
-      # has all three, else from a query.
-      def original_invoice(invoice_number, options)
-        keys = %w[buyer_identifier buyer_name invoice_date]
-        if keys.all? { |key| options.key?(key) }
-          return keys.to_h { |key| [key.to_sym, options[key]] }
+      # The original invoice's buyer and date (docs, section 4.1). The reference
+      # has the date and the 統一編號. The buyer's name comes from
+      # +provider_options+, else from a query. A failed query is the provider's
+      # error, not the invoice's: a NotFoundError would read as "the invoice of
+      # this call does not exist".
+      def original_invoice(parsed)
+        reference = parsed.invoice
+        buyer_name = Payload.string_keys(parsed.provider_options)["buyer_name"]
+        if buyer_name && reference.invoice_datetime
+          return { buyer_identifier: reference.buyer_ubn || Payload::CONSUMER_ID, buyer_name: buyer_name,
+                   invoice_datetime: reference.invoice_datetime }
         end
 
-        data = fetch_invoice({ "type" => "invoice", "invoice_number" => invoice_number.to_s })
-        { buyer_identifier: data["buyer_identifier"], buyer_name: data["buyer_name"],
-          invoice_date: data["invoice_date"] }
+        found = lookup(reference.number)
+        if found.invoice_datetime.nil?
+          raise ProviderError.new("allowance needs the invoice date; the invoice found by number has none",
+                                  provider: name, reason: Reason::LOOKUP_FAILED)
+        end
+        { buyer_identifier: reference.buyer_ubn || found.buyer.ubn || Payload::CONSUMER_ID,
+          buyer_name: buyer_name || found.buyer.name.to_s,
+          invoice_datetime: reference.invoice_datetime || found.invoice_datetime }
+      end
+
+      def lookup(number)
+        build_query_result(fetch_invoice(Payload.query(InvoiceReference.new(number: number))))
+      rescue Error => e
+        raise ProviderError.new("allowance needs the invoice's buyer and date; looking them up failed: #{e.message}",
+                                provider: name, reason: Reason::LOOKUP_FAILED, cause: e)
       end
 
       def build_query_result(data)
         tax = data["tax_amount"].to_i
         total = data["total_amount"].to_i
+        items = Array(data["product_item"]).map { |row| build_item(row) }
         QueryInvoiceResult.new(
           invoice_number: data["invoice_number"].to_s,
-          invoice_date: taipei_time(data["invoice_date"], data["invoice_time"]),
+          invoice_datetime: taipei_time(data["invoice_date"], data["invoice_time"]),
           random_code: data["random_number"].to_s,
           order_id: presence(data["order_id"]),
           status: status_of(data),
           amount: AmountSummary.new(sales_amount: total - tax, tax_amount: tax, total_amount: total),
           buyer: build_buyer(data),
-          items: Array(data["product_item"]).map { |row| build_item(row) },
+          items: items,
+          tax_type: items.empty? || items.any? { |item| item.tax_type.nil? } ? nil : TaxType.of(items, nil),
+          tax_rate: query_rate(data["tax_rate"]),
           raw: data
         )
+      end
+
+      # A rate that is not a MIG rate reads as nil, so an allowance has to give
+      # one.
+      def query_rate(reported)
+        Input.mig_rate!(reported, "tax_rate", name)
+      rescue ValidationError
+        nil
       end
 
       # docs, section 4.4. A cancelled (+C0701+) or rejected (+A0301+, +A0302+)
@@ -211,14 +239,6 @@ module Einvoice
 
         hour, minute, second = time.to_s.split(":").map(&:to_i)
         Time.new(*match.captures.map(&:to_i), hour.to_i, minute.to_i, second.to_i, "+08:00")
-      end
-
-      def taipei_midnight(ymd)
-        taipei_time(ymd, nil)
-      end
-
-      def today
-        @clock.call.getlocal("+08:00").strftime("%Y%m%d")
       end
     end
   end

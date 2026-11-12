@@ -47,14 +47,8 @@ RSpec.describe Einvoice::Amego::Payload do
     end
 
     it "refuses tax-exclusive prices on a B2C invoice" do
-      expect { issue(price_mode: "TAX_EXCLUSIVE") }.to raise_error(Einvoice::ValidationError, /B2B/)
-    end
-
-    it "refuses amounts that do not match the items" do
-      expect { issue(amount: { sales_amount: 90, tax_amount: 0, total_amount: 90 }) }
-        .to raise_error(Einvoice::ValidationError, /add up to 100/)
-      expect { b2b(amount: { sales_amount: 1001, tax_amount: 49, total_amount: 1050 }) }
-        .to raise_error(Einvoice::ValidationError, /tax of 50/)
+      expect { issue(price_mode: "TAX_EXCLUSIVE", amount: { sales_amount: 105, tax_amount: 0, total_amount: 105 }) }
+        .to raise_error(Einvoice::ValidationError, /B2B/)
     end
 
     it "derives the mixed tax type 9 from items with different tax types" do
@@ -70,7 +64,7 @@ RSpec.describe Einvoice::Amego::Payload do
 
       data = issue(tax_type: "ZERO_RATED",
                    provider_options: { customs_clearance_mark: 1, zero_tax_rate_reason: "71" })
-      expect(data).to include("TaxType" => "2", "ZeroTaxSalesAmount" => 100, "SalesAmount" => 0,
+      expect(data).to include("TaxType" => "2", "TaxRate" => "0", "ZeroTaxSalesAmount" => 100, "SalesAmount" => 0,
                               "CustomsClearanceMark" => "1", "ZeroTaxRateReason" => "71")
     end
 
@@ -81,15 +75,13 @@ RSpec.describe Einvoice::Amego::Payload do
     end
 
     it "refuses special tax" do
-      expect { issue(tax_type: "SPECIAL") }.to raise_error(Einvoice::UnsupportedError, /special/)
+      expect { issue(tax_type: "SPECIAL", tax_rate: 0.15) }.to raise_error(Einvoice::UnsupportedError, /special/)
     end
 
-    it "accepts only the 5% tax rate, written as 0.05 or 5" do
+    it "sends the rate as a decimal, and takes 0 or 0.05 only" do
       expect(issue(tax_rate: 0.05)["TaxRate"]).to eq("0.05")
-      expect(issue(tax_rate: 5)["TaxRate"]).to eq("0.05")
       expect(issue(tax_rate: "0.05")["TaxRate"]).to eq("0.05")
-      expect { issue(tax_rate: 0.1) }.to raise_error(Einvoice::UnsupportedError, /5%/)
-      expect { issue(tax_rate: Object.new) }.to raise_error(Einvoice::ValidationError, /tax_rate/)
+      expect { issue(tax_rate: 0.01) }.to raise_error(Einvoice::UnsupportedError, /0 or 0.05/)
     end
 
     describe "carriers" do
@@ -133,9 +125,9 @@ RSpec.describe Einvoice::Amego::Payload do
 
     it "refuses an item number it cannot read, instead of reading it as 0" do
       expect { issue(items: [{ description: "a", quantity: "lots", unit_price: 100, amount: 100 }]) }
-        .to raise_error(Einvoice::ValidationError, /item quantity must be a number, got "lots"/)
+        .to raise_error(Einvoice::ValidationError, /quantity must be a number, got "lots"/)
       expect { issue(items: [{ description: "a", quantity: 1, unit_price: 100, amount: Float::INFINITY }]) }
-        .to raise_error(Einvoice::ValidationError, /item amount/)
+        .to raise_error(Einvoice::ValidationError, /amount/)
     end
 
     it "reads numbers given as a String, a Float or a BigDecimal exactly" do
@@ -148,36 +140,37 @@ RSpec.describe Einvoice::Amego::Payload do
     end
 
     it "writes decimals with up to 7 places" do
-      data = issue(items: [{ description: "a", quantity: 3, unit_price: Rational(100, 3), amount: 100 }])
-      expect(data["ProductItem"].first["UnitPrice"]).to eq("33.3333333")
+      data = issue(items: [{ description: "a", quantity: 3, unit_price: "33.3333333", amount: 100 },
+                           { description: "b", quantity: 1, unit_price: "12.50", amount: "12.50" }],
+                   amount: { sales_amount: 113, tax_amount: 0, total_amount: 113 })
+      expect(data["ProductItem"].map { |item| item["UnitPrice"] }).to eq(%w[33.3333333 12.5])
     end
   end
 
   describe ".void" do
     it "sends one entry, with the reason" do
-      parsed = Einvoice::Input.void({ invoice_number: "AB12345678", reason: "取消" })
+      parsed = Einvoice::Input.void({ invoice: "AB12345678", reason: "取消" })
       expect(described_class.void(parsed))
         .to eq([{ "CancelInvoiceNumber" => "AB12345678", "CancelReason" => "取消" }])
-    end
-
-    it "refuses a reason longer than 20" do
-      parsed = Einvoice::Input.void({ invoice_number: "AB12345678", reason: "x" * 21 })
-      expect { described_class.void(parsed) }.to raise_error(Einvoice::ValidationError, /reason/)
     end
   end
 
   describe ".allowance" do
-    let(:original) { { buyer_identifier: "0000000000", buyer_name: "消費者", invoice_date: "20261017" } }
+    let(:original) do
+      { buyer_identifier: "0000000000", buyer_name: "消費者",
+        invoice_datetime: Time.new(2026, 10, 17, 9, 0, 0, "+08:00") }
+    end
 
-    def allowance(items:, amount:, allowance_id: "AL_1")
-      parsed = Einvoice::Input.allowance({ invoice_number: "AB12345678", allowance_id: allowance_id,
-                                           items: items, amount: amount })
+    def allowance(items:, amount:, allowance_id: "AL_1", price_mode: "TAX_INCLUSIVE", tax_rate: "0.05")
+      parsed = Einvoice::Input.allowance({ invoice: { number: "AB12345678", tax_type: "TAXABLE", tax_rate: tax_rate },
+                                           allowance_id: allowance_id, items: items, amount: amount,
+                                           price_mode: price_mode })
       described_class.allowance(parsed, original, Date.new(2026, 10, 18)).first
     end
 
-    it "splits the tax out of the contract's B2C shape" do
+    it "sends the amounts without tax, and the line taxes from the core" do
       entry = allowance(items: [{ description: "商品一", quantity: 1, unit_price: 100, amount: 100 }],
-                        amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 })
+                        amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 })
       expect(entry).to include("AllowanceNumber" => "AL_1", "AllowanceDate" => "20261018", "AllowanceType" => "2",
                                "BuyerIdentifier" => "0000000000", "BuyerName" => "消費者",
                                "TaxAmount" => 5, "TotalAmount" => 95)
@@ -187,60 +180,68 @@ RSpec.describe Einvoice::Amego::Payload do
                                             "OriginalInvoiceDate" => "20261017" }])
     end
 
-    it "puts the rounding difference on the last taxable item" do
+    it "splits the tax over the taxed lines as the core does" do
       entry = allowance(items: [{ description: "a", quantity: 1, unit_price: 10, amount: 10 },
                                 { description: "b", quantity: 1, unit_price: 10, amount: 10 },
                                 { description: "c", quantity: 1, unit_price: 10, amount: 10, tax_type: "TAX_FREE" }],
-                        amount: { sales_amount: 30, tax_amount: 0, total_amount: 30 })
-      taxes = entry["ProductItem"].map { |item| item["Tax"] }
-      expect(taxes).to eq([0, 1, 0])
-      expect(entry["TaxAmount"]).to eq(1)
-      expect(entry["TotalAmount"]).to eq(29)
+                        amount: { sales_amount: 29, tax_amount: 1, total_amount: 30 })
+      expect(entry["ProductItem"].map { |item| item["Tax"] }).to eq([0, 1, 0])
+      expect(entry).to include("TaxAmount" => 1, "TotalAmount" => 29)
     end
 
-    it "keeps amounts the caller split already" do
-      entry = allowance(items: [{ description: "a", quantity: 2, unit_price: 2180, amount: 4360 }],
+    it "derives the unit price from the amount without tax, so that price × quantity is the amount" do
+      entry = allowance(items: [{ description: "a", quantity: 3, unit_price: 33, amount: 99 }],
+                        amount: { sales_amount: 94, tax_amount: 5, total_amount: 99 })
+      expect(entry["ProductItem"].first).to include("Quantity" => "3", "UnitPrice" => "31.3333333", "Amount" => "94")
+    end
+
+    it "keeps tax-exclusive amounts as they are" do
+      entry = allowance(price_mode: "TAX_EXCLUSIVE",
+                        items: [{ description: "a", quantity: 2, unit_price: 2180, amount: 4360 }],
                         amount: { sales_amount: 4360, tax_amount: 218, total_amount: 4578 })
       expect(entry).to include("TaxAmount" => 218, "TotalAmount" => 4360)
       expect(entry["ProductItem"].first).to include("Amount" => "4360", "UnitPrice" => "2180", "Tax" => 218)
     end
 
-    it "accepts the invoice date as a Time or a Date" do
-      original[:invoice_date] = Time.new(2026, 10, 16, 20, 0, 0, "+00:00")
+    it "writes the invoice date in Taipei time" do
+      original[:invoice_datetime] = Time.new(2026, 10, 16, 20, 0, 0, "+00:00")
       entry = allowance(items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100 }],
-                        amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 })
+                        amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 })
       expect(entry["ProductItem"].first["OriginalInvoiceDate"]).to eq("20261017")
-
-      original[:invoice_date] = Date.new(2026, 10, 16)
-      entry = allowance(items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100 }],
-                        amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 })
-      expect(entry["ProductItem"].first["OriginalInvoiceDate"]).to eq("20261016")
     end
 
-    it "refuses an invoice date it cannot read" do
-      original[:invoice_date] = "yesterday"
+    it "takes a tax rate of 0 or 0.05 only" do
       expect do
-        allowance(items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100 }],
-                  amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 })
-      end.to raise_error(Einvoice::ValidationError, /invoice date/)
+        allowance(tax_rate: "0.01", items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100 }],
+                  amount: { sales_amount: 99, tax_amount: 1, total_amount: 100 })
+      end.to raise_error(Einvoice::UnsupportedError, /0 or 0.05/)
+    end
+
+    it "refuses special tax" do
+      parsed = Einvoice::Input.allowance({ invoice: { number: "AB12345678", tax_type: "SPECIAL", tax_rate: "0.15" },
+                                           allowance_id: "AL_1", price_mode: "TAX_EXCLUSIVE",
+                                           items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100 }],
+                                           amount: { sales_amount: 100, tax_amount: 15, total_amount: 115 } })
+      expect { described_class.allowance(parsed, original, Date.new(2026, 10, 18)) }
+        .to raise_error(Einvoice::UnsupportedError, /special/)
     end
 
     it "refuses an allowance number longer than 16" do
       expect do
         allowance(allowance_id: "x" * 17, items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100 }],
-                  amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 })
+                  amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 })
       end.to raise_error(Einvoice::ValidationError, /allowance_id/)
     end
   end
 
   describe ".void_allowance and .query" do
     it "builds the payloads" do
-      parsed = Einvoice::Input.void_allowance({ invoice_number: "AB12345678", allowance_number: "AL_1" })
+      parsed = Einvoice::Input.void_allowance({ allowance: "AL_1" })
       expect(described_class.void_allowance(parsed)).to eq([{ "CancelAllowanceNumber" => "AL_1" }])
 
-      expect(described_class.query(Einvoice::Input.query({ invoice_number: "AB12345678" })))
+      expect(described_class.query(Einvoice::InvoiceReference.new(number: "AB12345678")))
         .to eq("type" => "invoice", "invoice_number" => "AB12345678")
-      expect(described_class.query(Einvoice::Input.query({ invoice_number: "AB12345678", order_id: "O1" })))
+      expect(described_class.query(Einvoice::InvoiceReference.new(number: "AB12345678", order_id: "O1")))
         .to eq("type" => "order", "order_id" => "O1")
     end
   end
