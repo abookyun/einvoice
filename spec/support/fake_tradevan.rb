@@ -23,7 +23,7 @@ class FakeTradevan
   KEY2 = "fedcba9876543210"
 
   CREDENTIALS = {
-    acnt: "acnt", acntp: "acntp", key1: KEY1, key2: KEY2, endpoint: BASE_URL,
+    acnt: "acnt", acntp: "acntp", key1: KEY1, key2: KEY2, base_url: BASE_URL,
     company_un: "12345678", org_id: "ABCDE", paper_print_mode: "0", invoice_alarm_mode: "4",
     invoice_paper_returned: "N", allowance_paper_returned: "N", member_carrier_type: "1K0001"
   }.freeze

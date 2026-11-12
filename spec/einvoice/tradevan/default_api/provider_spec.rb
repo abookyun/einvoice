@@ -6,14 +6,12 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
   let!(:tradevan) { FakeTradevan.new.install! }
 
   # The contract over the DEFAULTAPI wire format: the v parameter, both keys,
-  # the Success/Message envelope. A void and an allowance need the original
-  # invoice's order id and date, which the unified inputs do not carry.
+  # the Success/Message envelope. The reference from issue has the order id
+  # and the date that a void and an allowance need. An allowance number has
+  # 16 characters (docs, section 4.8).
   it_behaves_like "an invoice provider",
-                  unknown_invoice_number: "ZZ00000000",
-                  unknown_allowance_number: "ABCDE20260101999",
-                  follow_up: lambda { |issued|
-                    { order_id: issued.order_id, invoice_date: issued.invoice_date }
-                  }
+                  unknown_reference: { number: "ZZ00000000" },
+                  unknown_allowance_number: "ABCDE20260101999"
 
   let(:issue_input) do
     {
@@ -51,11 +49,20 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
                                     "total" => "20000", "carrierType" => "3J0002")
       expect(result.invoice_number).to match(/\AGX\d{8}\z/)
       expect(result.random_code).to match(/\A\d{4}\z/)
-      expect(result.invoice_date).to be_a(Time)
+      expect(result.invoice_datetime).to be_a(Time)
       expect(result.order_id).to eq("53b2a44e4b3c")
       expect(result.total_amount).to eq(20_000)
       expect(result.status).to eq(Einvoice::InvoiceStatus::ISSUED)
       expect(result.raw["issueStatus"]).to eq("Y")
+      expect(result.reference).to have_attributes(order_id: "53b2a44e4b3c", buyer_ubn: nil,
+                                                  tax_type: Einvoice::TaxType::TAXABLE, tax_rate: Rational(5, 100))
+    end
+
+    it "sends the transaction time in UTC+8" do
+      clock = Struct.new(:now).new(Time.utc(2016, 4, 25, 4, 34, 56))
+      described_class.new(**FakeTradevan::CREDENTIALS, clock: clock).issue(issue_input)
+
+      expect(issue_data.values_at("transactionDate", "transactionTime")).to eq(%w[20160425 12:34:56])
     end
 
     # 1.x returned an unsuccessful result here. 2.0 raises, and the failReason
@@ -91,21 +98,24 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
         .to be_empty
     end
 
-    it "issues a B2B invoice" do
-      provider.issue(issue_input.merge(buyer: { name: "Acme", ubn: "53538851" }, carrier: nil))
+    it "issues a B2B invoice, and its reference keeps the buyer's 統一編號" do
+      result = provider.issue(issue_input.merge(buyer: { name: "Acme", ubn: "53538851" }, carrier: nil,
+                                                amount: { sales_amount: 19_048, tax_amount: 952,
+                                                          total_amount: 20_000 }))
 
       expect(issue_data).to include("buyerUn" => "53538851", "buyerTitle" => "Acme")
+      expect(result.reference.buyer_ubn).to eq("53538851")
     end
   end
 
   describe "#void" do
-    # Ported from the 1.x provider spec.
+    # Ported from the 1.x provider spec. The reference has the order id, so
+    # the adapter builds the saleIdentifier without a query.
     it "voids an invoice through the full wire format" do
       issued = provider.issue(issue_input)
-      result = provider.void(invoice_number: issued.invoice_number, reason: "客戶取消",
-                             provider_options: { order_id: "53b2a44e4b3c" })
+      result = provider.void({ invoice: issued.reference, reason: "客戶取消" })
 
-      expect(tradevan.path).to eq("post/cancel")
+      expect(tradevan.requests.map { |request| request[:path] }).to eq(%w[post/issue post/cancel])
       expect(JSON.parse(tradevan.params["voidData"])).to eq(
         "type" => "I", "saleIdentifier" => "12345678_ABCDE_53b2a44e4b3c",
         "invoiceNumber" => issued.invoice_number, "invoicePaperReturned" => "N"
@@ -113,49 +123,121 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
       expect(result.status).to eq(Einvoice::InvoiceStatus::VOIDED)
     end
 
-    it "needs the order id, and says so before any request" do
-      expect { provider.void(invoice_number: "GX38551078", reason: "客戶取消") }
-        .to raise_error(Einvoice::ValidationError, /order id/)
+    it "takes the saleIdentifier from provider_options, for invoices the 1.x client issued" do
+      expect do
+        provider.void({ invoice: "GX38551078", reason: "客戶取消",
+                        provider_options: { sale_identifier: "12345678_ABCDE_other" } })
+      end.to raise_error(Einvoice::NotFoundError)
+      expect(JSON.parse(tradevan.params["voidData"])["saleIdentifier"]).to eq("12345678_ABCDE_other")
+    end
+
+    it "looks up the saleIdentifier when the reference has only the number" do
+      issued = provider.issue(issue_input)
+      provider.void({ invoice: issued.invoice_number, reason: "客戶取消" })
+
+      expect(tradevan.requests.map { |request| request[:path] })
+        .to eq(%w[post/issue get/searchInvoiceDetail post/cancel])
+      expect(JSON.parse(tradevan.params["voidData"])["saleIdentifier"]).to eq("12345678_ABCDE_53b2a44e4b3c")
+    end
+
+    it "raises ProviderError with LOOKUP_FAILED when the lookup fails" do
+      expect { provider.void({ invoice: "GX38551078", reason: "客戶取消" }) }
+        .to raise_error(Einvoice::ProviderError) { |error|
+          expect(error.reason).to eq(Einvoice::Reason::LOOKUP_FAILED)
+          expect(error.cause).to be_a(Einvoice::NotFoundError)
+        }
+    end
+
+    it "needs the invoice number, and says so before any request" do
+      expect { provider.void({ invoice: { order_id: "53b2a44e4b3c" }, reason: "客戶取消" }) }
+        .to raise_error(Einvoice::ValidationError, /invoice\.number/)
       expect(tradevan.requests).to be_empty
+    end
+
+    it "raises ProviderError with LOOKUP_FAILED when the invoice found has no date" do
+      message = Einvoice::Tradevan::DefaultAPI::Crypto.encrypt(
+        %({"invoiceNumber":"GX38551078","saleIdentifier":"12345678_ABCDE_x"}), FakeTradevan::KEY1
+      )
+      stub_request(:get, %r{tradevan\.test/DEFAULTAPI/get/searchInvoiceDetail})
+        .to_return(headers: { "Content-Type" => "application/json" },
+                   body: JSON.generate("Success" => "Y", "Message" => message))
+
+      expect do
+        provider.allowance({ invoice: { number: "GX38551078", order_id: "x", tax_type: "taxable", tax_rate: "0.05" },
+                             allowance_id: "AL_1",
+                             items: [{ description: "A", quantity: 1, unit_price: 100, amount: 100 }],
+                             amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 },
+                             price_mode: "TAX_INCLUSIVE" })
+      end.to raise_error(Einvoice::ProviderError, /lacks one/) { |error|
+        expect(error.reason).to eq(Einvoice::Reason::LOOKUP_FAILED)
+      }
     end
 
     it "refuses to void an invoice that has an allowance" do
       issued = provider.issue(issue_input)
-      provider.allowance(invoice_number: issued.invoice_number, allowance_id: "AL_V",
-                         items: [{ description: "Coffee Latte", quantity: 1, unit_price: 100, amount: 100 }],
-                         amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 },
-                         provider_options: { order_id: issued.order_id, invoice_date: issued.invoice_date })
+      provider.allowance({ invoice: issued.reference, allowance_id: "AL_V",
+                           items: [{ description: "Coffee Latte", quantity: 1, unit_price: 100, amount: 100 }],
+                           amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 },
+                           price_mode: "TAX_INCLUSIVE" })
 
-      expect do
-        provider.void(invoice_number: issued.invoice_number, reason: "客戶取消",
-                      provider_options: { order_id: issued.order_id })
-      end.to raise_error(Einvoice::ConflictError) { |error|
-        expect(error.reason).to eq(Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE)
-      }
+      expect { provider.void({ invoice: issued.reference, reason: "客戶取消" }) }
+        .to raise_error(Einvoice::ConflictError) { |error|
+          expect(error.reason).to eq(Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE)
+        }
     end
   end
 
   describe "#allowance" do
     let(:issued) { provider.issue(issue_input) }
 
-    def allowance(**overrides)
+    def allowance(invoice: issued.reference, **overrides)
       provider.allowance({
-        invoice_number: issued.invoice_number, allowance_id: "AL_1",
+        invoice: invoice, allowance_id: "AL_1",
         items: [{ description: "Coffee Latte", quantity: 1, unit_price: 100, amount: 100 }],
-        amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 },
-        provider_options: { order_id: issued.order_id, invoice_date: issued.invoice_date }
+        amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 },
+        price_mode: "TAX_INCLUSIVE"
       }.merge(overrides))
     end
 
-    it "sends type A with the tax split out, and reads the allowance number" do
+    it "sends type A with the core's tax split, and reads the allowance number" do
       result = allowance
 
       expect(issue_data).to include("type" => "A", "allowanceExclusiveAmount" => "95", "allowanceTax" => "5",
                                     "allowanceInclusiveAmount" => "100")
+      expect(issue_data["itemList"].first).to include("invoiceDate" => issued.invoice_datetime.strftime("%Y%m%d"),
+                                                      "itemExclude" => "95", "tax" => "5", "itemTotal" => "100")
+      expect(tradevan.requests.map { |request| request[:path] }).to eq(%w[post/issue post/issue])
       expect(result.allowance_number).to match(/\AABCDE\d{11}\z/)
-      expect(result.allowance_date).to be_a(Time)
+      expect(result.allowance_date).to eq(Einvoice::Taipei.today)
       expect(result.invoice_number).to eq(issued.invoice_number)
       expect(result.total_amount).to eq(100)
+    end
+
+    it "looks up the saleIdentifier and the date when the reference lacks them" do
+      allowance(invoice: { number: issued.invoice_number, tax_type: "taxable", tax_rate: "0.05" })
+
+      expect(tradevan.requests.map { |request| request[:path] })
+        .to eq(%w[post/issue get/searchInvoiceDetail post/issue])
+      expect(issue_data["itemList"].first).to include("saleIdentifier" => "12345678_ABCDE_53b2a44e4b3c",
+                                                      "invoiceDate" => issued.invoice_datetime.strftime("%Y%m%d"))
+    end
+
+    it "takes today in Taipei as the date when the response has no allowanceDate" do
+      issued
+      message = Einvoice::Tradevan::DefaultAPI::Crypto.encrypt(
+        %({"issueStatus":"Y","allowanceNumber":"ABCDE20160502001"}), FakeTradevan::KEY1
+      )
+      stub_request(:post, %r{tradevan\.test/DEFAULTAPI/post/issue})
+        .to_return(headers: { "Content-Type" => "application/json" },
+                   body: JSON.generate("Success" => "Y", "Message" => message))
+      clock = Struct.new(:now).new(Time.utc(2016, 5, 1, 17, 0, 0))
+      result = described_class.new(**FakeTradevan::CREDENTIALS, clock: clock)
+                              .allowance({ invoice: issued.reference, allowance_id: "AL_1",
+                                           items: [{ description: "A", quantity: 1, unit_price: 100, amount: 100 }],
+                                           amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 },
+                                           price_mode: "TAX_INCLUSIVE" })
+
+      expect(result.allowance_date).to eq(Date.new(2016, 5, 2))
     end
 
     it "raises ProviderError when the response has no allowanceNumber" do
@@ -167,16 +249,11 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
 
       expect { allowance }.to raise_error(Einvoice::ProviderError, /no allowanceNumber/)
     end
-
-    it "needs the original invoice date" do
-      expect { allowance(provider_options: { order_id: issued.order_id }) }
-        .to raise_error(Einvoice::ValidationError, /invoice date/)
-    end
   end
 
   describe "#void_allowance" do
     it "refuses an allowance number that is not 16 characters, before any request" do
-      expect { provider.void_allowance(invoice_number: "GX38551078", allowance_number: "NOPE00000000") }
+      expect { provider.void_allowance({ allowance: "NOPE00000000" }) }
         .to raise_error(Einvoice::ValidationError, /allowanceNumber/)
       expect(tradevan.requests).to be_empty
     end
@@ -185,37 +262,47 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
   describe "#query" do
     it "reads searchInvoiceDetail into the unified result" do
       issued = provider.issue(issue_input)
-      found = provider.query(invoice_number: issued.invoice_number)
+      found = provider.query({ invoice: issued.invoice_number })
 
       expect(tradevan.path).to eq("get/searchInvoiceDetail")
       expect(tradevan.http_method).to eq(:get)
       expect(found.invoice_number).to eq(issued.invoice_number)
       expect(found.order_id).to eq("53b2a44e4b3c")
       expect(found.random_code).to eq(issued.random_code)
-      expect(found.invoice_date).to be_a(Time)
+      expect(found.invoice_datetime).to eq(issued.invoice_datetime)
       expect(found.amount).to eq(Einvoice::AmountSummary.new(sales_amount: 19_048, tax_amount: 952,
                                                              total_amount: 20_000))
       expect(found.buyer.name).to eq("John Appleseed")
       expect(found.items.first).to have_attributes(description: "Coffee Latte", quantity: 4000, unit_price: 5,
                                                    amount: 20_000, tax_type: Einvoice::TaxType::TAXABLE)
+      expect(found.reference).to have_attributes(order_id: "53b2a44e4b3c", tax_type: Einvoice::TaxType::TAXABLE,
+                                                 tax_rate: Rational(5, 100))
+    end
+
+    it "reads the rate of a tax-free invoice as 0" do
+      issued = provider.issue(issue_input.merge(tax_type: "TAX_FREE"))
+
+      expect(provider.query({ invoice: issued.reference })).to have_attributes(
+        tax_type: Einvoice::TaxType::TAX_FREE, tax_rate: 0
+      )
     end
 
     # The meaning of status I and V is unknown, so the adapter does not guess.
     it "leaves status nil, unless the invoice has an allowance" do
       issued = provider.issue(issue_input)
-      expect(provider.query(invoice_number: issued.invoice_number).status).to be_nil
+      expect(provider.query({ invoice: issued.reference }).status).to be_nil
 
-      provider.allowance(invoice_number: issued.invoice_number, allowance_id: "AL_Q",
-                         items: [{ description: "Coffee Latte", quantity: 1, unit_price: 100, amount: 100 }],
-                         amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 },
-                         provider_options: { order_id: issued.order_id, invoice_date: issued.invoice_date })
-      found = provider.query(invoice_number: issued.invoice_number)
+      provider.allowance({ invoice: issued.reference, allowance_id: "AL_Q",
+                           items: [{ description: "Coffee Latte", quantity: 1, unit_price: 100, amount: 100 }],
+                           amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 },
+                           price_mode: "TAX_INCLUSIVE" })
+      found = provider.query({ invoice: issued.reference })
       expect(found.status).to eq(Einvoice::InvoiceStatus::ALLOWANCE)
       expect(found.raw["status"]).to eq("I")
     end
 
     it "refuses a query by order id, which this adapter does not declare" do
-      expect { provider.query(order_id: "53b2a44e4b3c") }.to raise_error(Einvoice::UnsupportedError)
+      expect { provider.query({ invoice: { order_id: "53b2a44e4b3c" } }) }.to raise_error(Einvoice::UnsupportedError)
     end
   end
 

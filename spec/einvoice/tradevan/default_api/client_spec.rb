@@ -2,12 +2,12 @@
 
 RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
   subject(:client) do
-    described_class.new(acnt: "acnt", acntp: "acntp", key1: key1, key2: key2, endpoint: endpoint)
+    described_class.new(acnt: "acnt", acntp: "acntp", key1: key1, key2: key2, base_url: base_url)
   end
 
   let(:key1) { "0123456789abcdef" }
   let(:key2) { "fedcba9876543210" }
-  let(:endpoint) { "https://tradevan.test/" }
+  let(:base_url) { "https://tradevan.test/" }
   let(:crypto) { Einvoice::Tradevan::DefaultAPI::Crypto }
 
   def respond_with(body, status = 200)
@@ -20,10 +20,22 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
     crypto.encrypt(JSON.generate(message), key1)
   end
 
-  it "needs an endpoint" do
+  it "needs a base_url" do
     expect do
-      described_class.new(acnt: "a", acntp: "b", key1: key1, key2: key2, endpoint: "")
-    end.to raise_error(Einvoice::ValidationError, /endpoint/)
+      described_class.new(acnt: "a", acntp: "b", key1: key1, key2: key2, base_url: "")
+    end.to raise_error(Einvoice::ValidationError, /base_url/)
+  end
+
+  it "refuses a base_url without https" do
+    expect do
+      described_class.new(acnt: "a", acntp: "b", key1: key1, key2: key2, base_url: "http://tradevan.test")
+    end.to raise_error(Einvoice::ValidationError, /https/)
+  end
+
+  it "hides the password and both keys in inspect" do
+    expect(client.inspect).to include("acnt=\"acnt\"", "tradevan.test")
+    expect(client.inspect).not_to include("acntp\"", key1, key2)
+    expect(client.to_s).to eq(client.inspect)
   end
 
   describe "#request" do

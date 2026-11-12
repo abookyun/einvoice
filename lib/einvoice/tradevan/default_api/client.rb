@@ -17,22 +17,28 @@ module Einvoice
         PROVIDER = "tradevan"
         PATH_PREFIX = "/DEFAULTAPI/"
 
-        attr_reader :endpoint, :timeout
+        attr_reader :base_url, :timeout
 
-        # @param endpoint [String] the Tradevan host. There is no default: the
+        # @param base_url [String] the Tradevan host. There is no default: the
         #   1.x client never shipped one, and the hosts are not public.
-        def initialize(acnt:, acntp:, key1:, key2:, endpoint:, timeout: 30)
-          if endpoint.to_s.empty?
-            raise ValidationError.new("Tradevan endpoint is required", provider: PROVIDER)
+        def initialize(acnt:, acntp:, key1:, key2:, base_url:, timeout: 30)
+          if base_url.to_s.empty?
+            raise ValidationError.new("Tradevan base_url is required", provider: PROVIDER)
           end
 
           @acnt = acnt.to_s
           @acntp = acntp.to_s
           @key1 = key1.to_s
           @key2 = key2.to_s
-          @endpoint = endpoint.to_s.chomp("/")
+          @base_url = Redaction.base_url!(base_url.to_s, provider: PROVIDER).chomp("/")
           @timeout = timeout
         end
+
+        def inspect
+          "#<#{self.class.name} base_url=#{@base_url.inspect} acnt=#{@acnt.inspect} " \
+            "acntp=#{Redaction::FILTERED} key1=#{Redaction::FILTERED} key2=#{Redaction::FILTERED}>"
+        end
+        alias to_s inspect
 
         # Call +path+ (for example +"post/issue"+ or +"get/searchInvoiceDetail"+)
         # with +params+, and return the decrypted +Message+. A path that starts
@@ -54,7 +60,7 @@ module Einvoice
         private
 
         def send_request(path, v)
-          uri = URI("#{@endpoint}#{PATH_PREFIX}#{path}")
+          uri = URI("#{@base_url}#{PATH_PREFIX}#{path}")
           uri.query = URI.encode_www_form(v: v)
 
           http = Net::HTTP.new(uri.host, uri.port)
