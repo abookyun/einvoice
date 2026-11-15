@@ -194,7 +194,7 @@ module Einvoice
 
       # The receiving organisation's name for a 愛心碼, or +nil+ when unregistered.
       def love_code_organ_name(love_code)
-        if @validate_payload && !love_code.to_s.match?(/\A\d{3,7}\z/)
+        if @validate_payload && !love_code.to_s.match?(Donation::CODE_FORMAT)
           raise ValidationError.new("Invalid love code: #{love_code.inspect}", provider: name)
         end
 
