@@ -32,6 +32,12 @@ class FakeECPay
     @invoices.fetch(number)["tax_rate"] = rate
   end
 
+  # GetIssue by 自訂編號 then finds +number+, as if ECPay let another invoice
+  # reuse the order id. Nobody has seen ECPay do this (docs, section 8).
+  def move_order_id!(order_id, number)
+    @by_relate[order_id] = number
+  end
+
   # GetIssue then answers without an issue date, as a broken response would.
   def drop_issue_date!(number)
     @invoices.fetch(number)["issued_at"] = ""
