@@ -181,6 +181,34 @@ RSpec.describe "ECPay live stage API", :live do
     end
   end
 
+  # With vat 0, ECPay does not read ItemAmount. It stores ItemPrice × 1.05 and
+  # its amount, and checks SalesAmount against them (docs, section 4.3).
+  it "issues tax-excluded prices, and ECPay records them with tax" do
+    order = order_id
+    issued = provider.issue(issue_input(order, price_mode: "TAX_EXCLUSIVE",
+                                               amount: { sales_amount: 105, tax_amount: 0, total_amount: 105 }))
+
+    found = provider.query(invoice: issued.reference)
+    expect(found.amount.total_amount).to eq(105)
+    expect(found.items.first).to have_attributes(unit_price: 52.5, amount: 105)
+    provider.void(invoice: issued.reference, reason: "整合測試作廢")
+  end
+
+  # The docs require ClearanceMark for any TaxType 9. ECPay asks for it only
+  # when a zero-rated item is in the mix (5000007).
+  it "issues taxable and tax-free items together without a clearance mark" do
+    order = order_id
+    issued = provider.issue(issue_input(order, items: [
+                                          { description: "應稅", quantity: 1, unit_price: 50, amount: 50,
+                                            tax_type: "TAXABLE" },
+                                          { description: "免稅", quantity: 1, unit_price: 50, amount: 50,
+                                            tax_type: "TAX_FREE" }
+                                        ]))
+
+    expect(provider.query(invoice: issued.reference).tax_type).to eq(Einvoice::TaxType::MIXED)
+    provider.void(invoice: issued.reference, reason: "整合測試作廢")
+  end
+
   it "issues a B2B invoice carrying a 統一編號" do
     order = order_id
     issued = provider.issue(issue_input(order,
