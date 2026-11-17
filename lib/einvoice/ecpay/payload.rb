@@ -117,8 +117,9 @@ module Einvoice
         errors << "RelateNumber must be #{MAX_RELATE_NUMBER_LENGTH} characters or fewer" if
           relate.length > MAX_RELATE_NUMBER_LENGTH
 
-        # 發票金額(含稅) must equal round(Σ ItemAmount) — 5000022. Only enforced for
-        # 含稅 (vat=1); with vat=0 ECPay recomputes the total itself.
+        # 發票金額(含稅) must equal round(Σ ItemAmount) — 5000022. Only checked for
+        # 含稅 (vat=1). With vat=0, ECPay does not read ItemAmount: it stores
+        # ItemPrice × 1.05 and checks SalesAmount against that (stage, 2026-11-15).
         if data["vat"] != "0"
           total = data["Items"].sum { |item| item["ItemAmount"].to_f }
           unless total.round == data["SalesAmount"]
@@ -173,7 +174,8 @@ module Einvoice
       end
 
       # 零稅率 (TaxType 2, or 9 when a zero-rated item is mixed in) needs the
-      # customs-clearance mark — 5000007.
+      # customs-clearance mark — 5000007. The docs ask for it on any TaxType 9,
+      # but stage takes taxable plus tax-free without it (2026-11-15).
       def clearance_missing?(data)
         return false unless data["ClearanceMark"].to_s.empty?
         return true if data["TaxType"] == "2"

@@ -21,9 +21,9 @@ module Einvoice
         production: "https://einvoice.ecpay.com.tw"
       }.freeze
 
-      # Fixed by the B2C spec. The stage API accepts a request without it
-      # (verified 2026-08-15), but it is documented as required and the response
-      # echoes it back, so it is always sent.
+      # Sent in every RqHeader. The current B2C docs do not list Revision, and
+      # the stage API accepts a request without it (verified 2026-08-15). It
+      # stays until docs/providers/ecpay/b2c.md, open question 1, is settled.
       REVISION = "3.0.0"
 
       attr_reader :merchant_id, :mode, :base_url, :timeout

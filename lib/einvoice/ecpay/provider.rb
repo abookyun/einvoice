@@ -155,13 +155,15 @@ module Einvoice
         VoidAllowanceResult.new(allowance_number: allowance.allowance_number, raw: result)
       end
 
-      # 查詢發票. By 自訂編號 when the reference has an order_id. Otherwise by
-      # invoice number, which ECPay pairs with the issue date.
+      # 查詢發票. By invoice number when the reference has the number and the
+      # issue date, which ECPay pairs with it. Otherwise by 自訂編號. A query by
+      # 自訂編號 for a reference with a number checks that ECPay found that
+      # number, as an order id may belong to another invoice.
       def query(input)
         reference = Input.query(input, provider: name).invoice
-        if reference.order_id
+        if reference.order_id && (reference.number.nil? || reference.invoice_datetime.nil?)
           assert_supports!(Capability::QUERY_BY_ORDER_ID)
-          return query_by_order_id(reference.order_id)
+          return query_by_order_id(reference.order_id, number: reference.number)
         end
 
         if reference.invoice_datetime.nil?
@@ -192,7 +194,7 @@ module Einvoice
 
       # The receiving organisation's name for a 愛心碼, or +nil+ when unregistered.
       def love_code_organ_name(love_code)
-        if @validate_payload && !love_code.to_s.match?(/\A\d{3,7}\z/)
+        if @validate_payload && !love_code.to_s.match?(Donation::CODE_FORMAT)
           raise ValidationError.new("Invalid love code: #{love_code.inspect}", provider: name)
         end
 
@@ -313,9 +315,17 @@ module Einvoice
         Time.new(year.to_i, month.to_i, day.to_i, hour.to_i, minute.to_i, second.to_i, "+08:00")
       end
 
-      def query_by_order_id(order_id)
+      # +number+, when given, is the invoice the caller means. ECPay returns
+      # the invoice that has the order id now, so a different number is an
+      # error, not a result.
+      def query_by_order_id(order_id, number: nil)
         result = @client.request("/B2CInvoice/GetIssue", { "RelateNumber" => order_id })
-        build_query_result(result, InvoiceReference.new(order_id: order_id))
+        found = build_query_result(result, InvoiceReference.new(order_id: order_id))
+        if number && found.invoice_number != number
+          raise ProviderError.new("ECPay found invoice #{found.invoice_number} for order id #{order_id}, " \
+                                  "not #{number}", provider: name, raw: result)
+        end
+        found
       end
 
       # The issue date that Invalid, Allowance and GetIssue ask for. Taken from the
@@ -331,7 +341,7 @@ module Einvoice
         end
 
         found = begin
-          query_by_order_id(reference.order_id)
+          query_by_order_id(reference.order_id, number: reference.number)
         rescue Error => e
           raise ProviderError.new("#{operation} needs invoice.invoice_datetime; looking it up by order id failed: " \
                                   "#{e.message}", provider: name, reason: Reason::LOOKUP_FAILED, cause: e)

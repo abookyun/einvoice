@@ -128,6 +128,23 @@ RSpec.describe Einvoice::ECPay::Provider do
       )
     end
 
+    it "queries by number when the reference has the number, the date and an order id" do
+      issued = provider.issue(issue_input(order_id: "ORDER_QN"))
+      provider.query(invoice: issued.reference)
+
+      expect(ecpay.payload).to include("InvoiceNo" => issued.invoice_number)
+      expect(ecpay.payload).not_to include("RelateNumber")
+    end
+
+    it "refuses an invoice found by order id under another number" do
+      first = provider.issue(issue_input(order_id: "ORDER_QM"))
+      other = provider.issue(issue_input(order_id: "ORDER_QO"))
+      ecpay.move_order_id!("ORDER_QM", other.invoice_number)
+
+      expect { provider.query(invoice: { number: first.invoice_number, order_id: "ORDER_QM" }) }
+        .to raise_error(Einvoice::ProviderError, /found invoice #{other.invoice_number}/)
+    end
+
     it "needs the issue date to query by number" do
       expect { provider.query(invoice: "LA25000001") }
         .to raise_error(Einvoice::ValidationError, /invoice.invoice_datetime/)
@@ -255,6 +272,19 @@ RSpec.describe Einvoice::ECPay::Provider do
         .to raise_error(Einvoice::ProviderError) { |e|
           expect(e.reason).to eq(Einvoice::Reason::LOOKUP_FAILED)
           expect(e.message).to match(/the invoice found by order id has no issue date/)
+        }
+      expect(ecpay.path).to eq("/B2CInvoice/GetIssue")
+    end
+
+    it "does not take the issue date of another invoice found by order id" do
+      first = provider.issue(issue_input(order_id: "ORDER_VM"))
+      other = provider.issue(issue_input(order_id: "ORDER_VO"))
+      ecpay.move_order_id!("ORDER_VM", other.invoice_number)
+
+      expect { provider.void(invoice: { number: first.invoice_number, order_id: "ORDER_VM" }, reason: "客戶取消") }
+        .to raise_error(Einvoice::ProviderError) { |e|
+          expect(e.reason).to eq(Einvoice::Reason::LOOKUP_FAILED)
+          expect(e.message).to match(/found invoice #{other.invoice_number}/)
         }
       expect(ecpay.path).to eq("/B2CInvoice/GetIssue")
     end

@@ -146,9 +146,9 @@ provider = Einvoice::ECPay::Provider.new(**Einvoice::ECPay::SANDBOX)
 
 幾件需要知道的事：
 
-- **紙本或電子由 adapter 判斷。** 有載具或捐贈的發票是電子發票（`Print=0`），其他的都會列印。列印時 ECPay 要求買方名稱和地址。
+- **紙本或電子由 adapter 判斷。** 有載具或捐贈的發票是電子發票（`Print=0`），其他的都會列印。列印時 ECPay 要求買方名稱、地址，以及 email 或電話。
 - **混合稅率也由 adapter 判斷。** 如果品項的 `tax_type` 不一致，就會開成混合稅率（TaxType 9）發票，不用另外指定。
-- **作廢、折讓、用號碼查詢都需要發票的開立日期**，從 `invoice.invoice_datetime` 取得。如果 reference 沒有日期但有 `order_id`，adapter 會先查詢補上；查詢失敗時丟出 `ProviderError`，`reason` 是 `:lookup_failed`。只有號碼是不夠的。
+- **作廢、折讓、用號碼查詢都需要發票的開立日期**，從 `invoice.invoice_datetime` 取得。如果 reference 沒有日期但有 `order_id`，查詢改用訂單編號，作廢和折讓會先查詢補上日期。查詢失敗時丟出 `ProviderError`，`reason` 是 `:lookup_failed`。只有號碼是不夠的。
 - **作廢折讓需要發票號碼**，所以請傳 `AllowanceReference`，不要只傳折讓單號。
 - **不支援外幣。** ECPay 的 B2C API 沒有外幣欄位，所以 `currency` 不是 TWD 時會丟出 `UnsupportedError`，不會被當成 TWD 開立。
 - **應稅發票固定是 5%。** ECPay 依課稅別決定稅率，所以其他的 `tax_rate` 會丟出 `UnsupportedError`。

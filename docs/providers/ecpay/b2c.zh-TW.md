@@ -17,7 +17,7 @@ B2C API 也可以開立給營業人買方的發票：在 `CustomerIdentifier` �
 | 標記 | 來源 | 日期 | 提供的內容 |
 | --- | --- | --- | --- |
 | `[doc]` | ECPay B2C電子發票API技術文件，<https://developers.ecpay.com.tw/7809/>。每個 endpoint 一頁。2026-10-14 讀完全部 44 頁。 | 首頁更新於 2026-03-12，開立發票頁更新於 2026-05-20 | 下面所有沒有其他標記的內容。 |
-| `[live]` | 我們的 live spec（`spec/einvoice/ecpay/live_spec.rb`）和它錄下的 VCR cassette（`spec/fixtures/vcr_cassettes/ecpay/`） | 2026-08-15，stage | 真實的請求、回應和錯誤代碼。 |
+| `[live]` | 我們的 live spec（`spec/einvoice/ecpay/live_spec.rb`）和它錄下的 VCR cassette（`spec/fixtures/vcr_cassettes/ecpay/`） | 2026-08-15 和 2026-11-15，stage | 真實的請求、回應和錯誤代碼。 |
 | `[code]` | 2.x adapter（`lib/einvoice/ecpay/`） | 2026-08 | adapter 目前的做法。它的註解說有些代碼已經 live 驗證過，但沒有 cassette 錄到這些代碼。 |
 | `[fixture]` | 另一個 SDK 針對同一個 API 的 wire 與錯誤 fixture。副本放在 `spec/fixtures/shared/ecpay/`，附有來源。我們在 2026-10-28 讀過。 | 傳輸層錯誤由該 SDK 的作者於 2026-08-15 在 stage 實際執行過 | 對方實際看到的錯誤代碼和訊息。 |
 
@@ -182,7 +182,7 @@ adapter 另外對應了兩個檢查：`/B2CInvoice/CheckBarcode`（手機條碼�
 
 `provider_options` 的鍵可以是字串或 symbol。
 
-**缺少發票日期時。** `void`、`allowance` 和用號碼查詢都需要發票日期。如果 reference 沒有 `invoice_datetime`，但有 `order_id`，adapter 會先用 `RelateNumber` 呼叫 `GetIssue`，取得 `IIS_Create_Date`。否則丟出 `ValidationError`，指出缺少 `invoice_datetime`。只給發票號碼是不夠的。查詢失敗時，adapter 丟出帶有 `LOOKUP_FAILED` 的 `ProviderError`（[unified model](../README.zh-TW.md#unified-model)）。
+**缺少發票日期時。** `void`、`allowance` 和用號碼查詢都需要發票日期。查詢沒有日期時，改用 `order_id` 查詢（4.2）。`void` 和 `allowance` 的 reference 沒有 `invoice_datetime`，但有 `order_id` 時，adapter 會先用 `RelateNumber` 呼叫 `GetIssue`，取得 `IIS_Create_Date`。這個查詢失敗時，adapter 丟出帶有 `LOOKUP_FAILED` 的 `ProviderError`（[unified model](../README.zh-TW.md#unified-model)）。沒有 `order_id` 時，丟出 `ValidationError`，指出缺少 `invoice_datetime`。只給發票號碼是不夠的。
 
 **作廢折讓缺少發票號碼時。** `AllowanceInvalid` 需要 `InvoiceNo`。只給折讓單號時沒有這個值，所以丟出 `ValidationError`，指出缺少 `invoice_number`。
 
@@ -194,7 +194,7 @@ adapter 另外對應了兩個檢查：`/B2CInvoice/CheckBarcode`（手機條碼�
 | --- | --- | --- |
 | `order_id` | `RelateNumber` | 最多 50 |
 | `buyer.ubn` | `CustomerIdentifier` | 只有 B2B 才送。B2C 為空 |
-| `buyer.name`、`.address`、`.phone`、`.email` | `CustomerName`、`CustomerAddr`、`CustomerPhone`、`CustomerEmail` | 沒有時送空字串。列印的發票（`Print` 為 `1`）需要姓名和地址 `[doc 7896]` |
+| `buyer.name`、`.address`、`.phone`、`.email` | `CustomerName`、`CustomerAddr`、`CustomerPhone`、`CustomerEmail` | 沒有時送空字串。列印的發票（`Print` 為 `1`）需要姓名和地址 `[doc 7896]`，以及 email 或電話（5.1） |
 | `carrier.type` | `CarrierType` | `MEMBER` 為 `1`、`CITIZEN_CERTIFICATE` 為 `2`、`MOBILE_BARCODE` 為 `3` |
 | `carrier.code` | `CarrierNum` | `MEMBER` 時為空，ECPay 用 email 或手機建立載具 |
 | `donation.npoban` | `LoveCode` | 同時送 `Donation` `1`。可以同時帶載具（4.7） |
@@ -281,8 +281,8 @@ adapter 另外對應了兩個檢查：`/B2CInvoice/CheckBarcode`（手機條碼�
 
 | Unified | ECPay | 規則或預設值 |
 | --- | --- | --- |
-| `invoice.order_id` | `RelateNumber` | 有就使用 |
-| `invoice.number` | `InvoiceNo` | 沒有訂單編號時才用。查詢結果不會和它比對（8.2） |
+| `invoice.number` | `InvoiceNo` | reference 也有 `invoice_datetime` 時使用 |
+| `invoice.order_id` | `RelateNumber` | 其他情況使用。reference 有發票號碼，而查到的是另一個號碼時，丟出 `ProviderError` |
 | `invoice.invoice_datetime` | `InvoiceDate` | 只和 `InvoiceNo` 一起送，此時必填 |
 
 結果：
@@ -307,7 +307,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 
 - B2C 和 B2B 都把 `amount.total_amount` 當成 `SalesAmount` 送出，也就是含稅金額 `[doc 7896]`。`sales_amount` 和 `tax_amount` 不送出。稅額由 ECPay 計算：`round(SalesAmount / 1.05 × 0.05)`。混合稅率時，用應稅品項的合計計算 `[doc 7896]`。
 - `vat` 為 `1` 時，`SalesAmount` 必須等於 `ItemAmount` 加總後四捨五入的值，否則 ECPay 回傳 `5000022` `[live]`。adapter 在呼叫前會檢查。
-- `vat` 為 `0` 時，總計由 ECPay 自己計算。這一點沒有標 `[live]`，而且 5.1 的說法不同（8.1）。
+- `vat` 為 `0` 時，ECPay 不讀取 `ItemAmount`。它把 `ItemPrice × 1.05` 存成單價，把 `ItemPrice × ItemCount × 1.05` 存成金額，`SalesAmount` 必須等於這些金額加總後四捨五入，否則回傳 `5000022` `[live]`。所以 adapter 照輸入送出 `ItemAmount`，自己不檢查總計。核心已經用稅額明細檢查過 `amount.total_amount`。
 - 品項金額最多可以有 7 位小數，只有加總會四捨五入 `[doc 7896]`。
 
 **折讓。**
@@ -394,7 +394,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 | `CustomerAddr` | O | 最多 100。`Print` 為 `1` 時 M |
 | `CustomerPhone` | O | 最多 20，數字。`CustomerEmail` 空白時 M |
 | `CustomerEmail` | O | 最多 80，一個地址。`CustomerPhone` 空白時 M |
-| `ClearanceMark` | O | `1` / `2`。`TaxType` 為 `2` 或 `9` 時 M |
+| `ClearanceMark` | O | `1` / `2`。`TaxType` 為 `2` 或 `9` 時 M。stage 只在有零稅率品項時要求 `[live]` |
 | `Print` | M | `0` / `1`。只標示特店會列印這張發票。ECPay 不會列印或寄送 |
 | `Donation` | M | `0` / `1` |
 | `LoveCode` | O | 3 到 7 位數字，可以 `0` 開頭。`Donation` 為 `1` 時 M |
@@ -436,7 +436,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 
 跨欄位規則 `[doc 7896]`：
 
-- `ItemAmount` 的加總四捨五入後，必須等於 `SalesAmount`。`vat` 為 `0` 且 `TaxType` 為 `1` 時，`ItemPrice × ItemCount × 1.05 = ItemAmount`。
+- `ItemAmount` 的加總四捨五入後，必須等於 `SalesAmount`。`vat` 為 `0` 且 `TaxType` 為 `1` 時，`ItemPrice × ItemCount × 1.05 = ItemAmount`。`vat` 為 `0` 時，stage 不採用送出的 `ItemAmount`，而是存下這個乘積（4.3）`[live]`。
 - 混合稅率（`9`）可以是應稅加免稅，或應稅加零稅率。不能是免稅加零稅率。
 - 捐贈（`Donation` 為 `1`）：`Print` 必須是 `0`，`CustomerIdentifier` 必須空白。可以有載具：表示買方之後才把發票捐出。
 - 有統一編號時：`Donation` 必須是 `0`。沒有載具時 `Print` 為 `1`。載具為 `1` 或 `2` 時 `Print` 為 `0`。載具為 `3` 時兩者都可以。
@@ -446,7 +446,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 
 - B2C 有載具的發票不可以列印（`5000015`）。
 - 不列印的 B2B 發票需要載具（`5000028`）。
-- 零稅率發票需要 `ClearanceMark`（`5000007`）。adapter 只在有零稅率品項時要求這個欄位，`TaxType` 為 `9` 時也一樣（見第 7 節）。
+- 零稅率發票需要 `ClearanceMark`（`5000007`）。adapter 只在有零稅率品項時要求這個欄位，`TaxType` 為 `9` 時也一樣。stage 接受不帶這個欄位的應稅加免稅發票 `[live]`。
 
 回應的 `Data`：`RtnCode`、`RtnMsg`、`InvoiceNo`、`InvoiceDate`（`yyyy-MM-dd HH:mm:ss` 或 `yyyy/MM/dd HH:mm:ss`）、`RandomNumber`。範例見 2.5。
 
@@ -650,16 +650,7 @@ ECPay 會寫「重複」也會寫「重覆」，會寫「已作廢」也會寫�
 
 ## 7. 待解問題
 
-1. **`RqHeader.Revision`。** adapter 送出 `Revision: "3.0.0"`，註解說文件標示為必填。但目前的文件完全沒有列出 `Revision` `[doc 7896]`。stage 接受沒有這個欄位的請求 `[code]`。註解要修改，這個欄位也許可以拿掉。
-2. **混合稅率的通關方式。** 文件要求只要 `TaxType` 是 `9` 就必須有 `ClearanceMark`。adapter 只在混合的品項裡有零稅率時才要求，並說明有 live 驗證過（`5000007`）。應稅加免稅的情況，哪一個才對？
-3. **卡片載具。** 悠遊卡和一卡通（`4`、`5`）沒有對應的 unified `CarrierType`。
-4. **B2B API。** ECPay 另外有 B2B 發票 API。它走的是 MIG 的交換流程嗎？我們需要它嗎？
-5. **403 的 body。** ECPay 會送什麼？adapter 用不到，但有樣本可以讓 fake 更貼近真實。
-
-## 8. 已知問題
-
-這些是審查 2.0 程式碼時發現的問題，留到下次重整 adapter 時處理。
-
-1. **`vat` 為 `0` 時的 `ItemAmount`。** 開立發票時，adapter 把每個品項的 `amount` 送成 `ItemAmount`。`vat` 為 `0` 時，這個金額不含稅。但 5.1 說 `ItemAmount` 含稅，而且 `vat` 為 `0`、`TaxType` 為 `1` 時，`ItemPrice × ItemCount × 1.05 = ItemAmount` `[doc 7896]`。4.3 說 `vat` 為 `0` 時總計由 ECPay 自己計算，但這一點沒有標 `[live]`，而且 adapter 這時會跳過自己的總計檢查。折讓已經改送核心計算出的 `gross_amount`。需要用 live 測試確認哪一邊才對。
-2. **用訂單編號查詢時不比對發票號碼。** reference 同時有訂單編號和發票號碼時，adapter 只用 `RelateNumber` 查詢，不會比對回傳的 `IIS_Number` 和 `invoice.number`。如果 ECPay 允許重複使用訂單編號（例如作廢之後），查詢可能回傳另一張發票，而且不會出錯。修正方式是有發票號碼時用號碼查詢，或在號碼不同時丟出錯誤。
-3. **`love_code_organ_name` 用自己的格式。** 它用 `/\A\d{3,7}\z/` 檢查愛心碼，而不是 `Donation::CODE_FORMAT`。兩者目前相同。如果 MIG 改了愛心碼的格式，這個檢查不會跟著改。
+1. **`RqHeader.Revision`。** adapter 送出 `Revision: "3.0.0"`，但目前的文件完全沒有列出 `Revision` `[doc 7896]`。stage 接受沒有這個欄位的請求 `[code]`。這個欄位要拿掉嗎？
+2. **卡片載具。** 悠遊卡和一卡通（`4`、`5`）沒有對應的 unified `CarrierType`。
+3. **B2B API。** ECPay 另外有 B2B 發票 API。它走的是 MIG 的交換流程嗎？我們需要它嗎？
+4. **403 的 body。** ECPay 會送什麼？adapter 用不到，但有樣本可以讓 fake 更貼近真實。

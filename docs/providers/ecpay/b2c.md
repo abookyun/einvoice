@@ -15,7 +15,7 @@ The B2C API also issues invoices to a business buyer: send a 統一編號 in `Cu
 | Tag | Source | Date | What it gives |
 | --- | --- | --- | --- |
 | `[doc]` | ECPay B2C電子發票API技術文件, <https://developers.ecpay.com.tw/7809/>. One page per endpoint. We read all 44 pages on 2026-10-14. | Home page changed 2026-03-12, issue page 2026-05-20 | Everything below that has no other tag. |
-| `[live]` | Our live specs (`spec/einvoice/ecpay/live_spec.rb`) and the VCR cassettes they recorded (`spec/fixtures/vcr_cassettes/ecpay/`) | 2026-08-15, stage | Real requests, responses and error codes. |
+| `[live]` | Our live specs (`spec/einvoice/ecpay/live_spec.rb`) and the VCR cassettes they recorded (`spec/fixtures/vcr_cassettes/ecpay/`) | 2026-08-15 and 2026-11-15, stage | Real requests, responses and error codes. |
 | `[code]` | The 2.x adapter (`lib/einvoice/ecpay/`) | 2026-08 | What the adapter does today. Its comments name some codes as checked live, but no cassette records them. |
 | `[fixture]` | Wire and error fixtures of another SDK for the same API. A copy is in `spec/fixtures/shared/ecpay/`, with its source. We read them on 2026-10-28. | Transport errors run live on stage 2026-08-15, by that SDK's authors | Error codes and messages that its authors saw live. |
 
@@ -180,7 +180,7 @@ All paths start with `/B2CInvoice/`. Page 49890 is an older copy of the issue pa
 
 All `provider_options` keys are strings or symbols.
 
-**Missing invoice date.** `void`, `allowance` and a query by number need the invoice date. If the reference has no `invoice_datetime` but has `order_id`, the adapter queries `GetIssue` by `RelateNumber` first and takes `IIS_Create_Date`. Otherwise it raises `ValidationError` for `invoice_datetime`. A plain invoice number is not enough. If the query fails, the adapter raises `ProviderError` with `LOOKUP_FAILED` ([the unified model](../README.md#the-unified-model)).
+**Missing invoice date.** `void`, `allowance` and a query by number need the invoice date. A query without it goes by `order_id` instead (4.2). For `void` and `allowance`, if the reference has no `invoice_datetime` but has `order_id`, the adapter queries `GetIssue` by `RelateNumber` first and takes `IIS_Create_Date`. If that query fails, the adapter raises `ProviderError` with `LOOKUP_FAILED` ([the unified model](../README.md#the-unified-model)). Without `order_id`, it raises `ValidationError` for `invoice_datetime`. A plain invoice number is not enough.
 
 **Missing invoice number on void allowance.** `AllowanceInvalid` needs `InvoiceNo`. A plain allowance number has none, so it raises `ValidationError` for `invoice_number`.
 
@@ -192,7 +192,7 @@ All `provider_options` keys are strings or symbols.
 | --- | --- | --- |
 | `order_id` | `RelateNumber` | Max 50 |
 | `buyer.ubn` | `CustomerIdentifier` | B2B only. Empty for B2C |
-| `buyer.name`, `.address`, `.phone`, `.email` | `CustomerName`, `CustomerAddr`, `CustomerPhone`, `CustomerEmail` | Empty string when missing. A printed invoice (`Print` `1`) needs the name and the address `[doc 7896]` |
+| `buyer.name`, `.address`, `.phone`, `.email` | `CustomerName`, `CustomerAddr`, `CustomerPhone`, `CustomerEmail` | Empty string when missing. A printed invoice (`Print` `1`) needs the name and the address `[doc 7896]`, and an email or a phone (5.1) |
 | `carrier.type` | `CarrierType` | `MEMBER` `1`, `CITIZEN_CERTIFICATE` `2`, `MOBILE_BARCODE` `3` |
 | `carrier.code` | `CarrierNum` | Empty for `MEMBER`. ECPay builds the carrier from the email or phone |
 | `donation.npoban` | `LoveCode` | And `Donation` `1`. A carrier can be sent with it (4.7) |
@@ -279,8 +279,8 @@ Result: `allowance_number` from the input, `cancel_datetime` `nil`.
 
 | Unified | ECPay | Rule or default |
 | --- | --- | --- |
-| `invoice.order_id` | `RelateNumber` | Used when present |
-| `invoice.number` | `InvoiceNo` | Only without an order id. The result is not checked against it (8.2) |
+| `invoice.number` | `InvoiceNo` | Used when the reference also has `invoice_datetime` |
+| `invoice.order_id` | `RelateNumber` | Used otherwise. With a number in the reference, a result under another number raises `ProviderError` |
 | `invoice.invoice_datetime` | `InvoiceDate` | With `InvoiceNo` only. Required with it |
 
 Result:
@@ -305,7 +305,7 @@ The unified rules are in [the unified model](../README.md#the-unified-model).
 
 - The adapter sends `amount.total_amount` as `SalesAmount`, for both B2C and B2B. It is the amount with tax included `[doc 7896]`. `sales_amount` and `tax_amount` are not sent. ECPay computes the tax: `round(SalesAmount / 1.05 × 0.05)`. For mixed tax, it uses the sum of the taxable items `[doc 7896]`.
 - With `vat` `1`, `SalesAmount` must equal the rounded sum of `ItemAmount`, or ECPay returns `5000022` `[live]`. The adapter checks this before the call.
-- With `vat` `0`, ECPay computes the total itself. This is not marked `[live]`, and 5.1 says otherwise (8.1).
+- With `vat` `0`, ECPay does not read `ItemAmount`. It stores `ItemPrice × 1.05` as the price and `ItemPrice × ItemCount × 1.05` as the amount, and `SalesAmount` must equal their rounded sum, or it returns `5000022` `[live]`. So the adapter sends `ItemAmount` as the input gives it, and does not check the total itself. The core has already checked `amount.total_amount` against the breakdown.
 - Item amounts may have up to 7 digits after the point. Only the sum is rounded `[doc 7896]`.
 
 **Allowance.**
@@ -392,7 +392,7 @@ Seen live `[live]`: a voided invoice has `IIS_Invalid_Status` `1` and `IIS_Remai
 | `CustomerAddr` | O | max 100. M when `Print` is `1` |
 | `CustomerPhone` | O | max 20, digits. M when `CustomerEmail` is empty |
 | `CustomerEmail` | O | max 80, one address. M when `CustomerPhone` is empty |
-| `ClearanceMark` | O | `1` / `2`. M when `TaxType` is `2` or `9` |
+| `ClearanceMark` | O | `1` / `2`. M when `TaxType` is `2` or `9`. Stage asks for it only when a zero rated item is present `[live]` |
 | `Print` | M | `0` / `1`. This only marks that the merchant prints the invoice. ECPay does not print or mail it |
 | `Donation` | M | `0` / `1` |
 | `LoveCode` | O | 3 to 7 digits, may start with `0`. M when `Donation` is `1` |
@@ -434,7 +434,7 @@ Item fields:
 
 Rules across fields `[doc 7896]`:
 
-- The sum of `ItemAmount`, rounded, must equal `SalesAmount`. With `vat` `0` and `TaxType` `1`, `ItemPrice × ItemCount × 1.05 = ItemAmount`.
+- The sum of `ItemAmount`, rounded, must equal `SalesAmount`. With `vat` `0` and `TaxType` `1`, `ItemPrice × ItemCount × 1.05 = ItemAmount`. Stage ignores the `ItemAmount` sent with `vat` `0` and stores this product (4.3) `[live]`.
 - Mixed tax (`9`) allows taxable with tax free, or taxable with zero rated. Not tax free with zero rated.
 - Donated (`Donation` `1`): `Print` must be `0`, and `CustomerIdentifier` must be empty. A carrier is allowed: it means the buyer donated the invoice later.
 - With a 統一編號: `Donation` must be `0`. No carrier means `Print` `1`. Carrier `1` or `2` means `Print` `0`. Carrier `3` allows either.
@@ -444,7 +444,7 @@ The docs and the API do not always agree. The adapter's checks follow what stage
 
 - A B2C invoice with a carrier must not print (`5000015`).
 - A B2B invoice that does not print needs a carrier (`5000028`).
-- A zero rated invoice needs `ClearanceMark` (`5000007`). The adapter asks for it only when a zero rated item is present, also with `TaxType` `9` (see 7).
+- A zero rated invoice needs `ClearanceMark` (`5000007`). The adapter asks for it only when a zero rated item is present, also with `TaxType` `9`. Stage takes taxable plus tax free items without it `[live]`.
 
 Response `Data`: `RtnCode`, `RtnMsg`, `InvoiceNo`, `InvoiceDate` (`yyyy-MM-dd HH:mm:ss` or `yyyy/MM/dd HH:mm:ss`), `RandomNumber`. Example in 2.5.
 
@@ -648,16 +648,7 @@ ECPay writes both 重複 and 重覆, and both 已作廢 and 已被作廢. Match 
 
 ## 7. Open questions
 
-1. **`RqHeader.Revision`.** The adapter sends `Revision: "3.0.0"`, and its comment says the docs mark it as required. The current docs do not list `Revision` at all `[doc 7896]`. Stage accepts a request without it `[code]`. The comment should change, and maybe the field should go.
-2. **Clearance mark with mixed tax.** The docs require `ClearanceMark` for any `TaxType` `9`. The adapter requires it only when a zero rated item is in the mix, which it says it checked live (`5000007`). Which is right for taxable plus tax free?
-3. **Card carriers.** EasyCard and iPASS (`4`, `5`) have no unified `CarrierType`.
-4. **The B2B API.** ECPay also has a B2B invoice API. Is it the MIG exchange flow? Do we need it?
-5. **The body of a 403.** What does ECPay send? The adapter does not need it, but a sample would make the fake more real.
-
-## 8. Known issues
-
-A review of the 2.0 code found these. They wait for the next rework of the adapter.
-
-1. **`ItemAmount` with `vat` `0`.** For an issue, the adapter sends each item's `amount` as `ItemAmount`. With `vat` `0` that amount excludes tax. But 5.1 says that `ItemAmount` includes tax, and that `ItemPrice × ItemCount × 1.05 = ItemAmount` with `vat` `0` and `TaxType` `1` `[doc 7896]`. 4.3 says that ECPay computes the total itself with `vat` `0`, but that is not marked `[live]`, and the adapter skips its own total check then. The allowance already sends `gross_amount` from the core's breakdown. A live test should show which one is right.
-2. **A query by order id does not check the number.** When the reference has both an order id and a number, the adapter queries by `RelateNumber` only. It does not compare the `IIS_Number` it gets back with `invoice.number`. If ECPay lets an order id be used again, for example after a void, the query can return another invoice, and no error is raised. The fix is to query by number when there is one, or to raise when the numbers differ.
-3. **`love_code_organ_name` has its own pattern.** It checks the code with `/\A\d{3,7}\z/`, not with `Donation::CODE_FORMAT`. The two are the same today. If the MIG changes the shape of a 愛心碼, this check will not follow.
+1. **`RqHeader.Revision`.** The adapter sends `Revision: "3.0.0"`, but the current docs do not list `Revision` at all `[doc 7896]`. Stage accepts a request without it `[code]`. Should the field go?
+2. **Card carriers.** EasyCard and iPASS (`4`, `5`) have no unified `CarrierType`.
+3. **The B2B API.** ECPay also has a B2B invoice API. Is it the MIG exchange flow? Do we need it?
+4. **The body of a 403.** What does ECPay send? The adapter does not need it, but a sample would make the fake more real.
