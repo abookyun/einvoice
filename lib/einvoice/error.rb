@@ -42,13 +42,17 @@ module Einvoice
     # not give, and that query failed. +cause+ holds the error of the query.
     # A provider error: the invoice of the call may well exist.
     LOOKUP_FAILED             = :lookup_failed
+    # The provider says "not now": the invoice is still being issued, a change
+    # waits in its queue, or it is not uploaded yet. The same call may work
+    # later. A ConflictError, as the state is wrong for now.
+    RETRY_LATER               = :retry_later
 
     ALL = [
       DUPLICATE_ORDER, VOID_BLOCKED_BY_ALLOWANCE, ALLOWANCE_BLOCKED_BY_VOID,
       ALREADY_VOIDED, DUPLICATE_ALLOWANCE,
       PAST_DEADLINE, CARRIER_NOT_REGISTERED, RATE_LIMITED, CREDENTIALS_INVALID,
       NOT_ENROLLED, CONTRACT_EXPIRED, IP_BLOCKED, ACCOUNT_SUSPENDED, STALE_TIMESTAMP,
-      LOOKUP_FAILED
+      LOOKUP_FAILED, RETRY_LATER
     ].freeze
   end
 
