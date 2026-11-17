@@ -137,9 +137,9 @@ provider = Einvoice::ECPay::Provider.new(**Einvoice::ECPay::SANDBOX)
 
 A few things worth knowing:
 
-- **Paper vs. electronic is derived.** An invoice with a carrier or a donation is electronic (`Print=0`); anything else prints, and ECPay then requires a buyer name and address.
+- **Paper vs. electronic is derived.** An invoice with a carrier or a donation is electronic (`Print=0`); anything else prints, and ECPay then requires a buyer name, an address, and an email or a phone.
 - **Mixed tax rates are derived too.** Items that disagree on `tax_type` produce a 混合稅率 (TaxType 9) invoice; you don't ask for it explicitly.
-- **Void, allowance and a query by number need the invoice's issue date.** It comes from `invoice.invoice_datetime`. If the reference has an `order_id` instead, the adapter looks the date up first. A failed lookup raises `ProviderError` with `reason: :lookup_failed`. A plain number is not enough.
+- **Void, allowance and a query by number need the invoice's issue date.** It comes from `invoice.invoice_datetime`. If the reference has an `order_id` instead, a query goes by order id, and a void or an allowance looks the date up first. A failed lookup raises `ProviderError` with `reason: :lookup_failed`. A plain number is not enough.
 - **Void allowance needs the invoice number**, so pass the `AllowanceReference`, not only the allowance number.
 - **No foreign currency.** ECPay's B2C API has no such field, so a non-TWD `currency` raises `UnsupportedError` rather than being filed as TWD.
 - **A taxable invoice is 5%.** ECPay fixes the rate by tax type, so another `tax_rate` raises `UnsupportedError`.

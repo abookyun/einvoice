@@ -180,7 +180,7 @@ All paths start with `/B2CInvoice/`. Page 49890 is an older copy of the issue pa
 
 All `provider_options` keys are strings or symbols.
 
-**Missing invoice date.** `void`, `allowance` and a query by number need the invoice date. If the reference has no `invoice_datetime` but has `order_id`, the adapter queries `GetIssue` by `RelateNumber` first and takes `IIS_Create_Date`. Otherwise it raises `ValidationError` for `invoice_datetime`. A plain invoice number is not enough. If the query fails, the adapter raises `ProviderError` with `LOOKUP_FAILED` ([the unified model](../README.md#the-unified-model)).
+**Missing invoice date.** `void`, `allowance` and a query by number need the invoice date. A query without it goes by `order_id` instead (4.2). For `void` and `allowance`, if the reference has no `invoice_datetime` but has `order_id`, the adapter queries `GetIssue` by `RelateNumber` first and takes `IIS_Create_Date`. If that query fails, the adapter raises `ProviderError` with `LOOKUP_FAILED` ([the unified model](../README.md#the-unified-model)). Without `order_id`, it raises `ValidationError` for `invoice_datetime`. A plain invoice number is not enough.
 
 **Missing invoice number on void allowance.** `AllowanceInvalid` needs `InvoiceNo`. A plain allowance number has none, so it raises `ValidationError` for `invoice_number`.
 
@@ -192,7 +192,7 @@ All `provider_options` keys are strings or symbols.
 | --- | --- | --- |
 | `order_id` | `RelateNumber` | Max 50 |
 | `buyer.ubn` | `CustomerIdentifier` | B2B only. Empty for B2C |
-| `buyer.name`, `.address`, `.phone`, `.email` | `CustomerName`, `CustomerAddr`, `CustomerPhone`, `CustomerEmail` | Empty string when missing. A printed invoice (`Print` `1`) needs the name and the address `[doc 7896]` |
+| `buyer.name`, `.address`, `.phone`, `.email` | `CustomerName`, `CustomerAddr`, `CustomerPhone`, `CustomerEmail` | Empty string when missing. A printed invoice (`Print` `1`) needs the name and the address `[doc 7896]`, and an email or a phone (5.1) |
 | `carrier.type` | `CarrierType` | `MEMBER` `1`, `CITIZEN_CERTIFICATE` `2`, `MOBILE_BARCODE` `3` |
 | `carrier.code` | `CarrierNum` | Empty for `MEMBER`. ECPay builds the carrier from the email or phone |
 | `donation.npoban` | `LoveCode` | And `Donation` `1`. A carrier can be sent with it (4.7) |

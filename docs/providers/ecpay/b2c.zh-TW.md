@@ -182,7 +182,7 @@ adapter 另外對應了兩個檢查：`/B2CInvoice/CheckBarcode`（手機條碼�
 
 `provider_options` 的鍵可以是字串或 symbol。
 
-**缺少發票日期時。** `void`、`allowance` 和用號碼查詢都需要發票日期。如果 reference 沒有 `invoice_datetime`，但有 `order_id`，adapter 會先用 `RelateNumber` 呼叫 `GetIssue`，取得 `IIS_Create_Date`。否則丟出 `ValidationError`，指出缺少 `invoice_datetime`。只給發票號碼是不夠的。查詢失敗時，adapter 丟出帶有 `LOOKUP_FAILED` 的 `ProviderError`（[unified model](../README.zh-TW.md#unified-model)）。
+**缺少發票日期時。** `void`、`allowance` 和用號碼查詢都需要發票日期。查詢沒有日期時，改用 `order_id` 查詢（4.2）。`void` 和 `allowance` 的 reference 沒有 `invoice_datetime`，但有 `order_id` 時，adapter 會先用 `RelateNumber` 呼叫 `GetIssue`，取得 `IIS_Create_Date`。這個查詢失敗時，adapter 丟出帶有 `LOOKUP_FAILED` 的 `ProviderError`（[unified model](../README.zh-TW.md#unified-model)）。沒有 `order_id` 時，丟出 `ValidationError`，指出缺少 `invoice_datetime`。只給發票號碼是不夠的。
 
 **作廢折讓缺少發票號碼時。** `AllowanceInvalid` 需要 `InvoiceNo`。只給折讓單號時沒有這個值，所以丟出 `ValidationError`，指出缺少 `invoice_number`。
 
@@ -194,7 +194,7 @@ adapter 另外對應了兩個檢查：`/B2CInvoice/CheckBarcode`（手機條碼�
 | --- | --- | --- |
 | `order_id` | `RelateNumber` | 最多 50 |
 | `buyer.ubn` | `CustomerIdentifier` | 只有 B2B 才送。B2C 為空 |
-| `buyer.name`、`.address`、`.phone`、`.email` | `CustomerName`、`CustomerAddr`、`CustomerPhone`、`CustomerEmail` | 沒有時送空字串。列印的發票（`Print` 為 `1`）需要姓名和地址 `[doc 7896]` |
+| `buyer.name`、`.address`、`.phone`、`.email` | `CustomerName`、`CustomerAddr`、`CustomerPhone`、`CustomerEmail` | 沒有時送空字串。列印的發票（`Print` 為 `1`）需要姓名和地址 `[doc 7896]`，以及 email 或電話（5.1） |
 | `carrier.type` | `CarrierType` | `MEMBER` 為 `1`、`CITIZEN_CERTIFICATE` 為 `2`、`MOBILE_BARCODE` 為 `3` |
 | `carrier.code` | `CarrierNum` | `MEMBER` 時為空，ECPay 用 email 或手機建立載具 |
 | `donation.npoban` | `LoveCode` | 同時送 `Donation` `1`。可以同時帶載具（4.7） |
