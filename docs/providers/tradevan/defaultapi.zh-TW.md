@@ -551,7 +551,9 @@ type `I` 的回應 `[readme]`：
 | `Success` 為 `E`，訊息提到帳號、密碼或金鑰 | `AuthError` | `CREDENTIALS_INVALID` |
 | `Success` 為 `E`，其他訊息 | `ProviderError` | |
 | `failReason` 為 `duplicated`，或包含「重複」／「重覆」 | `ConflictError` | `DUPLICATE_ORDER` |
+| 訊息是「作廢……不能」，例如「已作廢，不能折讓」。比「已作廢」先檢查 | `ConflictError` | `ALLOWANCE_BLOCKED_BY_VOID` |
 | 訊息包含「已作廢」／「已被作廢」 | `ConflictError` | `ALREADY_VOIDED` |
+| 訊息包含「已折讓」／「折讓過」 | `ConflictError` | `VOID_BLOCKED_BY_ALLOWANCE` |
 | 訊息包含「查無」／「不存在」／not found | `NotFoundError` | |
 | 其他 | `ProviderError` | |
 

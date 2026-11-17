@@ -147,6 +147,13 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Rules do
         expect(errors_on(data.merge("total" => "100"), "total")).to be_empty
       end
 
+      it "compares the total with the item totals as decimals" do
+        halves = data.merge("total" => "1", "itemList" => [data["itemList"].first.merge("itemTotal" => "0.5"),
+                                                          data["itemList"].first.merge("itemTotal" => "0.5")])
+        expect(errors_on(halves, "total")).to be_empty
+        expect(errors_on(halves.merge("total" => "1.4"), "total")).to include(/sum of itemTotal \(1\)/)
+      end
+
       it "rejects a total that does not match the sum of item totals" do
         expect(errors_on(data.merge("total" => "999"), "total")).to include(/sum of itemTotal/)
       end

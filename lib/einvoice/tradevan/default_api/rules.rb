@@ -259,10 +259,11 @@ module Einvoice
 
           def total_matches_items
             items = Array(@data["itemList"]).map { |item| Rules.stringify(item) }
-            sum = items.sum { |item| item["itemTotal"].to_s.to_i }
-            return if @data["total"].to_s.to_i == sum
+            # Compared as decimals: "0.5" + "0.5" is "1".
+            sum = items.sum { |item| item["itemTotal"].to_s.to_r }
+            return if @data["total"].to_s.to_r == sum
 
-            add("total", "must equal the sum of itemTotal (#{sum})")
+            add("total", "must equal the sum of itemTotal (#{Number.plain(sum)})")
           end
 
           private

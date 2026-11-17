@@ -549,7 +549,9 @@ The classification. Everything in it is a guess until real failure texts are kno
 | `Success` `E`, the text mentions the account, password or key | `AuthError` | `CREDENTIALS_INVALID` |
 | `Success` `E`, other text | `ProviderError` | |
 | `failReason` `duplicated`, or contains 重複 / 重覆 | `ConflictError` | `DUPLICATE_ORDER` |
+| Text says 作廢 … 不能, for example 已作廢，不能折讓. Checked before 已作廢 | `ConflictError` | `ALLOWANCE_BLOCKED_BY_VOID` |
 | Text contains 已作廢 / 已被作廢 | `ConflictError` | `ALREADY_VOIDED` |
+| Text contains 已折讓 / 折讓過 | `ConflictError` | `VOID_BLOCKED_BY_ALLOWANCE` |
 | Text contains 查無 / 不存在 / not found | `NotFoundError` | |
 | anything else | `ProviderError` | |
 

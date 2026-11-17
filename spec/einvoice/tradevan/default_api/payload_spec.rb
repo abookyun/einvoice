@@ -90,6 +90,22 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Payload do
       expect(rules.issue_errors(data)).to eq({})
     end
 
+    it "sends the carrier with a donation, as the schema allows both" do
+      data = build(issue_input(donation: { npoban: "168001" }))
+
+      expect(data).to include("donate" => "Y", "donationUnit" => "168001", "carrierType" => "3J0002",
+                              "carrierId" => "/ABC1234")
+      expect(rules.issue_errors(data)).to eq({})
+    end
+
+    it "cuts a long B2B name to 30 characters for receiverName only" do
+      name = "測" * 40
+      data = build(issue_input(**b2b, buyer: { name: name, ubn: "53538851" }))
+
+      expect(data).to include("buyerTitle" => name, "receiverName" => "測" * 30)
+      expect(rules.issue_errors(data)).to eq({})
+    end
+
     it "sends a donation instead of a carrier" do
       data = build(issue_input(carrier: nil, donation: { npoban: "168001" }))
 

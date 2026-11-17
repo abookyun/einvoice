@@ -128,8 +128,10 @@ module Einvoice
           buyer = parsed.buyer
           return {} unless buyer
 
+          # receiverName takes 30 characters, buyerTitle 60. A longer B2B name
+          # is cut for receiverName only.
           fields = {
-            "receiverName" => buyer.name,
+            "receiverName" => buyer.name && buyer.name[0, 30],
             "receiverAddrRoad" => buyer.address,
             "receiverEmail" => buyer.email,
             "receiverMobile" => buyer.phone
@@ -141,15 +143,18 @@ module Einvoice
           fields.reject { |_, value| value.to_s.empty? }
         end
 
+        # A carrier goes with a donation too: the schema allows both (5.1).
         def donation_and_carrier(parsed, settings)
-          return { "donate" => "Y", "donationUnit" => parsed.donation.npoban } if parsed.donation
-
           carrier = parsed.carrier
-          # With donate "N", the 1.x rules ask for a carrier. A B2B invoice
-          # without a carrier therefore leaves donate out.
-          return {} if carrier.nil? && parsed.resolved_category == InvoiceCategory::B2B
+          if parsed.donation
+            fields = { "donate" => "Y", "donationUnit" => parsed.donation.npoban }
+          else
+            # With donate "N", the 1.x rules ask for a carrier. A B2B invoice
+            # without a carrier therefore leaves donate out.
+            return {} if carrier.nil? && parsed.resolved_category == InvoiceCategory::B2B
 
-          fields = { "donate" => "N" }
+            fields = { "donate" => "N" }
+          end
           return fields unless carrier
 
           code = carrier_code(parsed)
