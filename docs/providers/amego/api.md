@@ -324,7 +324,7 @@ Mapping (inferred):
 
 | `invoice_type` | Unified `InvoiceStatus` |
 | --- | --- |
-| `C0401`, `A0401`, `A0101`, `A0102` | `ALLOWANCE` when `allowance` has an entry that is not voided (`D0401` / `G0401`, not `D0501` / `G0501`), else `ISSUED` |
+| `C0401`, `A0401`, `A0101`, `A0102` | `ALLOWANCE` when `allowance` has an entry that is not voided (`D0401`, `G0401`, `B0401`, `B0101` or `B0102`, not `D0501` / `G0501`), else `ISSUED` |
 | `C0501`, `A0501`, `A0201`, `A0202` | `VOIDED` |
 | `C0701` (cancelled) | `nil` |
 | `A0301`, `A0302` (rejected) | `nil` |
@@ -551,7 +551,7 @@ Common codes:
 | `18` | Database connection failed | `ProviderError` | |
 | `19` | Company suspended | `AuthError` | `ACCOUNT_SUSPENDED` |
 | `20` | `data` is not JSON | `ValidationError` | |
-| `21` | Too many users, try later | `NetworkError` | `RATE_LIMITED` |
+| `21` | Too many users, try later | `ProviderError` | `RATE_LIMITED` |
 | `22` | API access not applied for | `AuthError` | `NOT_ENROLLED` |
 | `23` | This API takes an array | `ValidationError` | |
 | `51` | Past the 180-day query limit | `ProviderError` | |

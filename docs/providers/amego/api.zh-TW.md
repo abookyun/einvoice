@@ -326,7 +326,7 @@ core 的 `tax_breakdown` 提供這些總計：`taxable_amount`、`tax_free_amoun
 
 | `invoice_type` | Unified `InvoiceStatus` |
 | --- | --- |
-| `C0401`、`A0401`、`A0101`、`A0102` | `allowance` 裡有尚未作廢的折讓（`D0401` / `G0401`，不是 `D0501` / `G0501`）時為 `ALLOWANCE`，否則為 `ISSUED` |
+| `C0401`、`A0401`、`A0101`、`A0102` | `allowance` 裡有尚未作廢的折讓（`D0401`、`G0401`、`B0401`、`B0101` 或 `B0102`，不是 `D0501` / `G0501`）時為 `ALLOWANCE`，否則為 `ISSUED` |
 | `C0501`、`A0501`、`A0201`、`A0202` | `VOIDED` |
 | `C0701`（註銷） | `nil` |
 | `A0301`、`A0302`（退回） | `nil` |
@@ -553,7 +553,7 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 | `18` | 資料庫連線失敗 | `ProviderError` | |
 | `19` | 公司已停用 | `AuthError` | `ACCOUNT_SUSPENDED` |
 | `20` | `data` 不是 JSON | `ValidationError` | |
-| `21` | 使用人數過多，請稍後再試 | `NetworkError` | `RATE_LIMITED` |
+| `21` | 使用人數過多，請稍後再試 | `ProviderError` | `RATE_LIMITED` |
 | `22` | 尚未申請 API | `AuthError` | `NOT_ENROLLED` |
 | `23` | 這個 API 需要陣列 | `ValidationError` | |
 | `51` | 超過 180 天查詢期限 | `ProviderError` | |

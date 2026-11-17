@@ -37,12 +37,12 @@ module Einvoice
         # f0501
         3_050_111 => [:validation, nil],
         3_050_113 => [:validation, nil],
-        3_050_121 => [:conflict, nil],                    # still being issued
+        3_050_121 => [:conflict, Reason::RETRY_LATER],                # still being issued
         3_050_122 => [:conflict, Reason::ALREADY_VOIDED],
         3_050_123 => [:conflict, nil],                    # already cancelled (註銷)
         3_050_125 => [:not_found, nil],
         3_050_126 => [:conflict, Reason::PAST_DEADLINE],
-        3_050_131 => [:conflict, nil],                    # a queued change is waiting
+        3_050_131 => [:conflict, Reason::RETRY_LATER],                # a queued change is waiting
         3_050_141 => [:conflict, Reason::VOID_BLOCKED_BY_ALLOWANCE],
         # g0401
         4_040_145 => [:validation, nil],
@@ -58,7 +58,7 @@ module Einvoice
         4_050_132 => [:conflict, Reason::ALREADY_VOIDED],
         4_050_134 => [:not_found, nil],
         4_050_135 => [:conflict, Reason::PAST_DEADLINE],
-        4_050_141 => [:conflict, nil],                    # a queued change is waiting
+        4_050_141 => [:conflict, Reason::RETRY_LATER],                # a queued change is waiting
 
         9_000_111 => [:validation, nil],                  # barcode empty
         9_000_112 => [:validation, nil]                   # barcode format wrong

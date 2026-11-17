@@ -9,11 +9,14 @@ RSpec.describe Einvoice::Amego::Errors do
       71 => [:not_found, nil],
       3_040_111 => [:number_exhausted, nil],
       3_040_171 => [:conflict, Einvoice::Reason::DUPLICATE_ORDER],
+      3_050_121 => [:conflict, Einvoice::Reason::RETRY_LATER],
       3_050_122 => [:conflict, Einvoice::Reason::ALREADY_VOIDED],
+      3_050_131 => [:conflict, Einvoice::Reason::RETRY_LATER],
       3_050_141 => [:conflict, Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE],
       4_040_153 => [:conflict, Einvoice::Reason::ALLOWANCE_BLOCKED_BY_VOID],
       4_040_161 => [:conflict, Einvoice::Reason::DUPLICATE_ALLOWANCE],
-      4_050_134 => [:not_found, nil]
+      4_050_134 => [:not_found, nil],
+      4_050_141 => [:conflict, Einvoice::Reason::RETRY_LATER]
     }.each do |code, expected|
       it "maps #{code} to #{expected.inspect}" do
         expect(described_class.classify(code)).to eq(expected)

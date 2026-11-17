@@ -41,11 +41,12 @@ RSpec.describe "Amego live API", :live do
     }.merge(overrides)
   end
 
-  # A change waits in Amego's queue (3050121, 3050131). Retry a few times.
+  # A change waits in Amego's queue (3050121, 3050131, 4050141), which the
+  # adapter reports as RETRY_LATER. Retry a few times.
   def retry_queued(attempts: 6, wait: 5)
     yield
   rescue Einvoice::ConflictError => e
-    raise unless %w[3050121 3050131 4050141].include?(e.raw_code) && (attempts -= 1).positive?
+    raise unless e.reason == Einvoice::Reason::RETRY_LATER && (attempts -= 1).positive?
 
     sleep wait
     retry
