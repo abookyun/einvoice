@@ -268,7 +268,7 @@ Result: `allowance_number` from `AllowanceNo`, `cancel_datetime` `nil`.
 | Unified | ezPay | Rule or default |
 | --- | --- | --- |
 | `invoice.number` and `invoice.random_code` | `SearchType` `0`, `InvoiceNumber`, `RandomNum` | Used when both are present |
-| `invoice.order_id` and `invoice.total_amount` | `SearchType` `1`, `MerchantOrderNo`, `TotalAmt` | |
+| `invoice.order_id` and `invoice.total_amount` | `SearchType` `1`, `MerchantOrderNo`, `TotalAmt` | Not mapped. A reference without a number raises `UnsupportedError` (4.6) |
 
 Result:
 

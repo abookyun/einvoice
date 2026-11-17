@@ -12,7 +12,7 @@ RSpec.describe Einvoice::EzPay::Errors do
       "LIB10003" => [:conflict, Einvoice::Reason::DUPLICATE_ORDER],
       "LIB10005" => [:conflict, Einvoice::Reason::ALREADY_VOIDED],
       "LIB10007" => [:conflict, Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE],
-      "LIB10009" => [:conflict, nil],
+      "LIB10009" => [:conflict, Einvoice::Reason::RETRY_LATER],
       "IAI10002" => [:provider, nil],
       "XYZ00000" => [:provider, nil]
     }.each do |code, expected|

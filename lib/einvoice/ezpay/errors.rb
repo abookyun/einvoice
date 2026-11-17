@@ -46,7 +46,7 @@ module Einvoice
         "LIB10005" => [:conflict, Reason::ALREADY_VOIDED],
         "LIB10007" => [:conflict, Reason::VOID_BLOCKED_BY_ALLOWANCE],
         "LIB10008" => [:conflict, Reason::PAST_DEADLINE],
-        "LIB10009" => [:conflict, nil]                         # not uploaded yet, cannot void
+        "LIB10009" => [:conflict, Reason::RETRY_LATER]         # not uploaded yet, cannot void
       }.freeze
 
       # Guesses for the cases the code list does not cover. On an allowance,

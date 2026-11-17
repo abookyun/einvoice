@@ -270,7 +270,7 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 | Unified | ezPay | 規則或預設值 |
 | --- | --- | --- |
 | `invoice.number` 和 `invoice.random_code` | `SearchType` `0`、`InvoiceNumber`、`RandomNum` | 兩者都有時使用 |
-| `invoice.order_id` 和 `invoice.total_amount` | `SearchType` `1`、`MerchantOrderNo`、`TotalAmt` | |
+| `invoice.order_id` 和 `invoice.total_amount` | `SearchType` `1`、`MerchantOrderNo`、`TotalAmt` | 沒有對應。reference 沒有發票號碼時丟出 `UnsupportedError`（4.6） |
 
 結果：
 
