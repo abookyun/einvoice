@@ -178,6 +178,18 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
       expect { client.request("post/issue", {}) }.to raise_error(Einvoice::AuthError)
     end
 
+    it "lets the HTTP status decide for a Success E without readable text" do
+      [nil, "", "  ", 42].each do |message|
+        respond_with({ "Success" => "E", "Message" => message }, 503)
+        expect { client.request("post/issue", {}) }.to raise_error(Einvoice::NetworkError)
+
+        respond_with({ "Success" => "E", "Message" => message }, 200)
+        expect { client.request("post/issue", {}) }.to raise_error(Einvoice::ProviderError) { |error|
+          expect(error.raw_code).to eq("E")
+        }
+      end
+    end
+
     it "raises NetworkError when the connection fails" do
       stub_request(:any, /tradevan\.test/).to_timeout
 

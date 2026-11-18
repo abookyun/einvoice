@@ -120,7 +120,7 @@ module Einvoice
           case envelope["Success"]
           when "Y" then message(envelope, response)
           when "N" then raise_failure(envelope, response)
-          when "E" then raise_transport(envelope)
+          when "E" then raise_transport(envelope, response)
           else
             raise ProviderError.new("Tradevan returned an unknown Success value: " \
                                     "#{envelope['Success'].inspect}", provider: PROVIDER, raw: envelope)
@@ -143,9 +143,12 @@ module Einvoice
           raise_business(reason, result)
         end
 
-        # +Success: "E"+ carries a plain text Message.
-        def raise_transport(envelope)
-          message = envelope["Message"].to_s
+        # +Success: "E"+ carries a plain text Message. Without readable text,
+        # the envelope tells nothing, so HTTP 429 and 5xx decide.
+        def raise_transport(envelope, response)
+          message = envelope["Message"]
+          raise_for_status!(response) unless message.is_a?(String) && !message.strip.empty?
+          message = message.to_s
           code, reason = Errors.classify_transport(message)
           raise Einvoice::Error.for(
             code, message.empty? ? "Tradevan transport error" : message,
