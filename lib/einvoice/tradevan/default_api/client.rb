@@ -49,7 +49,7 @@ module Einvoice
         # with +post/+ is sent as POST, everything else as GET.
         def request(path, params)
           v = Crypto.encode_params(params, acnt: @acnt, acntp: @acntp, key1: @key1, key2: @key2)
-          read(send_request(path, v))
+          read(*send_request(path, v))
         end
 
         # Raise unless the inner status field (+issueStatus+, +voidStatus+) is
@@ -71,7 +71,8 @@ module Einvoice
           http.use_ssl = uri.scheme == "https"
           http.open_timeout = @timeout
           http.read_timeout = @timeout
-          parse(http.request(build_request(path, uri)))
+          response = http.request(build_request(path, uri))
+          [parse(response), response]
         rescue *Error::NETWORK_ERRORS => e
           raise NetworkError.new("Tradevan request failed: #{e.message}", provider: PROVIDER, cause: e)
         end
@@ -110,15 +111,15 @@ module Einvoice
           raise error if error
         end
 
-        def read(envelope)
+        def read(envelope, response)
           unless envelope.is_a?(Hash)
             raise ProviderError.new("Tradevan returned an unexpected envelope", provider: PROVIDER,
                                                                                 raw: envelope)
           end
 
           case envelope["Success"]
-          when "Y" then Crypto.decrypt_message(envelope["Message"], @key1)
-          when "N" then raise_failure(envelope)
+          when "Y" then message(envelope, response)
+          when "N" then raise_failure(envelope, response)
           when "E" then raise_transport(envelope)
           else
             raise ProviderError.new("Tradevan returned an unknown Success value: " \
@@ -127,8 +128,17 @@ module Einvoice
         end
 
         # +Success: "N"+ carries an encrypted Message, like a success does.
-        def raise_failure(envelope)
-          result = Crypto.decrypt_message(envelope["Message"], @key1)
+        # The decrypted +Message+. When it cannot be read, the envelope tells
+        # nothing, so HTTP 429 and 5xx decide, as for any other body.
+        def message(envelope, response)
+          Crypto.decrypt_message(envelope["Message"], @key1)
+        rescue ProviderError
+          raise_for_status!(response)
+          raise
+        end
+
+        def raise_failure(envelope, response)
+          result = message(envelope, response)
           reason = result.is_a?(Hash) ? result["failReason"].to_s : ""
           raise_business(reason, result)
         end

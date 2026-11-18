@@ -145,6 +145,24 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
       expect { client.request("post/issue", {}) }.to raise_error(Einvoice::NetworkError, /HTTP 503/)
     end
 
+    it "lets HTTP 5xx decide when the Message cannot be decrypted" do
+      respond_with({ "Success" => "Y", "Message" => "not a cipher" }, 503)
+      expect { client.request("post/issue", {}) }.to raise_error(Einvoice::NetworkError, /HTTP 503/)
+
+      respond_with({ "Success" => "N", "Message" => nil }, 502)
+      expect { client.request("post/issue", {}) }.to raise_error(Einvoice::NetworkError, /HTTP 502/)
+    end
+
+    it "keeps a ProviderError for a Message that cannot be decrypted on HTTP 200" do
+      respond_with({ "Success" => "Y", "Message" => "not a cipher" }, 200)
+      expect { client.request("post/issue", {}) }.to raise_error(Einvoice::ProviderError)
+    end
+
+    it "keeps a readable failReason on any HTTP status" do
+      respond_with({ "Success" => "N", "Message" => encrypted("failReason" => "duplicated") }, 500)
+      expect { client.request("post/issue", {}) }.to raise_error(Einvoice::ConflictError)
+    end
+
     it "raises NetworkError with RATE_LIMITED for HTTP 429" do
       respond_with("Too Many Requests", 429)
       expect { client.request("post/issue", {}) }
