@@ -32,6 +32,7 @@ Each item says what is wrong, where, and what it would take. Items under "Decide
 
 - **Query or fragment:** `Redaction.base_url!` accepts `https://host/gateway?region=tw`. A client that appends its path builds `/gateway?region=tw/DEFAULTAPI/...`, and the request goes to the wrong path. The check should refuse a query and a fragment. It lives in the core, so it changes every client.
 - **Frozen:** the Tradevan client freezes `base_url` (#43), so a caller cannot change it after the checks. The ECPay, Amego and ezPay clients do not.
+- **Status lost when the body fails:** every client calls `http.request` and reads the body in one step. When the headers arrive but reading the body fails, for example a read timeout, the error is a plain `NetworkError`. The HTTP status is lost, so an HTTP 429 does not get `RATE_LIMITED`. Read the status before the body, and keep it in the error. Found by CodeRabbit on #43.
 - **Found by:** CodeRabbit, in the review of the Tradevan adapter (#43). Fix it with item 3.
 
 ## Decide first
