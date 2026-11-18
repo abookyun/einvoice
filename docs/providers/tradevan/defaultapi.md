@@ -192,7 +192,7 @@ The allowance takes the invoice date from the reference, or from the same query.
 | `tax_rate` | (none) | Not sent. A taxable invoice with a rate other than `0.05`: `UnsupportedError` |
 | `items[]` | `itemList` | See below |
 | `remark` | (none) | `mainRemark` exists only for type `G`. Dropped |
-| `price_mode` | (none) | Not sent. `itemTotal` includes tax, so every price mode is sent with tax (4.3) |
+| `price_mode` | (none) | Not sent. `itemTotal` includes tax, so every price mode is sent with tax. Line totals with tax that do not add up to the whole-TWD total: `UnsupportedError` (4.3) |
 | `currency` | (none) | Not TWD: `UnsupportedError` |
 
 Items:
@@ -211,7 +211,7 @@ Result:
 
 | Unified | From |
 | --- | --- |
-| `invoice_number` | `invoiceNumber` |
+| `invoice_number` | `invoiceNumber`. Empty: `ProviderError`, because Tradevan may have issued the invoice but the reference cannot use it |
 | `invoice_datetime` | `invoiceDate` and `invoiceTime`, UTC+8 |
 | `random_code` | `checkNumber` |
 | `order_id`, `total_amount` | The input |
@@ -268,14 +268,14 @@ Result, from `searchInvoiceDetail` `[readme]`:
 | Unified | From |
 | --- | --- |
 | `invoice_number` | `invoiceNumber` |
-| `invoice_datetime` | `invoiceDate`, `invoiceTime` |
+| `invoice_datetime` | `invoiceDate`, `invoiceTime`. Missing: `nil`. Not a valid date or time: `ProviderError` |
 | `random_code` | `checkNumber` |
-| `order_id` | `saleIdentifier` without the prefix |
+| `order_id` | `saleIdentifier` without the prefix. `nil` when the prefix is not this adapter's, for example for an invoice the 1.x client issued |
 | `status` | See 4.4 |
 | `amount` | `sales = exclusiveAmount`, `tax = tax`, `total = total` |
 | `buyer` | `receiverName`, `receiverAddr`, `receiverPhone`. No email or 統一編號 in the response |
 | `items` | `detailList[]`: `productName`, `qty`, `price`, `total`, `taxType` |
-| `tax_type` | The items' `taxType`. Items with different types: `MIXED` |
+| `tax_type` | The items' `taxType`. Two different known types: `MIXED`. A line without a known type: `nil` |
 | `tax_rate` | `0.05` for `TAXABLE` and `MIXED`, `0` for `ZERO_RATED` and `TAX_FREE`. DEFAULTAPI has no rate field, and a taxable line can only be at the general rate (6.1) |
 | `reference` | Built from the fields above |
 
@@ -290,6 +290,7 @@ The unified rules are in [the unified model](../README.md#the-unified-model).
 - In `[readme]`, `itemTotal` 20000 and `tax` 952. The response gives `texclusiveAmount` 19048, `tax` 952, `inclusiveAmount` 20000. So Tradevan splits the tax: `20000 / 1.05 = 19047.6`, rounded to 19048.
 - The adapter sends `itemTotal` with tax, and leaves the item `tax` out. Tradevan computes the split.
 - B2C and B2B use the same fields, with any `price_mode`. `total` is `amount.total_amount`, and `itemTotal` is each line's `gross_amount` from the core's `tax_breakdown`.
+- `total` is whole TWD, but the line totals with tax can add up to a fraction when the amounts are not whole. A tax excluded line of 100.5 gives `itemTotal` 105.5 against a `total` of 106. DEFAULTAPI has no field for that gap, so the adapter raises `UnsupportedError` before the call.
 
 **Allowance.**
 

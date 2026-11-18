@@ -194,7 +194,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | `tax_rate` | （無） | 不送出。應稅發票的稅率不是 `0.05` 時：`UnsupportedError` |
 | `items[]` | `itemList` | 見下方 |
 | `remark` | （無） | `mainRemark` 只有 type `G` 才有，不送出 |
-| `price_mode` | （無） | 不送出。`itemTotal` 含稅，所以任何 price mode 都以含稅金額送出（4.3） |
+| `price_mode` | （無） | 不送出。`itemTotal` 含稅，所以任何 price mode 都以含稅金額送出。各列含稅金額加總不等於整數的總計時：`UnsupportedError`（4.3） |
 | `currency` | （無） | 不是新台幣時丟出 `UnsupportedError` |
 
 品項：
@@ -213,7 +213,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 
 | Unified | 來源 |
 | --- | --- |
-| `invoice_number` | `invoiceNumber` |
+| `invoice_number` | `invoiceNumber`。空白時：`ProviderError`，因為關貿可能已經開立，但 reference 無法使用它 |
 | `invoice_datetime` | `invoiceDate` 和 `invoiceTime`，UTC+8 |
 | `random_code` | `checkNumber` |
 | `order_id`、`total_amount` | 輸入值 |
@@ -270,14 +270,14 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | Unified | 來源 |
 | --- | --- |
 | `invoice_number` | `invoiceNumber` |
-| `invoice_datetime` | `invoiceDate`、`invoiceTime` |
+| `invoice_datetime` | `invoiceDate`、`invoiceTime`。沒有時為 `nil`。日期或時間不合法時：`ProviderError` |
 | `random_code` | `checkNumber` |
-| `order_id` | 去掉前綴的 `saleIdentifier` |
+| `order_id` | 去掉前綴的 `saleIdentifier`。前綴不是這個 adapter 的時為 `nil`，例如 1.x client 開立的發票 |
 | `status` | 見 4.4 |
 | `amount` | `sales = exclusiveAmount`、`tax = tax`、`total = total` |
 | `buyer` | `receiverName`、`receiverAddr`、`receiverPhone`。回應裡沒有 email 和統一編號 |
 | `items` | `detailList[]`：`productName`、`qty`、`price`、`total`、`taxType` |
-| `tax_type` | 品項的 `taxType`。品項的稅別不同時為 `MIXED` |
+| `tax_type` | 品項的 `taxType`。有兩種不同的已知稅別時為 `MIXED`。有一列沒有已知稅別時為 `nil` |
 | `tax_rate` | `TAXABLE` 和 `MIXED` 為 `0.05`，`ZERO_RATED` 和 `TAX_FREE` 為 `0`。DEFAULTAPI 沒有稅率欄位，應稅品項只能是一般稅率（6.1） |
 | `reference` | 用上面的欄位組成 |
 
@@ -292,6 +292,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 - `[readme]` 中，`itemTotal` 為 20000，`tax` 為 952。回應給出 `texclusiveAmount` 19048、`tax` 952、`inclusiveAmount` 20000。所以拆稅由關貿處理：`20000 / 1.05 = 19047.6`，四捨五入成 19048。
 - adapter 送出含稅的 `itemTotal`，不送品項的 `tax`。拆稅由關貿計算。
 - B2C 和 B2B 使用同樣的欄位，任何 `price_mode` 都可以。`total` 是 `amount.total_amount`，`itemTotal` 是 core `tax_breakdown` 中每一列的 `gross_amount`。
+- `total` 是整數新台幣，但金額不是整數時，各列的含稅金額加總可能有小數。例如未稅 100.5 的品項，`itemTotal` 是 105.5，`total` 卻是 106。DEFAULTAPI 沒有欄位可以表達這個差距，所以 adapter 會在呼叫前丟出 `UnsupportedError`。
 
 **折讓。**
 

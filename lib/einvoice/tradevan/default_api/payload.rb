@@ -31,6 +31,7 @@ module Einvoice
           types = parsed.items.map { |item| item.tax_type || parsed.tax_type }
           check_tax!(types, parsed.tax_rate)
           breakdown = parsed.tax_breakdown(provider: Client::PROVIDER)
+          check_total!(breakdown)
           sale = sale_identifier(settings, parsed.order_id)
 
           data = header(settings).merge(
@@ -96,10 +97,13 @@ module Einvoice
         end
 
         # The order id back from a +saleIdentifier+ built by {sale_identifier}.
+        # nil for an identifier this adapter did not build, for example one from
+        # the 1.x client: its rest is not an order id, and building it again
+        # from that rest would double the prefix.
         def order_id_from(settings, sale_identifier)
           prefix = sale_identifier(settings, "")
           value = sale_identifier.to_s
-          value.start_with?(prefix) ? value.delete_prefix(prefix) : value
+          value.start_with?(prefix) ? value.delete_prefix(prefix) : nil
         end
 
         def header(settings)
@@ -109,6 +113,20 @@ module Einvoice
             "paperPrintMode" => settings.paper_print_mode,
             "invoiceAlarmMode" => settings.invoice_alarm_mode
           }
+        end
+
+        # +total+ must equal the sum of +itemTotal+ [rules], and +total+ is whole
+        # TWD. With amounts that are not whole, the line totals with tax can add
+        # up to a fraction, for example 100.5 + 5 = 105.5 against a total of 106.
+        # DEFAULTAPI has no field to carry that gap, so such an invoice cannot be
+        # sent.
+        def check_total!(breakdown)
+          sum = breakdown.lines.sum { |line| line.gross_amount.to_r }
+          return if sum == breakdown.total_amount
+
+          raise UnsupportedError.new("Tradevan DEFAULTAPI needs the item totals with tax " \
+                                     "(#{number(sum)}) to equal the whole-TWD total " \
+                                     "(#{breakdown.total_amount})", provider: Client::PROVIDER)
         end
 
         # DEFAULTAPI has no code for a special tax rate (6.1) and no rate

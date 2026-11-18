@@ -90,6 +90,12 @@ module Einvoice
 
           result = @client.request("post/issue", { issueData: data })
           @client.check_status!(result, "issueStatus")
+          # Tradevan may have issued the invoice, so this is not a refusal. But
+          # without a number the reference cannot void or credit it.
+          if result["invoiceNumber"].to_s.empty?
+            raise ProviderError.new("Tradevan reported the issue as done but returned no invoiceNumber",
+                                    provider: name, raw: result)
+          end
 
           IssueInvoiceResult.new(
             invoice_number: result["invoiceNumber"].to_s,
@@ -191,27 +197,31 @@ module Einvoice
           return [sale, date] if sale && (date || !need_date)
 
           found = lookup(reference.number)
-          [sale || found[:sale], date || found[:date]]
+          sale ||= found[:sale]
+          date ||= found[:date]
+          # Only the fields this call needs have to come back.
+          missing = [("saleIdentifier" unless sale), ("invoiceDate" if need_date && !date)].compact
+          if missing.any?
+            raise ProviderError.new("Tradevan needs the invoice's #{missing.join(' and ')}; the invoice found " \
+                                    "lacks it", provider: name, reason: Reason::LOOKUP_FAILED)
+          end
+          [sale, date]
         end
 
         def lookup(number)
           found = begin
             search(number)
           rescue Error => e
-            raise ProviderError.new("Tradevan needs the invoice's saleIdentifier and date; looking them up " \
+            raise ProviderError.new("Tradevan needs the invoice's saleIdentifier or date; looking them up " \
                                     "failed: #{e.message}", provider: name, reason: Reason::LOOKUP_FAILED, cause: e)
           end
-          sale = found.raw["saleIdentifier"].to_s
-          if sale.empty? || found.invoice_datetime.nil?
-            raise ProviderError.new("Tradevan needs the invoice's saleIdentifier and date; the invoice found " \
-                                    "lacks one", provider: name, reason: Reason::LOOKUP_FAILED)
-          end
-          { sale: sale, date: Taipei.date(found.invoice_datetime) }
+          { sale: presence(found.raw["saleIdentifier"]),
+            date: found.invoice_datetime && Taipei.date(found.invoice_datetime) }
         end
 
         def build_query_result(result)
           items = Array(result["detailList"]).map { |row| build_item(row) }
-          tax_type = TaxType.of(items, nil)
+          tax_type = query_tax_type(items)
           QueryInvoiceResult.new(
             invoice_number: result["invoiceNumber"].to_s,
             invoice_datetime: parse_time(result["invoiceDate"], result["invoiceTime"]),
@@ -229,6 +239,17 @@ module Einvoice
             tax_rate: QUERY_RATE[tax_type],
             raw: result
           )
+        end
+
+        # Two different known types make MIXED. Otherwise a line with a missing
+        # or unknown type leaves the invoice's type unknown: it is not a type
+        # of its own.
+        def query_tax_type(items)
+          known = items.map(&:tax_type).compact.uniq
+          return TaxType::MIXED if known.size > 1
+          return nil if known.empty? || items.any? { |item| item.tax_type.nil? }
+
+          known.first
         end
 
         # DEFAULTAPI has no rate field. A taxable line is at the general rate,
@@ -268,13 +289,20 @@ module Einvoice
         end
 
         # "20160425" and "12:34:58" (UTC+8) → Time, or nil when the date is
-        # missing, so that a missing date never reads as "now".
+        # missing, so that a missing date never reads as "now". A date or a
+        # time that is there but not valid is the provider's error.
         def parse_time(date, time)
-          match = /\A(\d{4})(\d{2})(\d{2})\z/.match(date.to_s)
-          return nil unless match
+          return nil if date.to_s.empty?
 
-          hour, minute, second = time.to_s.split(":").map(&:to_i)
-          Time.new(*match.captures.map(&:to_i), hour.to_i, minute.to_i, second.to_i, "+08:00")
+          year, month, day = /\A(\d{4})(\d{2})(\d{2})\z/.match(date.to_s)&.captures&.map(&:to_i)
+          clock = time.to_s.empty? ? "00:00:00" : time.to_s
+          hour, minute, second = /\A(\d{2}):(\d{2}):(\d{2})\z/.match(clock)&.captures&.map(&:to_i)
+          unless year && hour && Date.valid_date?(year, month, day) && hour < 24 && minute < 60 && second < 60
+            raise ProviderError.new("Tradevan returned a date that is not valid: #{date.inspect} #{time.inspect}",
+                                    provider: name)
+          end
+
+          Time.new(year, month, day, hour, minute, second, "+08:00")
         end
       end
     end

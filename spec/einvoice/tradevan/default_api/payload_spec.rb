@@ -161,6 +161,15 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Payload do
       expect(rules.issue_errors(data)).to eq({})
     end
 
+    # 100.5 without tax is 105.5 with tax, but the whole-TWD total is 106.
+    it "refuses item totals with tax that cannot add up to the whole-TWD total" do
+      input = issue_input(**b2b, price_mode: "TAX_EXCLUSIVE",
+                                 items: [{ description: "A", quantity: 1, unit_price: 100.5, amount: 100.5 }],
+                                 amount: { sales_amount: 101, tax_amount: 5, total_amount: 106 })
+
+      expect { build(input) }.to raise_error(Einvoice::UnsupportedError, /\(105\.5\).*\(106\)/)
+    end
+
     it "refuses a taxable rate other than 0.05, which DEFAULTAPI cannot carry" do
       expect { build(issue_input(tax_rate: 0.01)) }
         .to raise_error(Einvoice::UnsupportedError, /0\.05 only/)
@@ -256,8 +265,8 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Payload do
       expect(described_class.order_id_from(settings, "12345678_ABCDE_53b2a44e4b3c")).to eq("53b2a44e4b3c")
     end
 
-    it "returns a saleIdentifier with another prefix as it is" do
-      expect(described_class.order_id_from(settings, "99999999_X_1")).to eq("99999999_X_1")
+    it "gives nil for a saleIdentifier with another prefix" do
+      expect(described_class.order_id_from(settings, "99999999_X_1")).to be_nil
     end
   end
 end

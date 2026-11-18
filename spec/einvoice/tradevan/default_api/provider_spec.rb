@@ -28,6 +28,20 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
     JSON.parse(tradevan.params(index)["issueData"])
   end
 
+  # A Success Y reply to +path+ with +message+, encrypted as Tradevan does.
+  def reply(path, message)
+    body = JSON.generate("Success" => "Y",
+                         "Message" => Einvoice::Tradevan::DefaultAPI::Crypto.encrypt(JSON.generate(message),
+                                                                                     FakeTradevan::KEY1))
+    stub_request(:any, %r{tradevan\.test/DEFAULTAPI/#{path}})
+      .to_return(headers: { "Content-Type" => "application/json" }, body: body)
+  end
+
+  def search_reply(fields)
+    reply("get/searchInvoiceDetail", { "invoiceNumber" => "GX38551078", "invoiceDate" => "20160425",
+                                       "invoiceTime" => "12:00:00", "total" => "1" }.merge(fields))
+  end
+
   it "identifies itself and declares what it can do" do
     expect(provider.name).to eq("tradevan")
     expect(provider.api_version).to eq("defaultapi")
@@ -96,6 +110,12 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
       expect(issue_data.keys - Einvoice::Tradevan::DefaultAPI::Rules::ISSUE_FIELDS).to be_empty
       expect(issue_data["itemList"].flat_map(&:keys) - Einvoice::Tradevan::DefaultAPI::Rules::ITEM_FIELDS)
         .to be_empty
+    end
+
+    it "raises ProviderError when Tradevan reports success but returns no invoice number" do
+      reply("post/issue", "issueStatus" => "Y", "invoiceNumber" => "")
+
+      expect { provider.issue(issue_input) }.to raise_error(Einvoice::ProviderError, /no invoiceNumber/)
     end
 
     it "issues a B2B invoice, and its reference keeps the buyer's 統一編號" do
@@ -168,9 +188,17 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
                              items: [{ description: "A", quantity: 1, unit_price: 100, amount: 100 }],
                              amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 },
                              price_mode: "TAX_INCLUSIVE" })
-      end.to raise_error(Einvoice::ProviderError, /lacks one/) { |error|
+      end.to raise_error(Einvoice::ProviderError, /invoiceDate/) { |error|
         expect(error.reason).to eq(Einvoice::Reason::LOOKUP_FAILED)
       }
+    end
+
+    it "voids with a saleIdentifier from the lookup, even when the invoice found has no date" do
+      search_reply("invoiceNumber" => "GX38551078", "saleIdentifier" => "12345678_ABCDE_x")
+
+      expect { provider.void({ invoice: "GX38551078", reason: "客戶取消" }) }
+        .to raise_error(Einvoice::NotFoundError)
+      expect(JSON.parse(tradevan.params["voidData"])["saleIdentifier"]).to eq("12345678_ABCDE_x")
     end
 
     it "refuses to void an invoice that has an allowance" do
@@ -208,7 +236,8 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
                                                       "itemExclude" => "95", "tax" => "5", "itemTotal" => "100")
       expect(tradevan.requests.map { |request| request[:path] }).to eq(%w[post/issue post/issue])
       expect(result.allowance_number).to match(/\AABCDE\d{11}\z/)
-      expect(result.allowance_date).to eq(Einvoice::Taipei.today)
+      # The date Tradevan answered, not the clock again: midnight may pass.
+      expect(result.allowance_date).to eq(Date.strptime(result.raw["allowanceDate"], "%Y%m%d"))
       expect(result.invoice_number).to eq(issued.invoice_number)
       expect(result.total_amount).to eq(100)
     end
@@ -279,12 +308,38 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
                                                  tax_rate: Rational(5, 100))
     end
 
+    it "leaves the tax type unknown when a line has none, and sees MIXED only from two known types" do
+      line = { "productName" => "A", "qty" => "1", "price" => "1", "total" => "1" }
+      search_reply("detailList" => [line.merge("taxType" => "T"), line])
+      expect(provider.query({ invoice: "GX38551078" })).to have_attributes(tax_type: nil, tax_rate: nil)
+
+      search_reply("detailList" => [line.merge("taxType" => "T"), line.merge("taxType" => "O")])
+      expect(provider.query({ invoice: "GX38551078" }).tax_type).to eq(Einvoice::TaxType::MIXED)
+    end
+
+    it "raises ProviderError for a date that is not valid, and reads a missing one as nil" do
+      search_reply("invoiceDate" => "20161325", "invoiceTime" => "12:00:00")
+      expect { provider.query({ invoice: "GX38551078" }) }.to raise_error(Einvoice::ProviderError, /not valid/)
+
+      search_reply("invoiceDate" => "20160230")
+      expect { provider.query({ invoice: "GX38551078" }) }.to raise_error(Einvoice::ProviderError, /not valid/)
+
+      search_reply("invoiceDate" => "")
+      expect(provider.query({ invoice: "GX38551078" }).invoice_datetime).to be_nil
+    end
+
+    it "gives no order id for a saleIdentifier that this adapter did not build" do
+      search_reply("saleIdentifier" => "12345678_OLD01_x")
+
+      expect(provider.query({ invoice: "GX38551078" }).order_id).to be_nil
+    end
+
     it "reads the rate of a tax-free invoice as 0" do
       issued = provider.issue(issue_input.merge(tax_type: "TAX_FREE"))
 
-      expect(provider.query({ invoice: issued.reference })).to have_attributes(
-        tax_type: Einvoice::TaxType::TAX_FREE, tax_rate: 0
-      )
+      found = provider.query({ invoice: issued.reference })
+      expect(found).to have_attributes(tax_type: Einvoice::TaxType::TAX_FREE, tax_rate: 0)
+      expect(found.amount).to eq(Einvoice::AmountSummary.new(sales_amount: 20_000, tax_amount: 0, total_amount: 20_000))
     end
 
     # The meaning of status I and V is unknown, so the adapter does not guess.
