@@ -29,6 +29,21 @@ RSpec.describe Einvoice::EzPay::Client do
       .to raise_error(Einvoice::ValidationError, /mode/)
   end
 
+  it "refuses a base_url without https, or with a user and password" do
+    expect { described_class.new(merchant_id: "1", hash_key: key, hash_iv: iv, base_url: "http://ezpay.test") }
+      .to raise_error(Einvoice::ValidationError, /https/)
+    expect { described_class.new(merchant_id: "1", hash_key: key, hash_iv: iv, base_url: "https://u:p@ezpay.test") }
+      .to raise_error(Einvoice::ValidationError, /user or password/)
+    expect(described_class.new(merchant_id: "1", hash_key: key, hash_iv: iv, base_url: "http://localhost:3000").base_url)
+      .to eq("http://localhost:3000")
+  end
+
+  it "hides the HashKey and the HashIV in inspect" do
+    expect(client.inspect).to include("merchant_id=\"3502275\"", "ezpay.test")
+    expect(client.inspect).not_to include(key, iv)
+    expect(client.to_s).to eq(client.inspect)
+  end
+
   describe "#request" do
     it "posts MerchantID_ and the encrypted PostData_, with RespondType, Version and TimeStamp first" do
       respond_with("Status" => "SUCCESS", "Message" => "", "Result" => "{}")

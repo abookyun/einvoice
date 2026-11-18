@@ -29,12 +29,18 @@ module Einvoice
         @hash_key = hash_key.to_s
         @hash_iv = hash_iv.to_s
         @mode = mode
-        @base_url = (base_url || BASE_URL.fetch(mode) do
+        @base_url = Redaction.base_url!(base_url || BASE_URL.fetch(mode) do
           raise ValidationError.new("Unknown ezPay mode: #{mode.inspect}", provider: PROVIDER)
-        end).chomp("/")
+        end, provider: PROVIDER).chomp("/")
         @timeout = timeout
         @clock = clock
       end
+
+      def inspect
+        "#<#{self.class.name} merchant_id=#{@merchant_id.inspect} mode=#{@mode.inspect} " \
+          "base_url=#{@base_url.inspect} hash_key=#{Redaction::FILTERED} hash_iv=#{Redaction::FILTERED}>"
+      end
+      alias to_s inspect
 
       # POST +fields+ to +path+ (for example +"/Api/invoice_issue"+) under the
       # API +version+, and return the parsed +Result+ Hash. A +Status+ other
