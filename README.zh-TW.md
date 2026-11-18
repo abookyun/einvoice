@@ -20,6 +20,8 @@
 
 第二個 adapter **Amego 光貿** 提供五個操作，已經對 Amego 公開的測試帳號驗證過。
 
+**ezPay 簡單行動支付** adapter 目前是實驗性質：它依 ezPay 公開的手冊寫成，還沒有對 ezPay 執行過。
+
 其他加值中心會陸續加入。它們的涵蓋範圍和完整度會不一樣：這些加值中心的文件比較不完整，也沒有公開的測試環境。所以只依文件寫出來的 adapter，在真正上線使用並確認之前，會有一些不確定性。
 
 ## 安裝
@@ -177,6 +179,26 @@ provider = Einvoice::Amego::Provider.new(
 - **載具驗證**：`validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })` 會向 Amego 查詢手機條碼是否已註冊。Amego 只能檢查手機條碼。愛心碼請用 `Einvoice::MOF::DonationCodes`（見下方）。
 - **其他功能**：其他 endpoint 請用 `provider.raw(path, payload)` 呼叫。note 的第 3 節列出了這些 endpoint。
 - 細節和待解問題見 [`docs/providers/amego/api.zh-TW.md`](docs/providers/amego/api.zh-TW.md)。
+
+### ezPay 簡單行動支付（實驗性質）
+
+```ruby
+provider = Einvoice::EzPay::Provider.new(
+  merchant_id: "...",               # 商店代號
+  hash_key: "...", hash_iv: "...",  # 32 and 16 bytes, server-side only
+  mode: :test                       # or :production
+)
+```
+
+- **實驗性質。** ezPay 沒有共用的測試帳號，也沒有人對 ezPay 執行過這個 adapter。它的加密和 `CheckCode` 和 ezPay 手冊的範例逐 byte 吻合。請先用你自己的測試商店測試，再正式使用。
+- **查詢需要隨機碼。** `issue` 或 `query` 回傳的 reference 裡有隨機碼。
+- **折讓需要原發票的訂單編號。** reference 裡有訂單編號。沒有時，adapter 會先用發票號碼查詢。折讓單號由 ezPay 配發，所以不會送出 `allowance_id`。折讓日期是今天（Asia/Taipei）。
+- **查詢分不出有沒有折讓。** ezPay 只說明發票是否已作廢。未作廢的發票，查詢結果的狀態是 `nil`。
+- **作廢要等上傳之後。** ezPay 在隔天早上上傳前一天的發票，上傳前不能作廢。
+- **價格依發票類別決定。** ezPay 要求 B2C 價格含稅，B2B 價格未稅。adapter 從 core 的明細取得價格，所以任何 `price_mode` 都可以。品項數量和單價必須是整數。
+- **不支援**：訂單編號查詢、特種稅率、外幣、B2B 發票的混合稅率，以及載具驗證 API。`tax_rate` 只能是 0 或 0.05。
+- **其他功能**：`provider.raw(path, version, fields)`，例如 `provider.raw("/Api/invoice_touch_issue", "1.0", { ... })`。
+- 細節和待解問題見 [`docs/providers/ezpay/invoice.zh-TW.md`](docs/providers/ezpay/invoice.zh-TW.md)。
 
 ## 財政部查詢
 

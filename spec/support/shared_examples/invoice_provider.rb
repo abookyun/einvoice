@@ -120,7 +120,10 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       expect(result).to be_a(Einvoice::IssueInvoiceResult)
     end
 
-    b2b = { buyer: { ubn: "53538851", name: "測試股份有限公司", email: "b@x.com" },
+    # No carrier: some providers take one on a B2C invoice only. So the
+    # invoice is printed, and the buyer needs an address.
+    b2b = { buyer: { ubn: "53538851", name: "測試股份有限公司", email: "b@x.com", address: "台北市信義區市府路1號" },
+            carrier: nil,
             amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 } }
     mixed = {
       items: [{ description: "商品一", quantity: 1, unit_price: 50, amount: 50, tax_type: "TAXABLE" },
