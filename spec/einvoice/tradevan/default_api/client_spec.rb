@@ -190,6 +190,15 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
       end
     end
 
+    it "does not read a Message that is not text as a credential error" do
+      respond_with({ "Success" => "E", "Message" => { "password" => nil } }, 200)
+
+      expect { client.request("post/issue", {}) }.to raise_error(Einvoice::ProviderError) { |error|
+        expect(error).not_to be_a(Einvoice::AuthError)
+        expect(error.raw).to include("Message" => { "password" => nil })
+      }
+    end
+
     it "raises NetworkError when the connection fails" do
       stub_request(:any, /tradevan\.test/).to_timeout
 

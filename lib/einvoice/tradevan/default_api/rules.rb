@@ -19,6 +19,9 @@ module Einvoice
       # Each check returns a Hash of field name => messages. An empty Hash means
       # the data is valid.
       module Rules
+        # A whole decimal string. String#to_r would read "100oops" as 100.
+        DECIMAL = /\A-?\d+(\.\d+)?\z/
+
         ISSUE_TYPES = %w[I R G H A].freeze
         VOID_TYPES = %w[C I A].freeze
         YES_NO = %w[Y N].freeze
@@ -256,8 +259,6 @@ module Einvoice
           def optional(field, **rule)
             apply(field, **rule) unless Rules.blank?(@data[field])
           end
-
-          DECIMAL = /\A-?\d+(\.\d+)?\z/
 
           def total_matches_items
             items = Array(@data["itemList"]).map { |item| Rules.stringify(item) }

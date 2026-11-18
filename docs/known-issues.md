@@ -4,18 +4,6 @@ This note collects the issues that we found while the adapters went into `2.0.0-
 
 Each item says what is wrong, where, and what it would take. Items under "Decide first" need a decision before anyone writes code.
 
-## Fix before the next release
-
-### 2a. Tradevan reads some bad responses wrongly
-
-- **Where:** `lib/einvoice/tradevan/default_api/client.rb`, `provider.rb` and the query table in `docs/providers/tradevan/defaultapi.md` (both languages).
-- **What:**
-  - A `Success: "E"` envelope whose `Message` is an object, such as `{"password": null}`, on HTTP 200 is turned into a string and matched against the credential pattern. It raises `AuthError`, although Tradevan sent no credential message. The change in #43 that lets the HTTP status decide for an unreadable `Message` caused this.
-  - A `detailList` number such as `"unavailable"` is read as 0, and `"5abc"` as 5. `String#to_r` does not refuse them.
-  - The `tax_type` row of the query table gives both the `MIXED` rule and the `nil` rule. It does not say that two known types make `MIXED` even when another line is unknown. Only the rate is then `nil`.
-- **Fix:** After the HTTP fallback, raise a plain `ProviderError` for a `Message` that is not readable text, and keep the envelope in `raw`. Check each query number with the same decimal pattern as `Rules`, and raise `ProviderError` with the field name. Reword the table row.
-- **Found by:** CodeRabbit, in the fourth review of #43. The adapter has never run against Tradevan, so nobody has seen these responses.
-
 ## Consistency across the adapters
 
 ### 3. Each client has its own HTTP handling

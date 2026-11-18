@@ -144,15 +144,20 @@ module Einvoice
         end
 
         # +Success: "E"+ carries a plain text Message. Without readable text,
-        # the envelope tells nothing, so HTTP 429 and 5xx decide.
+        # the envelope tells nothing, so HTTP 429 and 5xx decide. Otherwise it
+        # is a plain ProviderError: an object such as {"password" => nil} must
+        # not reach the patterns, which would read it as a credential error.
         def raise_transport(envelope, response)
           message = envelope["Message"]
-          raise_for_status!(response) unless message.is_a?(String) && !message.strip.empty?
-          message = message.to_s
+          unless message.is_a?(String) && !message.strip.empty?
+            raise_for_status!(response)
+            raise ProviderError.new("Tradevan returned an error without a readable message",
+                                    provider: PROVIDER, raw_code: "E", raw: envelope)
+          end
+
           code, reason = Errors.classify_transport(message)
           raise Einvoice::Error.for(
-            code, message.empty? ? "Tradevan transport error" : message,
-            provider: PROVIDER, reason: reason, raw_code: "E", raw_message: message, raw: envelope
+            code, message, provider: PROVIDER, reason: reason, raw_code: "E", raw_message: message, raw: envelope
           )
         end
 

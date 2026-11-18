@@ -359,6 +359,18 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
       end
     end
 
+    it "raises ProviderError for a detailList number that is not a decimal, and reads a missing one as nil" do
+      line = { "productName" => "A", "qty" => "1", "price" => "1", "total" => "1", "taxType" => "T" }
+      %w[unavailable 5abc].each do |bad|
+        search_reply("detailList" => [line.merge("qty" => bad)])
+        expect { provider.query({ invoice: "GX38551078" }) }.to raise_error(Einvoice::ProviderError, /qty/)
+      end
+
+      search_reply("detailList" => [line.merge("qty" => "0", "price" => "0.5", "total" => "")])
+      expect(provider.query({ invoice: "GX38551078" }).items.first)
+        .to have_attributes(quantity: 0, unit_price: 0.5, amount: nil)
+    end
+
     it "reads the rate of a mixed invoice without a taxable line as 0" do
       line = { "productName" => "A", "qty" => "1", "price" => "1", "total" => "1" }
       search_reply("detailList" => [line.merge("taxType" => "Z"), line.merge("taxType" => "O")])

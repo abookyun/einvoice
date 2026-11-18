@@ -276,8 +276,8 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | `status` | 見 4.4 |
 | `amount` | `sales = exclusiveAmount`、`tax = tax`、`total = total` |
 | `buyer` | `receiverName`、`receiverAddr`、`receiverPhone`。回應裡沒有 email 和統一編號 |
-| `items` | `detailList[]`：`productName`、`qty`、`price`、`total`、`taxType` |
-| `tax_type` | 品項的 `taxType`。有兩種不同的已知稅別時為 `MIXED`。有一列沒有已知稅別時為 `nil` |
+| `items` | `detailList[]`：`productName`、`qty`、`price`、`total`、`taxType`。沒有數字時為 `nil`。數字不是小數格式時：`ProviderError` |
+| `tax_type` | 品項的 `taxType`。有兩種不同的已知稅別時為 `MIXED`，即使另有一列沒有已知稅別也一樣。其他情況下，有一列沒有已知稅別時為 `nil` |
 | `tax_rate` | 有 `TAXABLE` 的列時為 `0.05`，否則為 `0`，`MIXED` 也一樣。有一列沒有已知稅別時為 `nil`。DEFAULTAPI 沒有稅率欄位，應稅品項只能是一般稅率（6.1） |
 | `reference` | 用上面的欄位組成 |
 

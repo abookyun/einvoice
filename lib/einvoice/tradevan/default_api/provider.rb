@@ -289,17 +289,27 @@ module Einvoice
         def build_item(row)
           InvoiceItem.new(
             description: row["productName"].to_s,
-            quantity: numeric(row["qty"]),
-            unit_price: numeric(row["price"]),
-            amount: numeric(row["total"]),
+            quantity: numeric(row, "qty"),
+            unit_price: numeric(row, "price"),
+            amount: numeric(row, "total"),
             unit: nil,
             tax_type: Payload::TAX_TYPE.invert[row["taxType"].to_s],
             remark: nil
           )
         end
 
-        # DEFAULTAPI sends numbers as strings. Keep whole numbers integral.
-        def numeric(value)
+        # DEFAULTAPI sends numbers as strings. Keep whole numbers integral. A
+        # missing number is nil, not 0. A value that is not a decimal number,
+        # such as "unavailable" or "5abc", is an error: String#to_r would read
+        # it as 0 or 5, a number that Tradevan did not send.
+        def numeric(row, field)
+          value = row[field]
+          return nil if value.nil? || value.to_s.strip.empty?
+          unless value.to_s.match?(Rules::DECIMAL)
+            raise ProviderError.new("Tradevan returned a detailList #{field} that is not a number: #{value.inspect}",
+                                    provider: name, raw: row)
+          end
+
           rational = value.to_s.to_r
           rational.denominator == 1 ? rational.to_i : rational.to_f
         end

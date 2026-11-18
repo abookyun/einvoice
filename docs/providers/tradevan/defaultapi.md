@@ -274,8 +274,8 @@ Result, from `searchInvoiceDetail` `[readme]`:
 | `status` | See 4.4 |
 | `amount` | `sales = exclusiveAmount`, `tax = tax`, `total = total` |
 | `buyer` | `receiverName`, `receiverAddr`, `receiverPhone`. No email or 統一編號 in the response |
-| `items` | `detailList[]`: `productName`, `qty`, `price`, `total`, `taxType` |
-| `tax_type` | The items' `taxType`. Two different known types: `MIXED`. A line without a known type: `nil` |
+| `items` | `detailList[]`: `productName`, `qty`, `price`, `total`, `taxType`. A missing number is `nil`. A number that is not a decimal: `ProviderError` |
+| `tax_type` | The items' `taxType`. Two different known types: `MIXED`, even when another line has no known type. Otherwise, a line without a known type: `nil` |
 | `tax_rate` | `0.05` when a line is `TAXABLE`, else `0`, `MIXED` too. A line without a known type: `nil`. DEFAULTAPI has no rate field, and a taxable line can only be at the general rate (6.1) |
 | `reference` | Built from the fields above |
 
