@@ -270,7 +270,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | Unified | 來源 |
 | --- | --- |
 | `invoice_number` | `invoiceNumber` |
-| `invoice_datetime` | `invoiceDate`、`invoiceTime`。沒有 `invoiceDate` 時為 `nil`。有日期但沒有 `invoiceTime` 時，為當天的午夜。日期或時間不合法時：`ProviderError` |
+| `invoice_datetime` | `invoiceDate`、`invoiceTime`。沒有 `invoiceDate` 時為 `nil`，也不讀取 `invoiceTime`。有日期但沒有 `invoiceTime` 時，為當天的午夜。日期或時間不合法時：`ProviderError` |
 | `random_code` | `checkNumber` |
 | `order_id` | 去掉 `companyUn_orgId_` 前綴的 `saleIdentifier`。這個 adapter 開立的發票，這就是訂單編號（4.2）。其他發票，例如 1.x client 開立的，後段可能是別的值：每個 `saleIdentifier` 都有這個前綴 [rules]，所以 adapter 無法分辨。沒有前綴時為 `nil` |
 | `status` | 見 4.4 |

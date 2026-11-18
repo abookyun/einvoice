@@ -243,6 +243,15 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
       }.merge(overrides))
     end
 
+    # Through the provider, so Rules.issue_errors runs too: type A has no total rule.
+    it "sends allowance line totals that are not whole, with the payload checks on" do
+      allowance(items: [{ description: "A", quantity: 1, unit_price: 100.5, amount: 100.5 }],
+                amount: { sales_amount: 101, tax_amount: 5, total_amount: 106 }, price_mode: "TAX_EXCLUSIVE")
+
+      expect(issue_data).to include("type" => "A", "allowanceInclusiveAmount" => "106")
+      expect(issue_data["itemList"].first).to include("itemTotal" => "105.5")
+    end
+
     it "sends type A with the core's tax split, and reads the allowance number" do
       result = allowance
 
@@ -332,6 +341,22 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
       search_reply("detailList" => [line.merge("taxType" => "T"), line.merge("taxType" => "O")])
       expect(provider.query({ invoice: "GX38551078" }))
         .to have_attributes(tax_type: Einvoice::TaxType::MIXED, tax_rate: Rational(5, 100))
+    end
+
+    it "leaves the rate unknown when a mixed invoice has a line of unknown type" do
+      line = { "productName" => "A", "qty" => "1", "price" => "1", "total" => "1" }
+      search_reply("detailList" => [line.merge("taxType" => "Z"), line.merge("taxType" => "O"), line])
+
+      found = provider.query({ invoice: "GX38551078" })
+      expect(found).to have_attributes(tax_type: Einvoice::TaxType::MIXED, tax_rate: nil)
+      expect(found.reference.tax_rate).to be_nil
+    end
+
+    it "raises ProviderError for a detailList that is not a list of objects" do
+      [[nil], "x", [1]].each do |list|
+        search_reply("detailList" => list)
+        expect { provider.query({ invoice: "GX38551078" }) }.to raise_error(Einvoice::ProviderError, /detailList/)
+      end
     end
 
     it "reads the rate of a mixed invoice without a taxable line as 0" do

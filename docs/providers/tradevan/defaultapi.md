@@ -268,7 +268,7 @@ Result, from `searchInvoiceDetail` `[readme]`:
 | Unified | From |
 | --- | --- |
 | `invoice_number` | `invoiceNumber` |
-| `invoice_datetime` | `invoiceDate`, `invoiceTime`. No `invoiceDate`: `nil`. A date without `invoiceTime`: midnight that day. A date or a time that is not valid: `ProviderError` |
+| `invoice_datetime` | `invoiceDate`, `invoiceTime`. No `invoiceDate`: `nil`, and `invoiceTime` is not read. A date without `invoiceTime`: midnight that day. A date or a time that is not valid: `ProviderError` |
 | `random_code` | `checkNumber` |
 | `order_id` | `saleIdentifier` without the `companyUn_orgId_` prefix. This is the order id for an invoice that this adapter issued (4.2). For another invoice, such as one from the 1.x client, the rest may be something else: every `saleIdentifier` has this prefix [rules], so the adapter cannot tell. Without the prefix: `nil` |
 | `status` | See 4.4 |

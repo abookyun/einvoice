@@ -231,7 +231,7 @@ module Einvoice
         end
 
         def build_query_result(result)
-          items = Array(result["detailList"]).map { |row| build_item(row) }
+          items = query_items(result["detailList"])
           tax_type = query_tax_type(items)
           QueryInvoiceResult.new(
             invoice_number: result["invoiceNumber"].to_s,
@@ -265,11 +265,25 @@ module Einvoice
 
         # DEFAULTAPI has no rate field. A taxable line is at the general rate,
         # the only one its tax letters can carry (6.1). Without a taxable line,
-        # MIXED too, the rate is 0. An unknown type leaves it unknown.
+        # MIXED too, the rate is 0. A line with an unknown type could be taxable,
+        # so it leaves the rate unknown, even when the type is MIXED.
         def query_rate(items, tax_type)
-          return nil if tax_type.nil?
+          return nil if tax_type.nil? || items.any? { |item| item.tax_type.nil? }
 
           items.any? { |item| item.tax_type == TaxType::TAXABLE } ? Payload::TAX_RATE : 0r
+        end
+
+        # Checked here, not in +detail+: a void or an allowance lookup reads
+        # only the sale identifier and the date, so a bad item list cannot
+        # stop it.
+        def query_items(list)
+          return [] if list.nil?
+          unless list.is_a?(Array) && list.all?(Hash)
+            raise ProviderError.new("Tradevan returned a detailList that is not a list of objects",
+                                    provider: name, raw: list)
+          end
+
+          list.map { |row| build_item(row) }
         end
 
         def build_item(row)

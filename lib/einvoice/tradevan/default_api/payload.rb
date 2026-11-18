@@ -65,7 +65,6 @@ module Einvoice
         def allowance(parsed, settings, sale:, invoice_date:, today:)
           breakdown = parsed.tax_breakdown(provider: Client::PROVIDER)
           check_tax!(breakdown.lines.map(&:tax_type), parsed.tax_rate)
-          check_total!(breakdown)
           amount = parsed.amount
           header(settings).merge(
             "type" => "A",
@@ -117,9 +116,11 @@ module Einvoice
           }
         end
 
-        # +total+ must equal the sum of +itemTotal+ [rules], and +total+ is whole
-        # TWD. With amounts that are not whole, the line totals with tax can add
-        # up to a fraction, for example 100.5 + 5 = 105.5 against a total of 106.
+        # For types I, R and G, +total+ must equal the sum of +itemTotal+
+        # [rules], and +total+ is whole TWD. A type A allowance has no +total+
+        # and no such rule, so this check is for an issue only. With amounts
+        # that are not whole, the line totals with tax can add up to a
+        # fraction, for example 100.5 + 5 = 105.5 against a total of 106.
         # DEFAULTAPI has no field to carry that gap, so such an invoice cannot be
         # sent.
         def check_total!(breakdown)
@@ -240,7 +241,7 @@ module Einvoice
         end
 
         # DEFAULTAPI sends every value as a string. Whole numbers lose their ".0".
-        # Whole numbers lose their ".0". Other numbers are written in fixed
+        # Other numbers are written in fixed
         # point with up to 7 decimal places (MIG 表 15-5), never as "1.0e-07".
         # A Float is read through its shortest form, so 0.1 stays 0.1 and not
         # its binary approximation.

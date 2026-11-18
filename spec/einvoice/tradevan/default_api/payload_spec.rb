@@ -253,16 +253,16 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Payload do
       expect(data["itemList"].map { |row| row["serialNumber"] }).to eq(%w[0001 0002 0003])
     end
 
-    it "refuses allowance line totals that cannot add up to the whole-TWD total" do
+    it "sends allowance line totals that are not whole: type A has no total rule" do
       input = Einvoice::Input.allowance({
                                           invoice: "GX38551078", allowance_id: "AL_1",
                                           items: [{ description: "A", quantity: 1, unit_price: 100.5, amount: 100.5 }],
                                           amount: { sales_amount: 101, tax_amount: 5, total_amount: 106 },
                                           price_mode: "TAX_EXCLUSIVE", tax_type: "TAXABLE", tax_rate: 0.05
                                         })
-      expect do
-        described_class.allowance(input, settings, sale: "x", invoice_date: Date.today, today: Date.today)
-      end.to raise_error(Einvoice::UnsupportedError, /\(105\.5\).*\(106\)/)
+      data = described_class.allowance(input, settings, sale: "x", invoice_date: Date.today, today: Date.today)
+      expect(data).to include("allowanceInclusiveAmount" => "106")
+      expect(data["itemList"].first).to include("itemTotal" => "105.5")
     end
 
     it "refuses the special tax rate" do
