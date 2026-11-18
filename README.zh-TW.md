@@ -217,7 +217,8 @@ provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
 ```
 
 - **實驗性質。** 這個 adapter 依據 1.x client、它的 validator 和 README 範例移植而來。關貿沒有公開 API 文件，也沒有人對 live API 執行過這個 adapter。請先用你自己的帳號測試，再正式使用。1.x client 繼續留在 `1-x-stable`。
-- **作廢和折讓需要原發票的訂單編號。** DEFAULTAPI 用 `saleIdentifier` 識別發票，adapter 用訂單編號組出這個值。折讓另外需要原發票日期。`issue` 或 `query` 回傳的 reference 都有這兩個值。缺少時，adapter 會先用發票號碼查詢。1.x client 開立的發票，請用 `provider_options: { sale_identifier: }` 傳入它的識別碼。
+- **作廢和折讓需要原發票的 `saleIdentifier`。** DEFAULTAPI 用它識別發票。adapter 依序從 `provider_options: { sale_identifier: }` 取得（1.x client 開立的發票請用這個方式），或用 reference 的訂單編號組出，或用發票號碼查詢。折讓另外需要原發票日期，從 reference 或同一次查詢取得。`issue` 回傳的 reference 都有這些值。
+- **折讓需要稅別和稅率**，而且在查詢之前就要有。`issue` 或 `query` 回傳的 reference 都有。只有發票號碼時，請在折讓的輸入中傳入 `tax_type:`，有應稅品項時也要傳入 `tax_rate:`。
 - **查詢結果的 `status` 常常是 `nil`。** DEFAULTAPI 狀態代碼的意思還不清楚，所以 adapter 不猜。發票有折讓時 `status` 為 `:allowance`，其他情況為 `nil`。原始代碼在 `result.raw["status"]`。
 - **送出的價格含稅。** adapter 從 core 的稅額明細取得價格，所以任何 `price_mode` 都可以。應稅的 `tax_rate` 必須是 0.05。折讓的回應沒有日期時，折讓日期是今天（Asia/Taipei）。
 - **不支援**：用訂單編號查詢、混合稅率、特種稅率，以及外幣。
