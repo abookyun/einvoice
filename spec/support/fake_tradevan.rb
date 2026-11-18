@@ -29,7 +29,28 @@ class FakeTradevan
   }.freeze
 
   Crypto = Einvoice::Tradevan::DefaultAPI::Crypto
-  Rules = Einvoice::Tradevan::DefaultAPI::Rules
+  # The DEFAULTAPI schema, kept here and not taken from the adapter's Rules
+  # (docs, section 5). A key that the adapter adds to its payload and to Rules
+  # by mistake then still fails here.
+  ISSUE_FIELDS = %w[
+    companyUn orgId orgUn type saleIdentifier allowanceIdentifier transactionNumber
+    transactionDate transactionTime total transactionSource transactionTarget
+    invoiceNumber allowanceNumber allowanceDate allowanceExclusiveAmount allowanceTax
+    allowancePaperReturned allowanceInclusiveAmount paperPrintMode invoiceAlarmMode
+    invoicePaperReturned donate donationUnit carrierType carrierId carrierIdHidden
+    buyerUn buyerTitle receiverName receiverAddrZip receiverAddrRoad receiverEmail
+    receiverMobile allowaDeclaration idViewId memberId checkNumber invoiceDate
+    invoiceTime texclusiveAmount oeclusiveAmount zexclusiveAmount tax mainRemark
+    invoiceType itemList
+  ].freeze
+  ITEM_FIELDS = %w[
+    saleIdentifier serialNumber invoiceNumber invoiceDate invoiceTime productCode
+    productName qty price tax itemExclude itemTotal taxType description
+  ].freeze
+  VOID_FIELDS = %w[
+    type saleIdentifier invoiceNumber invoicePaperReturned allowanceNumber
+    allowancePaperReturned companyUn
+  ].freeze
 
   attr_reader :requests
 
@@ -92,8 +113,8 @@ class FakeTradevan
   # --- post/issue --------------------------------------------------------------
 
   def issue(data)
-    unknown = unknown_keys(data, Rules::ISSUE_FIELDS) +
-              Array(data["itemList"]).flat_map { |item| unknown_keys(item, Rules::ITEM_FIELDS) }
+    unknown = unknown_keys(data, ISSUE_FIELDS) +
+              Array(data["itemList"]).flat_map { |item| unknown_keys(item, ITEM_FIELDS) }
     return failure("issueStatus", "unknown field: #{unknown.join(', ')}") if unknown.any?
 
     case data["type"]
@@ -110,18 +131,26 @@ class FakeTradevan
     @sequence += 1
     number = format("GX%08d", 38_551_000 + @sequence)
     total = data["total"].to_i
-    exclusive = (total / 1.05).round
+    # Tradevan splits the tax out of the taxable items only. [readme] has
+    # only a taxable item, so this part is inferred.
+    sums = Hash.new(0).merge(Array(data["itemList"]).group_by { |item| item["taxType"] }
+                                                    .transform_values { |items| items.sum { |i| i["itemTotal"].to_r } })
+    taxed_exclusive = (sums["T"] / 1.05).round
+    tax = sums["T"].round - taxed_exclusive
+    at = taipei_now
     @invoices[number] = {
-      "number" => number, "sale" => sale, "data" => data, "date" => today, "time" => clock,
-      "check" => format("%04d", (@sequence * 4229) % 10_000), "total" => total,
+      "number" => number, "sale" => sale, "data" => data,
+      "date" => at.strftime("%Y%m%d"), "time" => at.strftime("%H:%M:%S"),
+      "check" => format("%04d", (@sequence * 4229) % 10_000), "total" => total, "tax" => tax,
       "remaining" => total, "voided" => false
     }
     success(
       "saleIdentifier" => sale, "issueStatus" => "Y", "failReason" => "",
       "invoiceNumber" => number, "checkNumber" => @invoices[number]["check"],
-      "invoiceDate" => today, "invoiceTime" => clock,
-      "texclusiveAmount" => exclusive.to_s, "oexclusiveAmount" => "0", "zexclusiveAmount" => "0",
-      "tax" => (total - exclusive).to_s, "inclusiveAmount" => total.to_s,
+      "invoiceDate" => @invoices[number]["date"], "invoiceTime" => @invoices[number]["time"],
+      "texclusiveAmount" => taxed_exclusive.to_s, "oexclusiveAmount" => sums["O"].round.to_s,
+      "zexclusiveAmount" => sums["Z"].round.to_s,
+      "tax" => tax.to_s, "inclusiveAmount" => total.to_s,
       "mainRemark" => "", "invoiceType" => "", "invoiceStatus" => "V",
       "allowanceNumber" => "", "allowanceDate" => "", "allowanceExclusiveAmount" => "",
       "allowanceTax" => "", "allowanceTotalAmount" => "0", "allowanceStatus" => ""
@@ -140,12 +169,13 @@ class FakeTradevan
     return failure("issueStatus", "折讓金額超過發票餘額") if amount > invoice["remaining"]
 
     @sequence += 1
-    number = format("%s%s%03d", CREDENTIALS[:org_id], today, @sequence)
+    date = taipei_now.strftime("%Y%m%d")
+    number = format("%s%s%03d", CREDENTIALS[:org_id], date, @sequence)
     invoice["remaining"] -= amount
     @allowances[number] = { "invoice" => invoice["number"], "amount" => amount, "voided" => false }
     success("allowanceIdentifier" => data["allowanceIdentifier"], "issueStatus" => "Y",
             "failReason" => "", "invoiceNumber" => invoice["number"],
-            "allowanceNumber" => number, "allowanceDate" => today,
+            "allowanceNumber" => number, "allowanceDate" => date,
             "allowanceExclusiveAmount" => data["allowanceExclusiveAmount"],
             "allowanceTax" => data["allowanceTax"], "allowanceTotalAmount" => amount.to_s)
   end
@@ -153,7 +183,7 @@ class FakeTradevan
   # --- post/cancel -------------------------------------------------------------
 
   def cancel(data)
-    unknown = unknown_keys(data, Rules::VOID_FIELDS)
+    unknown = unknown_keys(data, VOID_FIELDS)
     return failure("voidStatus", "unknown field: #{unknown.join(', ')}") if unknown.any?
 
     data["type"] == "A" ? cancel_allowance(data) : cancel_invoice(data)
@@ -190,12 +220,11 @@ class FakeTradevan
 
     data = invoice["data"]
     total = invoice["total"]
-    exclusive = (total / 1.05).round
     success(
       "saleIdentifier" => invoice["sale"], "invoiceNumber" => invoice["number"],
       "checkNumber" => invoice["check"], "invoiceDate" => invoice["date"],
-      "invoiceTime" => invoice["time"], "exclusiveAmount" => exclusive.to_s,
-      "tax" => (total - exclusive).to_s, "total" => total.to_s,
+      "invoiceTime" => invoice["time"], "exclusiveAmount" => (total - invoice["tax"]).to_s,
+      "tax" => invoice["tax"].to_s, "total" => total.to_s,
       "status" => invoice["voided"] ? "V" : "I",
       "hasAllowance" => invoice["remaining"] < total ? "Y" : "N",
       "receiverName" => data["receiverName"].to_s, "receiverAddr" => data["receiverAddrRoad"].to_s,
@@ -232,11 +261,8 @@ class FakeTradevan
     { status: 200, headers: { "Content-Type" => "application/json" }, body: JSON.generate(body) }
   end
 
-  def today
-    Time.now.getlocal("+08:00").strftime("%Y%m%d")
-  end
-
-  def clock
-    Time.now.getlocal("+08:00").strftime("%H:%M:%S")
+  # Read once per call, so one invoice never gets two different times.
+  def taipei_now
+    Time.now.getlocal("+08:00")
   end
 end

@@ -257,8 +257,14 @@ module Einvoice
             apply(field, **rule) unless Rules.blank?(@data[field])
           end
 
+          DECIMAL = /\A-?\d+(\.\d+)?\z/
+
           def total_matches_items
             items = Array(@data["itemList"]).map { |item| Rules.stringify(item) }
+            # Only whole decimal strings: String#to_r would read "100oops" as 100.
+            values = [@data["total"], *items.map { |item| item["itemTotal"] }].map(&:to_s)
+            return add("total", "and every itemTotal must be decimal numbers") unless values.all?(DECIMAL)
+
             # Compared as decimals: "0.5" + "0.5" is "1".
             sum = items.sum { |item| item["itemTotal"].to_s.to_r }
             return if @data["total"].to_s.to_r == sum

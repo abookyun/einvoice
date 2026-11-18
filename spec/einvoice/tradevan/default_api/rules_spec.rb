@@ -118,7 +118,11 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Rules do
       it("checks buyerTitle is at most 60") { expect_at_most(data, "buyerTitle", 60) }
       it("checks idViewId is at most 10") { expect_at_most(data, "idViewId", 10) }
       it("checks memberId is at most 50") { expect_at_most(data, "memberId", 50) }
-      it("checks total is at most 20") { expect(errors_on(data.merge("total" => "1" * 21), "total")).not_to be_empty }
+      it "checks total is at most 20" do
+        long = "1" * 21
+        matching = data.merge("total" => long, "itemList" => [data["itemList"].first.merge("itemTotal" => long)])
+        expect(errors_on(matching, "total")).to include(/20 characters or fewer/)
+      end
 
       it "checks transactionTime is HH:MM:SS" do
         expect_length(data, "transactionTime", "01:43:20", %w[1:43:20 014320 01:43:200])
@@ -152,6 +156,12 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Rules do
                                                           data["itemList"].first.merge("itemTotal" => "0.5")])
         expect(errors_on(halves, "total")).to be_empty
         expect(errors_on(halves.merge("total" => "1.4"), "total")).to include(/sum of itemTotal \(1\)/)
+      end
+
+      it "refuses a total or an itemTotal that is not a decimal number" do
+        expect(errors_on(data.merge("total" => "100oops"), "total")).to include(/decimal numbers/)
+        bad_item = data.merge("itemList" => [data["itemList"].first.merge("itemTotal" => "1e2")])
+        expect(errors_on(bad_item, "total")).to include(/decimal numbers/)
       end
 
       it "rejects a total that does not match the sum of item totals" do
