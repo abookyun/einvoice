@@ -28,6 +28,12 @@ Each item says what is wrong, where, and what it would take. Items under "Decide
 - **Fix:** Move the shared part into the core: the network rescue, the "a body the provider wrote decides, else the HTTP status" rule, and the `base_url` check. Each client then keeps only its envelope and its crypto.
 - **When:** after all four adapters are merged, so the shared part is cut from four real clients.
 
+### 3a. `base_url` checks that every client needs
+
+- **Query or fragment:** `Redaction.base_url!` accepts `https://host/gateway?region=tw`. A client that appends its path builds `/gateway?region=tw/DEFAULTAPI/...`, and the request goes to the wrong path. The check should refuse a query and a fragment. It lives in the core, so it changes every client.
+- **Frozen:** the Tradevan client freezes `base_url` (#43), so a caller cannot change it after the checks. The ECPay, Amego and ezPay clients do not.
+- **Found by:** CodeRabbit, in the review of the Tradevan adapter (#43). Fix it with item 3.
+
 ## Decide first
 
 ### 4. Query status means different things
