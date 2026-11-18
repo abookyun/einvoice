@@ -67,10 +67,8 @@ module Einvoice
           http.use_ssl = uri.scheme == "https"
           http.open_timeout = @timeout
           http.read_timeout = @timeout
-          parse_json(http.request(build_request(path, uri)))
-        rescue Einvoice::Error
-          raise
-        rescue StandardError => e
+          parse(http.request(build_request(path, uri)))
+        rescue *Error::NETWORK_ERRORS => e
           raise NetworkError.new("Tradevan request failed: #{e.message}", provider: PROVIDER, cause: e)
         end
 
@@ -87,11 +85,25 @@ module Einvoice
           request
         end
 
-        def parse_json(response)
-          JSON.parse(response.body.to_s)
+        # A body that Tradevan wrote (a JSON object with +Success+) decides the
+        # error, whatever the HTTP status. Any other body falls back to the
+        # status: HTTP 429 and 5xx are a NetworkError, so the caller can retry
+        # (docs/providers/README.md, "The unified model").
+        def parse(response)
+          body = JSON.parse(response.body.to_s)
+          return body if body.is_a?(Hash) && body.key?("Success")
+
+          raise_for_status!(response)
+          body
         rescue JSON::ParserError => e
+          raise_for_status!(response)
           raise ProviderError.new("Tradevan returned a non-JSON response (HTTP #{response.code})",
                                   provider: PROVIDER, raw_code: response.code, cause: e)
+        end
+
+        def raise_for_status!(response)
+          error = NetworkError.for_status(response, provider: PROVIDER)
+          raise error if error
         end
 
         def read(envelope)
