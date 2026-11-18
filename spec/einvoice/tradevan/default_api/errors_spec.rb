@@ -10,6 +10,7 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Errors do
       "發票已作廢" => [:conflict, Einvoice::Reason::ALREADY_VOIDED],
       "發票已被作廢" => [:conflict, Einvoice::Reason::ALREADY_VOIDED],
       "發票已折讓，不能作廢" => [:conflict, Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE],
+      "發票不能作廢，因為已折讓" => [:conflict, Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE],
       "查無發票資料" => [:not_found, nil],
       "發票不存在" => [:not_found, nil],
       "Invoice not found" => [:not_found, nil],
@@ -37,6 +38,12 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Errors do
 
     it "maps anything else to ProviderError" do
       expect(described_class.classify_transport("系統維護中")).to eq([:provider, nil])
+    end
+
+    it "matches whole English words only" do
+      expect(described_class.classify_transport("Invalid key1")).to eq([:auth, Einvoice::Reason::CREDENTIALS_INVALID])
+      expect(described_class.classify_transport("wrong password")).to eq([:auth, Einvoice::Reason::CREDENTIALS_INVALID])
+      expect(described_class.classify_transport("Required keyword is missing")).to eq([:provider, nil])
     end
   end
 end

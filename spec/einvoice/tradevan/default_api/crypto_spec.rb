@@ -85,5 +85,16 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Crypto do
       expect { described_class.decrypt_message(message, key1) }
         .to raise_error(Einvoice::ProviderError, /malformed JSON/)
     end
+
+    it "keeps an Array, which some raw endpoints answer" do
+      expect(described_class.decrypt_message(described_class.encrypt("[1]", key1), key1)).to eq([1])
+    end
+
+    it "raises ProviderError for a message that is not an object or an array" do
+      %w[null 1 "text"].each do |text|
+        expect { described_class.decrypt_message(described_class.encrypt(text, key1), key1) }
+          .to raise_error(Einvoice::ProviderError, /not a JSON object or array/)
+      end
+    end
   end
 end

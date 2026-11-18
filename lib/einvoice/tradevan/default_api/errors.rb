@@ -16,11 +16,14 @@ module Einvoice
       # samples, an unknown failure is more likely a provider problem than bad
       # input.
       module Errors
-        CREDENTIALS = /帳號|密碼|金鑰|acnt|key|password|account/i
+        # Whole English words only: "keyword" is not about a key.
+        CREDENTIALS = /帳號|密碼|金鑰|\b(acntp?|keys?|key[12]|password|account)\b/i
         DUPLICATE = /duplicat|重[複覆]/i
         # Checked before ALREADY_VOID: "已作廢，不能折讓" is a refusal, and the
-        # refusal is the part the caller can act on.
-        BLOCKED_BY_VOID = /作廢.*不能|不能.*作廢.*折讓/
+        # refusal is the part the caller can act on. 不能 must come after 作廢
+        # and before 折讓, so "發票不能作廢，因為已折讓" (a blocked void) falls
+        # through to ALLOWANCE_MADE.
+        BLOCKED_BY_VOID = /作廢.*不能.*折讓/
         ALREADY_VOID = /已(被)?作廢/
         ALLOWANCE_MADE = /已折讓|折讓過/
         MISSING = /查無|不存在|not\s*found/i

@@ -2,9 +2,10 @@
 
 RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
   subject(:client) do
-    described_class.new(acnt: "acnt", acntp: "acntp", key1: key1, key2: key2, base_url: base_url)
+    described_class.new(acnt: "acnt", acntp: password, key1: key1, key2: key2, base_url: base_url)
   end
 
+  let(:password) { "s3cret-pass" }
   let(:key1) { "0123456789abcdef" }
   let(:key2) { "fedcba9876543210" }
   let(:base_url) { "https://tradevan.test/" }
@@ -34,8 +35,13 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
 
   it "hides the password and both keys in inspect" do
     expect(client.inspect).to include("acnt=\"acnt\"", "tradevan.test")
-    expect(client.inspect).not_to include("acntp\"", key1, key2)
+    [client.inspect, client.to_s].each { |text| expect(text).not_to include(password, key1, key2) }
     expect(client.to_s).to eq(client.inspect)
+  end
+
+  it "keeps the checked base_url from changing" do
+    expect(client.base_url).to be_frozen
+    expect { client.base_url << "@evil.test" }.to raise_error(FrozenError)
   end
 
   describe "#request" do
@@ -132,6 +138,11 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
 
       respond_with({ "error" => "bad gateway" }, 502)
       expect { client.request("post/issue", {}) }.to raise_error(Einvoice::NetworkError, /HTTP 502/)
+    end
+
+    it "lets the HTTP status decide when Success is not Y, N or E" do
+      respond_with({ "Success" => nil }, 503)
+      expect { client.request("post/issue", {}) }.to raise_error(Einvoice::NetworkError, /HTTP 503/)
     end
 
     it "raises NetworkError with RATE_LIMITED for HTTP 429" do

@@ -16,6 +16,9 @@ module Einvoice
       class Client
         PROVIDER = "tradevan"
         PATH_PREFIX = "/DEFAULTAPI/"
+        # The envelope's +Success+ values. A body with another value was not
+        # written by DEFAULTAPI, so the HTTP status decides.
+        SUCCESS_VALUES = %w[Y N E].freeze
 
         attr_reader :base_url, :timeout
 
@@ -30,7 +33,8 @@ module Einvoice
           @acntp = acntp.to_s
           @key1 = key1.to_s
           @key2 = key2.to_s
-          @base_url = Redaction.base_url!(base_url.to_s, provider: PROVIDER).chomp("/")
+          # Frozen: the checks above must hold for every request after this.
+          @base_url = Redaction.base_url!(base_url.to_s, provider: PROVIDER).chomp("/").freeze
           @timeout = timeout
         end
 
@@ -91,7 +95,7 @@ module Einvoice
         # (docs/providers/README.md, "The unified model").
         def parse(response)
           body = JSON.parse(response.body.to_s)
-          return body if body.is_a?(Hash) && body.key?("Success")
+          return body if body.is_a?(Hash) && SUCCESS_VALUES.include?(body["Success"])
 
           raise_for_status!(response)
           body

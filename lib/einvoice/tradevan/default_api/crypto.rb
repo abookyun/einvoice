@@ -44,9 +44,15 @@ module Einvoice
           encrypt(JSON.generate(envelope), key2)
         end
 
-        # Read an encrypted response +Message+ back into a Hash or an Array.
+        # Read an encrypted response +Message+ back into a Hash or an Array. Some
+        # raw endpoints answer an Array. Anything else, such as +null+, is not a
+        # message the adapter can read.
         def decrypt_message(message, key1)
-          JSON.parse(decrypt(message, key1))
+          result = JSON.parse(decrypt(message, key1))
+          return result if result.is_a?(Hash) || result.is_a?(Array)
+
+          raise ProviderError.new("Tradevan returned a message that is not a JSON object or array",
+                                  provider: Client::PROVIDER, raw: result)
         rescue JSON::ParserError => e
           raise ProviderError.new("Tradevan returned a malformed JSON message",
                                   provider: Client::PROVIDER, cause: e)
