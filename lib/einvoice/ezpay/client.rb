@@ -65,18 +65,30 @@ module Einvoice
 
         post = Net::HTTP::Post.new(uri.request_uri)
         post.set_form_data(form)
-        parse_json(http.request(post))
-      rescue Einvoice::Error
-        raise
-      rescue StandardError => e
+        parse(http.request(post))
+      rescue *Error::NETWORK_ERRORS => e
         raise NetworkError.new("ezPay request failed: #{e.message}", provider: PROVIDER, cause: e)
       end
 
-      def parse_json(response)
-        JSON.parse(response.body.to_s)
+      # A body that ezPay wrote (a JSON object with +Status+) decides the
+      # error, whatever the HTTP status. Any other body falls back to the
+      # status: HTTP 429 and 5xx are a NetworkError, so the caller can retry
+      # (docs/providers/README.md, "The unified model").
+      def parse(response)
+        body = JSON.parse(response.body.to_s)
+        return body if body.is_a?(Hash) && body.key?("Status")
+
+        raise_for_status!(response)
+        body
       rescue JSON::ParserError => e
+        raise_for_status!(response)
         raise ProviderError.new("ezPay returned a non-JSON response (HTTP #{response.code})",
                                 provider: PROVIDER, raw_code: response.code, cause: e)
+      end
+
+      def raise_for_status!(response)
+        error = NetworkError.for_status(response, provider: PROVIDER)
+        raise error if error
       end
 
       def read(body, operation)

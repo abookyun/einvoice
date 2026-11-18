@@ -79,15 +79,41 @@ RSpec.describe Einvoice::EzPay::Client do
     end
 
     it "raises ProviderError on a body that is not JSON, or has no Status" do
-      respond_with("<html>", 502)
-      expect { client.request("/Api/x", "1.0", {}) }.to raise_error(Einvoice::ProviderError, /HTTP 502/)
+      respond_with("<html>", 200)
+      expect { client.request("/Api/x", "1.0", {}) }.to raise_error(Einvoice::ProviderError, /HTTP 200/)
       respond_with("ok" => true)
       expect { client.request("/Api/x", "1.0", {}) }.to raise_error(Einvoice::ProviderError, /unexpected response/)
+    end
+
+    it "raises NetworkError for HTTP 5xx with a body that ezPay did not write" do
+      respond_with("<html>", 502)
+      expect { client.request("/Api/x", "1.0", {}) }.to raise_error(Einvoice::NetworkError, /HTTP 502/)
+      respond_with({ "error" => "bad gateway" }, 503)
+      expect { client.request("/Api/x", "1.0", {}) }.to raise_error(Einvoice::NetworkError, /HTTP 503/)
+    end
+
+    it "raises NetworkError with RATE_LIMITED for HTTP 429" do
+      respond_with("Too Many Requests", 429)
+      expect { client.request("/Api/x", "1.0", {}) }
+        .to raise_error(Einvoice::NetworkError) { |error| expect(error.reason).to eq(Einvoice::Reason::RATE_LIMITED) }
+    end
+
+    # The rule of the unified model: a body that the adapter can read decides.
+    it "lets a body that ezPay wrote decide, whatever the HTTP status" do
+      respond_with({ "Status" => "SUCCESS", "Message" => "", "Result" => "{}" }, 503)
+      expect(client.request("/Api/x", "1.0", {})).to eq({})
+      respond_with({ "Status" => "LIB10003", "Message" => "商店訂單編號重複", "Result" => "" }, 500)
+      expect { client.request("/Api/x", "1.0", {}) }.to raise_error(Einvoice::ConflictError)
     end
 
     it "raises NetworkError when the connection fails" do
       stub_request(:post, %r{ezpay\.test}).to_raise(Errno::ECONNREFUSED)
       expect { client.request("/Api/x", "1.0", {}) }.to raise_error(Einvoice::NetworkError)
+    end
+
+    it "does not report a bug as a NetworkError" do
+      stub_request(:post, %r{ezpay\.test}).to_raise(NoMethodError.new("a bug"))
+      expect { client.request("/Api/x", "1.0", {}) }.to raise_error(NoMethodError, /a bug/)
     end
   end
 
