@@ -40,7 +40,7 @@ RSpec.describe Einvoice::Amego::Provider, "adapter details" do
   end
 
   it "uses the published test account by default host" do
-    expect(described_class.new(**Einvoice::Amego::SANDBOX).client.endpoint).to eq("https://invoice-api.amego.tw")
+    expect(described_class.new(**Einvoice::Amego::SANDBOX).client.base_url).to eq("https://invoice-api.amego.tw")
   end
 
   describe "#issue" do

@@ -17,21 +17,26 @@ module Einvoice
     class Client
       PROVIDER = "amego"
       # One host for test and production. The credentials pick the environment.
-      ENDPOINT = "https://invoice-api.amego.tw"
+      BASE_URL = "https://invoice-api.amego.tw"
 
-      attr_reader :endpoint, :timeout
+      attr_reader :base_url, :timeout
 
-      def initialize(ban:, app_key:, endpoint: ENDPOINT, timeout: 30, clock: -> { Time.now })
+      def initialize(ban:, app_key:, base_url: BASE_URL, timeout: 30, clock: -> { Time.now })
         if ban.to_s.empty? || app_key.to_s.empty?
           raise ValidationError.new("Amego ban and app_key are required", provider: PROVIDER)
         end
 
         @ban = ban.to_s
         @app_key = app_key.to_s
-        @endpoint = endpoint.to_s.chomp("/")
+        @base_url = Redaction.base_url!(base_url, provider: PROVIDER).chomp("/")
         @timeout = timeout
         @clock = clock
       end
+
+      def inspect
+        "#<#{self.class.name} ban=#{@ban.inspect} base_url=#{@base_url.inspect} app_key=#{Redaction::FILTERED}>"
+      end
+      alias to_s inspect
 
       # POST +payload+ to +path+ (for example +"/json/f0401"+) and return the
       # parsed response body, with +code+ 0. Any other +code+ raises.
@@ -55,7 +60,7 @@ module Einvoice
       private
 
       def send_request(path, form)
-        uri = URI("#{@endpoint}#{path}")
+        uri = URI("#{@base_url}#{path}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = uri.scheme == "https"
         http.open_timeout = @timeout

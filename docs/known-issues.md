@@ -6,20 +6,6 @@ Each item says what is wrong, where, and what it would take. Items under "Decide
 
 ## Fix before the next release
 
-### 1. The Amego client prints its app key and takes any endpoint
-
-- **Where:** `lib/einvoice/amego/client.rb`.
-- **What:** The client does not override `inspect`, so `inspect`, `pp` and logging print `app_key`. The `endpoint` argument is not checked, so a remote `http://` URL sends invoice data without TLS. The ECPay, ezPay and Tradevan clients do both through `Redaction.base_url!` and their own `inspect`.
-- **Fix:** As in the ezPay client: check the URL with `Redaction.base_url!`, and show `app_key` as `[FILTERED]`.
-- **Found by:** CodeRabbit, in the review of the ezPay client (#42). The Amego client was already merged.
-- **Risk today:** none outside this repo. The tag `v2.0.0.alpha1` was made before the Amego adapter.
-
-### 2. The Amego client calls its URL `endpoint`
-
-- **Where:** `lib/einvoice/amego/client.rb` and `lib/einvoice/amego/provider.rb`.
-- **What:** The other three adapters take `base_url:`. A caller who switches providers has to rename the argument.
-- **Fix:** Rename it to `base_url:`. Fix it together with item 1. 2.0 is not released yet, so no deprecation is needed.
-
 ### 2a. Tradevan reads some bad responses wrongly
 
 - **Where:** `lib/einvoice/tradevan/default_api/client.rb`, `provider.rb` and the query table in `docs/providers/tradevan/defaultapi.md` (both languages).

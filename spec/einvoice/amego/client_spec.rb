@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 RSpec.describe Einvoice::Amego::Client do
-  subject(:client) { described_class.new(ban: "12345678", app_key: "key", endpoint: endpoint, clock: clock) }
+  subject(:client) { described_class.new(ban: "12345678", app_key: "key", base_url: base_url, clock: clock) }
 
-  let(:endpoint) { "https://amego.test/" }
+  let(:base_url) { "https://amego.test/" }
   let(:clock) { -> { Time.at(1_729_000_000) } }
 
   def respond_with(body, status = 200)
@@ -24,8 +24,23 @@ RSpec.describe Einvoice::Amego::Client do
     expect { described_class.new(ban: "1", app_key: nil) }.to raise_error(Einvoice::ValidationError)
   end
 
+  it "hides the App Key in inspect" do
+    secret = described_class.new(ban: "12345678", app_key: "s3cret-app-key")
+    expect(secret.inspect).to include("ban=\"12345678\"", "invoice-api.amego.tw")
+    [secret.inspect, secret.to_s, "#{secret}"].each { |text| expect(text).not_to include("s3cret-app-key") }
+  end
+
+  it "checks base_url like the other clients" do
+    expect { described_class.new(ban: "1", app_key: "k", base_url: "http://amego.example") }
+      .to raise_error(Einvoice::ValidationError, /https/)
+    expect { described_class.new(ban: "1", app_key: "k", base_url: "https://u:p@amego.example") }
+      .to raise_error(Einvoice::ValidationError, /user or password/)
+    expect(described_class.new(ban: "1", app_key: "k", base_url: "http://localhost:4000").base_url)
+      .to eq("http://localhost:4000")
+  end
+
   it "defaults to Amego's one host" do
-    expect(described_class.new(ban: "1", app_key: "k").endpoint).to eq("https://invoice-api.amego.tw")
+    expect(described_class.new(ban: "1", app_key: "k").base_url).to eq("https://invoice-api.amego.tw")
   end
 
   describe "#request" do
