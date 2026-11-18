@@ -189,7 +189,7 @@ RSpec.describe Einvoice::Amego::Payload do
       expect(entry).to include("TaxAmount" => 1, "TotalAmount" => 29)
     end
 
-    it "derives the unit price from the amount without tax, so that price × quantity is the amount" do
+    it "derives the unit price from the amount without tax, rounded to 7 decimal places" do
       entry = allowance(items: [{ description: "a", quantity: 3, unit_price: 33, amount: 99 }],
                         amount: { sales_amount: 94, tax_amount: 5, total_amount: 99 })
       expect(entry["ProductItem"].first).to include("Quantity" => "3", "UnitPrice" => "31.3333333", "Amount" => "94")
@@ -243,6 +243,18 @@ RSpec.describe Einvoice::Amego::Payload do
         .to eq("type" => "invoice", "invoice_number" => "AB12345678")
       expect(described_class.query(Einvoice::InvoiceReference.new(number: "AB12345678", order_id: "O1")))
         .to eq("type" => "order", "order_id" => "O1")
+    end
+  end
+
+  describe ".number" do
+    it "writes whole numbers without a point, and up to 7 decimal places" do
+      expect(described_class.number(100)).to eq("100")
+      expect(described_class.number(Rational(94, 3))).to eq("31.3333333")
+      expect(described_class.number(0.25)).to eq("0.25")
+    end
+
+    it "rounds first, so a value close to a whole number has no trailing point" do
+      expect(described_class.number(Rational(100_000_000_001, 1_000_000_000))).to eq("100")
     end
   end
 end

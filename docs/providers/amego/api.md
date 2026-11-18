@@ -238,7 +238,7 @@ The void is asynchronous. `code` `0` means Amego accepted the void into its queu
 | `provider_options[:buyer_name]`, else the query | `BuyerName` | Must match the original invoice |
 | `invoice.number` | `ProductItem[].OriginalInvoiceNumber` | |
 | `invoice.invoice_datetime`, else the query | `ProductItem[].OriginalInvoiceDate` | `Ymd` in UTC+8 |
-| `items[]` | `ProductItem[]` | `description` → `OriginalDescription`, `quantity` → `Quantity`, plus the line's `Amount`, `Tax` and `TaxType` from the core. Amounts exclude tax. `UnitPrice` is `Amount / Quantity`. See 4.3 |
+| `items[]` | `ProductItem[]` | `description` → `OriginalDescription`, `quantity` → `Quantity`, plus the line's `Amount`, `Tax` and `TaxType` from the core. Amounts exclude tax. `UnitPrice` is `Amount / Quantity`, rounded to 7 decimal places. See 4.3 |
 | `amount` | `TaxAmount`, `TotalAmount` | See 4.3 |
 
 Result:
@@ -307,7 +307,7 @@ Item amounts keep 7 decimals unless `DetailAmountRound` is `1` `[doc]`.
 
 **Allowance.** Amounts exclude tax, and each item has its own integer `Tax` `[doc]`. This is G0401. The adapter sends each line's `net_amount` and `tax` from the core's breakdown. `TotalAmount` is the sum without tax, and `TaxAmount` is the sum of the item taxes. A 99 split into 94 and a tax of 5 was accepted `[live]`.
 
-`UnitPrice` is the line's `net_amount` over its quantity, so `UnitPrice × Quantity` is `Amount`. That is what the live run sent. The core's `net_unit_price` comes from the item's unit price, so it can differ from `Amount / Quantity`. The docs do not say if Amego takes that gap, so the adapter does not use it.
+`UnitPrice` is the line's `net_amount` over its quantity, rounded to 7 decimal places. So `UnitPrice × Quantity` can miss `Amount` by that rounding: 94 over 3 is `31.3333333`. Amego accepted that allowance `[live]` (2026-11-18). The core's `net_unit_price` comes from the item's unit price, so it can miss `Amount` by the rounding of the line tax, which is larger. The docs do not say if Amego takes that gap, so the adapter does not use it.
 
 **Query.** `total_amount` is the total. `tax_amount` is only split out for B2B, as on issue. The result is `total = total_amount`, `tax = tax_amount`, `sales = total - tax`.
 

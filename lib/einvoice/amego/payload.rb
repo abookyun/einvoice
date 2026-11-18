@@ -213,9 +213,10 @@ module Einvoice
 
       # Amego wants allowance amounts without tax, and an integer +Tax+ on each
       # item (docs, section 4.3). Both come from the core's line. The unit price
-      # is the amount over the quantity, so +UnitPrice × Quantity+ is +Amount+.
-      # That is what the live test sent. The docs do not say if Amego takes a
-      # gap, as the core's +net_unit_price+ can have.
+      # is the amount over the quantity, rounded to 7 decimal places, so
+      # +UnitPrice × Quantity+ can miss +Amount+ by that rounding: 94 over 3 is
+      # 31.3333333. The core's +net_unit_price+ is not used, because it comes
+      # from the item's unit price and can miss by the rounding of the tax.
       def allowance_item(item, line)
         description = item.description.to_s
         max!(description, MAX_DESCRIPTION, "item description")
@@ -238,11 +239,13 @@ module Einvoice
 
       # Amego takes up to 7 decimals. Whole numbers go out without a point. The
       # core has already read every number as exact.
+      # Rounds to 7 decimal places first, so a value that rounds to a whole
+      # number is written without a point: "100", not "100.".
       def number(value)
-        rational = value.to_r
+        rational = value.to_r.round(7)
         return rational.to_i.to_s if rational.denominator == 1
 
-        format("%.7f", rational.round(7)).sub(/0+\z/, "")
+        format("%.7f", rational).sub(/0+\z/, "")
       end
 
       # A Time → "Ymd" in Taipei time.

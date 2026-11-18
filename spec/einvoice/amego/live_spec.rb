@@ -113,6 +113,24 @@ RSpec.describe "Amego live API", :live do
     expect(cancelled.allowance_number).to eq(number)
   end
 
+  # 94 over 3 is 31.3333333 after rounding, so UnitPrice × Quantity misses
+  # Amount by 0.0000001 (docs, section 4.3).
+  it "credits a line whose unit price does not divide evenly" do
+    item = { description: "整合測試商品", quantity: 3, unit_price: 33, amount: 99 }
+    issued = provider.issue(issue_input(unique_id("RB"), items: [item],
+                                                       amount: { sales_amount: 99, tax_amount: 0, total_amount: 99 }))
+    number = unique_id("AL")
+
+    allowance = retry_queued do
+      provider.allowance({ invoice: issued.reference, allowance_id: number, items: [item],
+                           amount: { sales_amount: 94, tax_amount: 5, total_amount: 99 },
+                           price_mode: "TAX_INCLUSIVE" })
+    end
+    expect(allowance.allowance_number).to eq(number)
+
+    retry_queued { provider.void_allowance({ allowance: allowance.reference }) }
+  end
+
   it "voids an invoice, and refuses a second void" do
     issued = provider.issue(issue_input(unique_id("RB")))
     voided = retry_queued { provider.void({ invoice: issued.reference, reason: "整合測試作廢" }) }

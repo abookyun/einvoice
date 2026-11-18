@@ -240,7 +240,7 @@ Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部
 | `provider_options[:buyer_name]`，沒有時取自查詢 | `BuyerName` | 必須和原發票一致 |
 | `invoice.number` | `ProductItem[].OriginalInvoiceNumber` | |
 | `invoice.invoice_datetime`，沒有時取自查詢 | `ProductItem[].OriginalInvoiceDate` | UTC+8 的 `Ymd` |
-| `items[]` | `ProductItem[]` | `description` → `OriginalDescription`、`quantity` → `Quantity`，再加上 core 明細中該列的 `Amount`、`Tax` 和 `TaxType`。金額不含稅。`UnitPrice` 是 `Amount / Quantity`。見 4.3 |
+| `items[]` | `ProductItem[]` | `description` → `OriginalDescription`、`quantity` → `Quantity`，再加上 core 明細中該列的 `Amount`、`Tax` 和 `TaxType`。金額不含稅。`UnitPrice` 是 `Amount / Quantity`，四捨五入到小數點後 7 位。見 4.3 |
 | `amount` | `TaxAmount`、`TotalAmount` | 見 4.3 |
 
 結果：
@@ -309,7 +309,7 @@ core 的 `tax_breakdown` 提供這些總計：`taxable_amount`、`tax_free_amoun
 
 **折讓。** 金額不含稅，每個品項有自己的整數 `Tax` `[doc]`。這就是 G0401。adapter 送出 core 明細中每一列的 `net_amount` 和 `tax`。`TotalAmount` 是未稅金額的合計，`TaxAmount` 是品項稅額的合計。99 元拆成 94 加稅額 5 的折讓，Amego 接受了 `[live]`。
 
-`UnitPrice` 是該列的 `net_amount` 除以數量，所以 `UnitPrice × Quantity` 等於 `Amount`。live 執行時送的就是這個值。core 的 `net_unit_price` 從品項的單價算出，可能和 `Amount / Quantity` 不同。文件沒有說 Amego 是否接受這個差距，所以 adapter 不使用它。
+`UnitPrice` 是該列的 `net_amount` 除以數量，四捨五入到小數點後 7 位。所以 `UnitPrice × Quantity` 可能和 `Amount` 差一點：94 除以 3 是 `31.3333333`。Amego 接受了這筆折讓 `[live]`（2026-11-18）。core 的 `net_unit_price` 從品項的單價算出，和 `Amount` 的差距來自每列稅額的四捨五入，會比較大。文件沒有說 Amego 是否接受這個差距，所以 adapter 不使用它。
 
 **查詢。** `total_amount` 是總計。`tax_amount` 只有 B2B 才會拆出來，和開立時一樣。結果是 `total = total_amount`、`tax = tax_amount`、`sales = total - tax`。
 
