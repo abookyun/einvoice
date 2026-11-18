@@ -268,15 +268,15 @@ Result, from `searchInvoiceDetail` `[readme]`:
 | Unified | From |
 | --- | --- |
 | `invoice_number` | `invoiceNumber` |
-| `invoice_datetime` | `invoiceDate`, `invoiceTime`. Missing: `nil`. Not a valid date or time: `ProviderError` |
+| `invoice_datetime` | `invoiceDate`, `invoiceTime`. No `invoiceDate`: `nil`. A date without `invoiceTime`: midnight that day. A date or a time that is not valid: `ProviderError` |
 | `random_code` | `checkNumber` |
-| `order_id` | `saleIdentifier` without the prefix. `nil` when the prefix is not this adapter's, for example for an invoice the 1.x client issued |
+| `order_id` | `saleIdentifier` without the `companyUn_orgId_` prefix. This is the order id for an invoice that this adapter issued (4.2). For another invoice, such as one from the 1.x client, the rest may be something else: every `saleIdentifier` has this prefix [rules], so the adapter cannot tell. Without the prefix: `nil` |
 | `status` | See 4.4 |
 | `amount` | `sales = exclusiveAmount`, `tax = tax`, `total = total` |
 | `buyer` | `receiverName`, `receiverAddr`, `receiverPhone`. No email or 統一編號 in the response |
 | `items` | `detailList[]`: `productName`, `qty`, `price`, `total`, `taxType` |
 | `tax_type` | The items' `taxType`. Two different known types: `MIXED`. A line without a known type: `nil` |
-| `tax_rate` | `0.05` for `TAXABLE` and `MIXED`, `0` for `ZERO_RATED` and `TAX_FREE`. DEFAULTAPI has no rate field, and a taxable line can only be at the general rate (6.1) |
+| `tax_rate` | `0.05` when a line is `TAXABLE`, else `0`, `MIXED` too. A line without a known type: `nil`. DEFAULTAPI has no rate field, and a taxable line can only be at the general rate (6.1) |
 | `reference` | Built from the fields above |
 
 ### 4.3 Amounts and tax

@@ -179,7 +179,17 @@ module Einvoice
         private
 
         def search(number)
-          build_query_result(@client.request("get/searchInvoiceDetail", { invoiceNumber: number }))
+          build_query_result(detail(number))
+        end
+
+        # The searchInvoiceDetail object. The client keeps arrays, which some
+        # raw endpoints answer, but this one must be an object.
+        def detail(number)
+          result = @client.request("get/searchInvoiceDetail", { invoiceNumber: number })
+          return result if result.is_a?(Hash)
+
+          raise ProviderError.new("Tradevan returned an invoice detail that is not an object",
+                                  provider: name, raw: result)
         end
 
         # The original invoice's +saleIdentifier+ and, for an allowance, its
@@ -196,7 +206,7 @@ module Einvoice
           date = reference.invoice_datetime && Taipei.date(reference.invoice_datetime)
           return [sale, date] if sale && (date || !need_date)
 
-          found = lookup(reference.number)
+          found = lookup(reference.number, need_date: need_date && date.nil?)
           sale ||= found[:sale]
           date ||= found[:date]
           # Only the fields this call needs have to come back.
@@ -208,15 +218,16 @@ module Einvoice
           [sale, date]
         end
 
-        def lookup(number)
-          found = begin
-            search(number)
-          rescue Error => e
-            raise ProviderError.new("Tradevan needs the invoice's saleIdentifier or date; looking them up " \
-                                    "failed: #{e.message}", provider: name, reason: Reason::LOOKUP_FAILED, cause: e)
-          end
-          { sale: presence(found.raw["saleIdentifier"]),
-            date: found.invoice_datetime && Taipei.date(found.invoice_datetime) }
+        # Reads only what the call needs: a void does not need the date, and an
+        # allowance does not need the time. So a bad field that the call does
+        # not use cannot stop it.
+        def lookup(number, need_date:)
+          result = detail(number)
+          date = need_date ? parse_time(result["invoiceDate"], nil) : nil
+          { sale: presence(result["saleIdentifier"]), date: date && Taipei.date(date) }
+        rescue Error => e
+          raise ProviderError.new("Tradevan needs the invoice's saleIdentifier or date; looking them up " \
+                                  "failed: #{e.message}", provider: name, reason: Reason::LOOKUP_FAILED, cause: e)
         end
 
         def build_query_result(result)
@@ -236,7 +247,7 @@ module Einvoice
                              phone: presence(result["receiverPhone"])),
             items: items,
             tax_type: tax_type,
-            tax_rate: QUERY_RATE[tax_type],
+            tax_rate: query_rate(items, tax_type),
             raw: result
           )
         end
@@ -253,11 +264,13 @@ module Einvoice
         end
 
         # DEFAULTAPI has no rate field. A taxable line is at the general rate,
-        # the only one its tax letters can carry (6.1).
-        QUERY_RATE = {
-          TaxType::TAXABLE => Payload::TAX_RATE, TaxType::MIXED => Payload::TAX_RATE,
-          TaxType::ZERO_RATED => 0r, TaxType::TAX_FREE => 0r
-        }.freeze
+        # the only one its tax letters can carry (6.1). Without a taxable line,
+        # MIXED too, the rate is 0. An unknown type leaves it unknown.
+        def query_rate(items, tax_type)
+          return nil if tax_type.nil?
+
+          items.any? { |item| item.tax_type == TaxType::TAXABLE } ? Payload::TAX_RATE : 0r
+        end
 
         def build_item(row)
           InvoiceItem.new(

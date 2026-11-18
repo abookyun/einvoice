@@ -194,11 +194,27 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
     end
 
     it "voids with a saleIdentifier from the lookup, even when the invoice found has no date" do
-      search_reply("invoiceNumber" => "GX38551078", "saleIdentifier" => "12345678_ABCDE_x")
+      search_reply("saleIdentifier" => "12345678_ABCDE_x", "invoiceDate" => nil)
 
       expect { provider.void({ invoice: "GX38551078", reason: "客戶取消" }) }
         .to raise_error(Einvoice::NotFoundError)
       expect(JSON.parse(tradevan.params["voidData"])["saleIdentifier"]).to eq("12345678_ABCDE_x")
+    end
+
+    it "voids even when the invoice found has a date that is not valid, as a void does not need it" do
+      search_reply("saleIdentifier" => "12345678_ABCDE_x", "invoiceDate" => "20160230")
+
+      expect { provider.void({ invoice: "GX38551078", reason: "客戶取消" }) }
+        .to raise_error(Einvoice::NotFoundError)
+      expect(tradevan.path).to eq("post/cancel")
+    end
+
+    it "raises LOOKUP_FAILED when the invoice detail is not an object" do
+      reply("get/searchInvoiceDetail", [])
+
+      expect { provider.void({ invoice: "GX38551078", reason: "客戶取消" }) }
+        .to raise_error(Einvoice::ProviderError) { |error| expect(error.reason).to eq(Einvoice::Reason::LOOKUP_FAILED) }
+      expect { provider.query({ invoice: "GX38551078" }) }.to raise_error(Einvoice::ProviderError, /not an object/)
     end
 
     it "refuses to void an invoice that has an allowance" do
@@ -314,7 +330,16 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
       expect(provider.query({ invoice: "GX38551078" })).to have_attributes(tax_type: nil, tax_rate: nil)
 
       search_reply("detailList" => [line.merge("taxType" => "T"), line.merge("taxType" => "O")])
-      expect(provider.query({ invoice: "GX38551078" }).tax_type).to eq(Einvoice::TaxType::MIXED)
+      expect(provider.query({ invoice: "GX38551078" }))
+        .to have_attributes(tax_type: Einvoice::TaxType::MIXED, tax_rate: Rational(5, 100))
+    end
+
+    it "reads the rate of a mixed invoice without a taxable line as 0" do
+      line = { "productName" => "A", "qty" => "1", "price" => "1", "total" => "1" }
+      search_reply("detailList" => [line.merge("taxType" => "Z"), line.merge("taxType" => "O")])
+
+      expect(provider.query({ invoice: "GX38551078" }))
+        .to have_attributes(tax_type: Einvoice::TaxType::MIXED, tax_rate: 0)
     end
 
     it "raises ProviderError for a date that is not valid, and reads a missing one as nil" do

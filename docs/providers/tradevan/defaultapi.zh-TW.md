@@ -270,15 +270,15 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | Unified | 來源 |
 | --- | --- |
 | `invoice_number` | `invoiceNumber` |
-| `invoice_datetime` | `invoiceDate`、`invoiceTime`。沒有時為 `nil`。日期或時間不合法時：`ProviderError` |
+| `invoice_datetime` | `invoiceDate`、`invoiceTime`。沒有 `invoiceDate` 時為 `nil`。有日期但沒有 `invoiceTime` 時，為當天的午夜。日期或時間不合法時：`ProviderError` |
 | `random_code` | `checkNumber` |
-| `order_id` | 去掉前綴的 `saleIdentifier`。前綴不是這個 adapter 的時為 `nil`，例如 1.x client 開立的發票 |
+| `order_id` | 去掉 `companyUn_orgId_` 前綴的 `saleIdentifier`。這個 adapter 開立的發票，這就是訂單編號（4.2）。其他發票，例如 1.x client 開立的，後段可能是別的值：每個 `saleIdentifier` 都有這個前綴 [rules]，所以 adapter 無法分辨。沒有前綴時為 `nil` |
 | `status` | 見 4.4 |
 | `amount` | `sales = exclusiveAmount`、`tax = tax`、`total = total` |
 | `buyer` | `receiverName`、`receiverAddr`、`receiverPhone`。回應裡沒有 email 和統一編號 |
 | `items` | `detailList[]`：`productName`、`qty`、`price`、`total`、`taxType` |
 | `tax_type` | 品項的 `taxType`。有兩種不同的已知稅別時為 `MIXED`。有一列沒有已知稅別時為 `nil` |
-| `tax_rate` | `TAXABLE` 和 `MIXED` 為 `0.05`，`ZERO_RATED` 和 `TAX_FREE` 為 `0`。DEFAULTAPI 沒有稅率欄位，應稅品項只能是一般稅率（6.1） |
+| `tax_rate` | 有 `TAXABLE` 的列時為 `0.05`，否則為 `0`，`MIXED` 也一樣。有一列沒有已知稅別時為 `nil`。DEFAULTAPI 沒有稅率欄位，應稅品項只能是一般稅率（6.1） |
 | `reference` | 用上面的欄位組成 |
 
 ### 4.3 金額與稅額

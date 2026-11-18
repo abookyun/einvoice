@@ -65,6 +65,7 @@ module Einvoice
         def allowance(parsed, settings, sale:, invoice_date:, today:)
           breakdown = parsed.tax_breakdown(provider: Client::PROVIDER)
           check_tax!(breakdown.lines.map(&:tax_type), parsed.tax_rate)
+          check_total!(breakdown)
           amount = parsed.amount
           header(settings).merge(
             "type" => "A",
@@ -97,9 +98,10 @@ module Einvoice
         end
 
         # The order id back from a +saleIdentifier+ built by {sale_identifier}.
-        # nil for an identifier this adapter did not build, for example one from
-        # the 1.x client: its rest is not an order id, and building it again
-        # from that rest would double the prefix.
+        # The rest after the prefix. That is the order id for an invoice that
+        # this adapter issued. Every saleIdentifier has the prefix [rules], so
+        # for another invoice the rest is only a guess. nil without the prefix:
+        # building it again from the whole value would double the prefix.
         def order_id_from(settings, sale_identifier)
           prefix = sale_identifier(settings, "")
           value = sale_identifier.to_s
@@ -121,7 +123,8 @@ module Einvoice
         # DEFAULTAPI has no field to carry that gap, so such an invoice cannot be
         # sent.
         def check_total!(breakdown)
-          sum = breakdown.lines.sum { |line| line.gross_amount.to_r }
+          # The sum of the values that go out, so the check and the wire agree.
+          sum = breakdown.lines.sum { |line| number(line.gross_amount).to_r }
           return if sum == breakdown.total_amount
 
           raise UnsupportedError.new("Tradevan DEFAULTAPI needs the item totals with tax " \
@@ -237,11 +240,17 @@ module Einvoice
         end
 
         # DEFAULTAPI sends every value as a string. Whole numbers lose their ".0".
+        # Whole numbers lose their ".0". Other numbers are written in fixed
+        # point with up to 7 decimal places (MIG 表 15-5), never as "1.0e-07".
+        # A Float is read through its shortest form, so 0.1 stays 0.1 and not
+        # its binary approximation.
         def number(value)
           return value if value.is_a?(String)
 
-          rational = value.to_r
-          rational.denominator == 1 ? rational.to_i.to_s : value.to_f.to_s
+          rational = (value.is_a?(Float) ? value.to_s.to_r : value.to_r).round(7)
+          return rational.to_i.to_s if rational.denominator == 1
+
+          format("%.7f", rational).sub(/0+\z/, "")
         end
       end
     end

@@ -162,6 +162,23 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Payload do
     end
 
     # 100.5 without tax is 105.5 with tax, but the whole-TWD total is 106.
+    # As Floats, 0.1 + 0.9 + 20 is not exactly 21. The check uses the values
+    # that go out, and those add up.
+    it "sends decimal line totals that add up to the whole total" do
+      items = [{ description: "A", quantity: 1, unit_price: 0.1, amount: 0.1 },
+               { description: "B", quantity: 1, unit_price: 0.9, amount: 0.9 },
+               { description: "C", quantity: 1, unit_price: 20, amount: 20 }]
+      data = build(issue_input(items: items, amount: { sales_amount: 21, tax_amount: 0, total_amount: 21 }))
+
+      expect(data["itemList"].map { |row| row["itemTotal"] }).to eq(%w[0.1 0.9 20])
+      expect(rules.issue_errors(data)).to eq({})
+    end
+
+    it "writes small amounts in fixed point, not as 1.0e-07" do
+      expect([1.0e-07, -1.0e-07, Rational(94, 3)].map { |v| described_class.number(v) })
+        .to eq(%w[0.0000001 -0.0000001 31.3333333])
+    end
+
     it "refuses item totals with tax that cannot add up to the whole-TWD total" do
       input = issue_input(**b2b, price_mode: "TAX_EXCLUSIVE",
                                  items: [{ description: "A", quantity: 1, unit_price: 100.5, amount: 100.5 }],
@@ -234,6 +251,18 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Payload do
       expect(data["itemList"].sum { |row| row["itemExclude"].to_i }).to eq(95)
       expect(data["itemList"].sum { |row| row["tax"].to_i }).to eq(5)
       expect(data["itemList"].map { |row| row["serialNumber"] }).to eq(%w[0001 0002 0003])
+    end
+
+    it "refuses allowance line totals that cannot add up to the whole-TWD total" do
+      input = Einvoice::Input.allowance({
+                                          invoice: "GX38551078", allowance_id: "AL_1",
+                                          items: [{ description: "A", quantity: 1, unit_price: 100.5, amount: 100.5 }],
+                                          amount: { sales_amount: 101, tax_amount: 5, total_amount: 106 },
+                                          price_mode: "TAX_EXCLUSIVE", tax_type: "TAXABLE", tax_rate: 0.05
+                                        })
+      expect do
+        described_class.allowance(input, settings, sale: "x", invoice_date: Date.today, today: Date.today)
+      end.to raise_error(Einvoice::UnsupportedError, /\(105\.5\).*\(106\)/)
     end
 
     it "refuses the special tax rate" do
