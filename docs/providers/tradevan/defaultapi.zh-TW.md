@@ -6,9 +6,9 @@
 
 ## 1. 狀態與來源
 
-> **可信度：** 沒有公開文件，也沒有帳號。這個 API 透過 1.x client 在正式環境使用中（`[prod]`）。實驗性質的 2.x adapter 進行中。它只能對我們的 fake 測試，這裡的內容在 2026 年都沒有對 live API 實際執行過。第 4 節和 6.4 是 adapter 要遵守的對應方式。
+> **可信度：** 沒有公開文件，也沒有帳號。這個 API 透過 1.x client 在正式環境使用中（`[prod]`）。2.x 的 adapter 是實驗性質。它只對我們的 fake 通過共用 contract，這裡的內容在 2026 年都沒有對 live API 實際執行過。第 4 節和 6.4 說明 adapter 的做法。
 
-這是 1.x client 包裝的 API。所有路徑都以 `/DEFAULTAPI/` 開頭。2.x 的 adapter 會是 `Einvoice::Tradevan::DefaultAPI::Provider`，標為實驗性質。
+這是 1.x client 包裝的 API。所有路徑都以 `/DEFAULTAPI/` 開頭。2.x 的 adapter 是 `Einvoice::Tradevan::DefaultAPI::Provider`，標為實驗性質。
 
 API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒絕提供較新的版本給我們。所以沒有公開的連結。本筆記依據 1.x 現有的資料，以及一份正式環境使用者的回報整理而成。本專案目前沒有人有關貿帳號，所以這裡的內容在 2026 年都沒有對 live API 驗證過。
 
@@ -194,7 +194,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | `tax_rate` | （無） | 不送出。應稅發票的稅率不是 `0.05` 時：`UnsupportedError` |
 | `items[]` | `itemList` | 見下方 |
 | `remark` | （無） | `mainRemark` 只有 type `G` 才有，不送出 |
-| `price_mode` `TAX_EXCLUSIVE` | （無） | `itemTotal` 含稅，所以這是 `ValidationError` |
+| `price_mode` | （無） | 不送出。`itemTotal` 含稅，所以任何 price mode 都以含稅金額送出。各列含稅金額加總不等於整數的總計時：`UnsupportedError`（4.3） |
 | `currency` | （無） | 不是新台幣時丟出 `UnsupportedError` |
 
 品項：
@@ -205,15 +205,15 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | （序號） | `serialNumber` | 4 位數字：`0001`、`0002`、… |
 | `description` | `productName` | 最多 300 |
 | `quantity` | `qty` | 整數不帶 `.0`。見第 7 節問題 4 |
-| `unit_price` | `price` | |
-| `amount` | `itemTotal` | 含稅 |
+| `unit_price` | `price` | core `tax_breakdown` 中該列的 `gross_unit_price` |
+| `amount` | `itemTotal` | 該列的 `gross_amount`，含稅 |
 | `tax_type` | `taxType` | `T`、`Z`、`O`（6.1） |
 
 結果：
 
 | Unified | 來源 |
 | --- | --- |
-| `invoice_number` | `invoiceNumber` |
+| `invoice_number` | `invoiceNumber`。空白時：`ProviderError`，因為關貿可能已經開立，但 reference 無法使用它 |
 | `invoice_datetime` | `invoiceDate` 和 `invoiceTime`，UTC+8 |
 | `random_code` | `checkNumber` |
 | `order_id`、`total_amount` | 輸入值 |
@@ -246,7 +246,7 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | `invoice.invoice_datetime`，沒有時取自查詢 | `itemList[].invoiceDate` | 必填。UTC+8 的 `yyyyMMdd` |
 | `items[]` | `itemList[]` | 同開立。`itemExclude` 是品項的未稅金額，`tax` 是它的稅額，`itemTotal` 是兩者相加（4.3） |
 
-結果：沒有任何來源顯示 type `A` 的回應。adapter 讀取 `allowanceNumber`，因為 type `I` 的回應有這個欄位。如果是空的，adapter 丟出帶有原始回應的 `ProviderError`。`allowance_date` 在回應有 `allowanceDate` 時取它，否則為 `nil`。
+結果：沒有任何來源顯示 type `A` 的回應。adapter 讀取 `allowanceNumber`，因為 type `I` 的回應有這個欄位。如果是空的，adapter 丟出帶有原始回應的 `ProviderError`。`allowance_date` 在回應有 `allowanceDate` 時取它。否則是 UTC+8 的今天，也就是 adapter 送出的 `transactionDate`（推導）。
 
 #### `void_allowance`
 
@@ -270,13 +270,15 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | Unified | 來源 |
 | --- | --- |
 | `invoice_number` | `invoiceNumber` |
-| `invoice_datetime` | `invoiceDate`、`invoiceTime` |
+| `invoice_datetime` | `invoiceDate`、`invoiceTime`。沒有 `invoiceDate` 時為 `nil`，也不讀取 `invoiceTime`。有日期但沒有 `invoiceTime` 時，為當天的午夜。日期或時間不合法時：`ProviderError` |
 | `random_code` | `checkNumber` |
-| `order_id` | 去掉前綴的 `saleIdentifier` |
+| `order_id` | 去掉 `companyUn_orgId_` 前綴的 `saleIdentifier`。這個 adapter 開立的發票，這就是訂單編號（4.2）。其他發票，例如 1.x client 開立的，後段可能是別的值：每個 `saleIdentifier` 都有這個前綴 [rules]，所以 adapter 無法分辨。沒有前綴時為 `nil` |
 | `status` | 見 4.4 |
 | `amount` | `sales = exclusiveAmount`、`tax = tax`、`total = total` |
 | `buyer` | `receiverName`、`receiverAddr`、`receiverPhone`。回應裡沒有 email 和統一編號 |
 | `items` | `detailList[]`：`productName`、`qty`、`price`、`total`、`taxType` |
+| `tax_type` | 品項的 `taxType`。有兩種不同的已知稅別時為 `MIXED`。有一列沒有已知稅別時為 `nil` |
+| `tax_rate` | 有 `TAXABLE` 的列時為 `0.05`，否則為 `0`，`MIXED` 也一樣。有一列沒有已知稅別時為 `nil`。DEFAULTAPI 沒有稅率欄位，應稅品項只能是一般稅率（6.1） |
 | `reference` | 用上面的欄位組成 |
 
 ### 4.3 金額與稅額
@@ -289,7 +291,8 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 - 表頭的 `total` 必須等於 `itemTotal` 的合計 `[rules]`。比較時用小數，不用整數。
 - `[readme]` 中，`itemTotal` 為 20000，`tax` 為 952。回應給出 `texclusiveAmount` 19048、`tax` 952、`inclusiveAmount` 20000。所以拆稅由關貿處理：`20000 / 1.05 = 19047.6`，四捨五入成 19048。
 - adapter 送出含稅的 `itemTotal`，不送品項的 `tax`。拆稅由關貿計算。
-- B2B 使用同樣的欄位。`total` 是 `amount.total_amount`，`itemTotal` 是 core `tax_breakdown` 中每一列的 `gross_amount`。
+- B2C 和 B2B 使用同樣的欄位，任何 `price_mode` 都可以。`total` 是 `amount.total_amount`，`itemTotal` 是 core `tax_breakdown` 中每一列的 `gross_amount`。
+- `total` 是整數新台幣，但金額不是整數時，各列的含稅金額加總可能有小數。例如未稅 100.5 的品項，`itemTotal` 是 105.5，`total` 卻是 106。DEFAULTAPI 沒有欄位可以表達這個差距，所以 adapter 會在呼叫前丟出 `UnsupportedError`。
 
 **折讓。**
 
@@ -549,7 +552,9 @@ type `I` 的回應 `[readme]`：
 | `Success` 為 `E`，訊息提到帳號、密碼或金鑰 | `AuthError` | `CREDENTIALS_INVALID` |
 | `Success` 為 `E`，其他訊息 | `ProviderError` | |
 | `failReason` 為 `duplicated`，或包含「重複」／「重覆」 | `ConflictError` | `DUPLICATE_ORDER` |
+| 訊息是「作廢……不能」，例如「已作廢，不能折讓」。比「已作廢」先檢查 | `ConflictError` | `ALLOWANCE_BLOCKED_BY_VOID` |
 | 訊息包含「已作廢」／「已被作廢」 | `ConflictError` | `ALREADY_VOIDED` |
+| 訊息包含「已折讓」／「折讓過」 | `ConflictError` | `VOID_BLOCKED_BY_ALLOWANCE` |
 | 訊息包含「查無」／「不存在」／not found | `NotFoundError` | |
 | 其他 | `ProviderError` | |
 
@@ -558,7 +563,7 @@ type `I` 的回應 `[readme]`：
 ## 7. 待解問題
 
 1. 狀態代碼 `V` 和 `I` 是什麼意思？adapter 猜錯的話，會把已作廢的發票回報成已開立。
-2. type `A` 的開立回應長什麼樣子？會回傳折讓單號嗎？
+2. type `A` 的開立回應長什麼樣子？會回傳折讓單號和折讓日期嗎？
 3. 關貿會送出哪些失敗訊息？沒有這些訊息，錯誤就無法對應到 `NotFoundError` 或 `ConflictError`。
 4. `qty` 有放大嗎？`[readme]` 中的品項 `qty` 為 4000、`price` 為 5、`itemTotal` 為 20000，所以 `qty × price = itemTotal`。`[readme-2026]` 中的品項 `qty` 為 1000、`price` 為 100、`itemTotal` 為 100，看起來 `qty` 是數量乘以 1000。`[rfc]` 也把 `qty` 描述成「乘以 1000 的整數」。來源互相矛盾，而從 1.x 改用 2.x 的使用者需要知道答案。
 5. 測試和正式環境的主機是什麼？

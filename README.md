@@ -20,6 +20,8 @@ A second adapter, **Amego 光貿**, covers the five operations and is checked ag
 
 An **ezPay 簡單行動支付** adapter is experimental: it is built from ezPay's public manuals, and has not run against ezPay.
 
+A **Tradevan 關貿 DEFAULTAPI** adapter is experimental: it is ported from the 1.x client and has not been run against the live API.
+
 Other centers follow. Coverage and completeness for those will vary: their docs are less complete and they have no public sandbox, so an adapter built from docs alone carries some uncertainty until real production use confirms it.
 
 ## Installation
@@ -190,6 +192,29 @@ provider = Einvoice::EzPay::Provider.new(
 - **Not supported**: query by order id, special tax rates, foreign currency, mixed tax on a B2B invoice, and the carrier check APIs. `tax_rate` must be 0 or 0.05.
 - **Anything else**: `provider.raw(path, version, fields)`, for example `provider.raw("/Api/invoice_touch_issue", "1.0", { ... })`.
 - The details and the open questions are in [`docs/providers/ezpay/invoice.md`](docs/providers/ezpay/invoice.md).
+
+### Tradevan 關貿 (DEFAULTAPI, experimental)
+
+```ruby
+provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
+  acnt: "...", acntp: "...",
+  key1: "...", key2: "...",          # 16 bytes each, server-side only
+  base_url: "https://...",           # your Tradevan host; there is no default
+  company_un: "12345678", org_id: "ABCDE",
+  paper_print_mode: "0", invoice_alarm_mode: "4",
+  invoice_paper_returned: "N", allowance_paper_returned: "N",
+  member_carrier_type: "1K0001"      # only needed for MEMBER carriers
+)
+```
+
+- **Experimental.** This adapter is ported from the 1.x client, its validators and its README examples. Tradevan does not publish its API docs, and nobody has run this adapter against the live API. Test it against your own account before you rely on it. The 1.x client stays on `1-x-stable`.
+- **Void and allowance need the original `saleIdentifier`.** DEFAULTAPI identifies an invoice by it. The adapter takes it from `provider_options: { sale_identifier: }` (use this for an invoice that the 1.x client issued), else builds it from the reference's order id, else queries the invoice by number. An allowance also needs the invoice date, from the reference or the same query. The reference from `issue` has all of these.
+- **An allowance needs the tax type and rate** before any lookup. They come from the reference of `issue` or `query`. With only an invoice number, pass `tax_type:` and, for taxable items, `tax_rate:` in the allowance input.
+- **Query status is often `nil`.** The meaning of DEFAULTAPI's status codes is unknown, so the adapter does not guess. `status` is `:allowance` when the invoice has an allowance, and `nil` otherwise. The raw code is in `result.raw["status"]`.
+- **Prices include tax on the wire.** The adapter takes them from the core's breakdown, so any `price_mode` works. A taxable `tax_rate` must be 0.05. When the allowance response has no date, the allowance date is today (Asia/Taipei).
+- **Not supported**: query by order id, mixed tax, the special tax rate, and foreign currency.
+- **Anything else**: reach the other DEFAULTAPI endpoints through `provider.raw(path, params)`, for example `provider.raw("get/getInvoiceMarkInfo", { ... })`.
+- The details and the open questions are in [`docs/providers/tradevan/defaultapi.md`](docs/providers/tradevan/defaultapi.md).
 
 ## 財政部 lookups
 

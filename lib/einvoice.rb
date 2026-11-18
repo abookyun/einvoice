@@ -14,6 +14,7 @@ require "einvoice/mock_provider"
 require "einvoice/ecpay"
 require "einvoice/amego"
 require "einvoice/ezpay"
+require "einvoice/tradevan"
 require "einvoice/mof"
 
 # Provider-agnostic Taiwan e-invoice SDK (財政部 MIG 4.0).

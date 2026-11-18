@@ -22,6 +22,8 @@
 
 **ezPay 簡單行動支付** adapter 目前是實驗性質：它依 ezPay 公開的手冊寫成，還沒有對 ezPay 執行過。
 
+**關貿 DEFAULTAPI** adapter 目前是實驗性質：它從 1.x client 移植而來，還沒有對 live API 執行過。
+
 其他加值中心會陸續加入。它們的涵蓋範圍和完整度會不一樣：這些加值中心的文件比較不完整，也沒有公開的測試環境。所以只依文件寫出來的 adapter，在真正上線使用並確認之前，會有一些不確定性。
 
 ## 安裝
@@ -199,6 +201,29 @@ provider = Einvoice::EzPay::Provider.new(
 - **不支援**：訂單編號查詢、特種稅率、外幣、B2B 發票的混合稅率，以及載具驗證 API。`tax_rate` 只能是 0 或 0.05。
 - **其他功能**：`provider.raw(path, version, fields)`，例如 `provider.raw("/Api/invoice_touch_issue", "1.0", { ... })`。
 - 細節和待解問題見 [`docs/providers/ezpay/invoice.zh-TW.md`](docs/providers/ezpay/invoice.zh-TW.md)。
+
+### 關貿 Tradevan（DEFAULTAPI，實驗性質）
+
+```ruby
+provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
+  acnt: "...", acntp: "...",
+  key1: "...", key2: "...",          # 16 bytes each, server-side only
+  base_url: "https://...",           # your Tradevan host; there is no default
+  company_un: "12345678", org_id: "ABCDE",
+  paper_print_mode: "0", invoice_alarm_mode: "4",
+  invoice_paper_returned: "N", allowance_paper_returned: "N",
+  member_carrier_type: "1K0001"      # only needed for MEMBER carriers
+)
+```
+
+- **實驗性質。** 這個 adapter 依據 1.x client、它的 validator 和 README 範例移植而來。關貿沒有公開 API 文件，也沒有人對 live API 執行過這個 adapter。請先用你自己的帳號測試，再正式使用。1.x client 繼續留在 `1-x-stable`。
+- **作廢和折讓需要原發票的 `saleIdentifier`。** DEFAULTAPI 用它識別發票。adapter 依序從 `provider_options: { sale_identifier: }` 取得（1.x client 開立的發票請用這個方式），或用 reference 的訂單編號組出，或用發票號碼查詢。折讓另外需要原發票日期，從 reference 或同一次查詢取得。`issue` 回傳的 reference 都有這些值。
+- **折讓需要稅別和稅率**，而且在查詢之前就要有。`issue` 或 `query` 回傳的 reference 都有。只有發票號碼時，請在折讓的輸入中傳入 `tax_type:`，有應稅品項時也要傳入 `tax_rate:`。
+- **查詢結果的 `status` 常常是 `nil`。** DEFAULTAPI 狀態代碼的意思還不清楚，所以 adapter 不猜。發票有折讓時 `status` 為 `:allowance`，其他情況為 `nil`。原始代碼在 `result.raw["status"]`。
+- **送出的價格含稅。** adapter 從 core 的稅額明細取得價格，所以任何 `price_mode` 都可以。應稅的 `tax_rate` 必須是 0.05。折讓的回應沒有日期時，折讓日期是今天（Asia/Taipei）。
+- **不支援**：用訂單編號查詢、混合稅率、特種稅率，以及外幣。
+- **其他功能**：其他 DEFAULTAPI endpoint 請用 `provider.raw(path, params)` 呼叫，例如 `provider.raw("get/getInvoiceMarkInfo", { ... })`。
+- 細節和待解問題見 [`docs/providers/tradevan/defaultapi.zh-TW.md`](docs/providers/tradevan/defaultapi.zh-TW.md)。
 
 ## 財政部查詢
 
