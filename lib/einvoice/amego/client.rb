@@ -65,18 +65,30 @@ module Einvoice
         post["Content-Type"] = "application/x-www-form-urlencoded"
         post["Accept"] = "application/json"
         post.body = self.class.encode_form(form)
-        parse_json(http.request(post))
-      rescue Einvoice::Error
-        raise
-      rescue StandardError => e
+        parse(http.request(post))
+      rescue *Error::NETWORK_ERRORS => e
         raise NetworkError.new("Amego request failed: #{e.message}", provider: PROVIDER, cause: e)
       end
 
-      def parse_json(response)
-        JSON.parse(response.body.to_s)
+      # A body that Amego wrote (a JSON object with +code+) decides the error,
+      # whatever the HTTP status. Any other body falls back to the status:
+      # HTTP 429 and 5xx are a NetworkError, so the caller can retry
+      # (docs/providers/README.md, "The unified model").
+      def parse(response)
+        body = JSON.parse(response.body.to_s)
+        return body if body.is_a?(Hash) && body.key?("code")
+
+        raise_for_status!(response)
+        body
       rescue JSON::ParserError => e
+        raise_for_status!(response)
         raise ProviderError.new("Amego returned a non-JSON response (HTTP #{response.code})",
                                 provider: PROVIDER, raw_code: response.code, cause: e)
+      end
+
+      def raise_for_status!(response)
+        error = NetworkError.for_status(response, provider: PROVIDER)
+        raise error if error
       end
 
       def read(body)

@@ -63,8 +63,31 @@ RSpec.describe Einvoice::Amego::Client do
     end
 
     it "raises ProviderError on a body that is not JSON" do
+      respond_with("<html>", 200)
+      expect { client.request("/json/f0401", {}) }.to raise_error(Einvoice::ProviderError, /HTTP 200/)
+    end
+
+    it "raises NetworkError for HTTP 5xx with a body that Amego did not write" do
       respond_with("<html>", 502)
-      expect { client.request("/json/f0401", {}) }.to raise_error(Einvoice::ProviderError, /HTTP 502/)
+      expect { client.request("/json/f0401", {}) }.to raise_error(Einvoice::NetworkError, /HTTP 502/)
+
+      respond_with({ "error" => "bad gateway" }, 503)
+      expect { client.request("/json/f0401", {}) }.to raise_error(Einvoice::NetworkError, /HTTP 503/)
+    end
+
+    it "raises NetworkError with RATE_LIMITED for HTTP 429" do
+      respond_with("Too Many Requests", 429)
+      expect { client.request("/json/f0401", {}) }
+        .to raise_error(Einvoice::NetworkError) { |error| expect(error.reason).to eq(Einvoice::Reason::RATE_LIMITED) }
+    end
+
+    # The rule of the unified model: a body that the adapter can read decides.
+    it "lets a body that Amego wrote decide, whatever the HTTP status" do
+      respond_with({ "code" => 0, "msg" => "" }, 503)
+      expect(client.request("/json/f0401", {})).to include("code" => 0)
+
+      respond_with({ "code" => 71, "msg" => "查無資料" }, 500)
+      expect { client.request("/json/f0401", {}) }.to raise_error(Einvoice::NotFoundError)
     end
 
     it "raises ProviderError on JSON without a code" do
@@ -75,6 +98,11 @@ RSpec.describe Einvoice::Amego::Client do
     it "raises NetworkError when the connection fails" do
       stub_request(:post, %r{amego\.test}).to_raise(Errno::ECONNREFUSED)
       expect { client.request("/json/f0401", {}) }.to raise_error(Einvoice::NetworkError)
+    end
+
+    it "does not report a bug as a NetworkError" do
+      stub_request(:post, %r{amego\.test}).to_raise(NoMethodError.new("a bug"))
+      expect { client.request("/json/f0401", {}) }.to raise_error(NoMethodError, /a bug/)
     end
   end
 
