@@ -187,7 +187,7 @@ class FakeEzPay
                   "CreateTime").merge(
                     "BuyerName" => fields["BuyerName"], "BuyerUBN" => fields["BuyerUBN"],
                     "BuyerAddress" => fields["BuyerAddress"], "BuyerPhone" => "", "BuyerEmail" => fields["BuyerEmail"],
-                    "Category" => fields["Category"], "TaxType" => fields["TaxType"], "TaxRate" => "0.05000",
+                    "Category" => fields["Category"], "TaxType" => fields["TaxType"], "TaxRate" => query_rate(fields["TaxRate"]),
                     "Amt" => fields["Amt"], "TaxAmt" => fields["TaxAmt"], "TotalAmt" => fields["TotalAmt"],
                     "CarrierType" => fields["CarrierType"], "CarrierNum" => Crypto.urldecode(fields["CarrierNum"]),
                     "LoveCode" => fields["LoveCode"], "PrintFlag" => fields["PrintFlag"],
@@ -219,5 +219,11 @@ class FakeEzPay
   def reply(status, message, result = nil)
     body = { "Status" => status, "Message" => message, "Result" => result ? JSON.generate(result) : "" }
     { status: 200, headers: { "Content-Type" => "application/json" }, body: JSON.generate(body) }
+  end
+
+  # Issue sends the rate as a percent ("5"). The query answers it as a
+  # fraction with five decimal places ("0.05000") (docs, section 4.2).
+  def query_rate(percent)
+    format("%.5f", percent.to_r / 100)
   end
 end

@@ -94,6 +94,15 @@ RSpec.describe Einvoice::EzPay::Provider, "adapter details" do
                                                            amount: 100, unit: "個", tax_type: nil)])
     end
 
+    it "reads back the rate of a tax-free invoice as 0" do
+      issued = provider.issue(issue_input.merge(tax_type: "TAX_FREE",
+                                                amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }))
+
+      expect(ezpay.fields).to include("TaxRate" => "0")
+      expect(provider.query({ invoice: issued.reference })).to have_attributes(tax_type: Einvoice::TaxType::TAX_FREE,
+                                                                             tax_rate: 0)
+    end
+
     it "gives no status to an invoice that is not voided, and VOIDED after a void" do
       issued = provider.issue(issue_input)
       expect(provider.query({ invoice: issued.reference }).status).to be_nil
