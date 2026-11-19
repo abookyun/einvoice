@@ -45,6 +45,12 @@ RSpec.describe Einvoice::ECPay::Payload do
         .to raise_error(Einvoice::ValidationError, /Print must be 0 for a carrier invoice/)
     end
 
+    # TaxType can only become 2 without a mark through provider_options[:data].
+    it "refuses a zero-rated payload without a clearance mark, as invalid input" do
+      expect { build(provider_options: { data: { "TaxType" => "2" } }) }
+        .to raise_error(Einvoice::ValidationError, /ClearanceMark is required when TaxType is 2/)
+    end
+
     it "refuses to print without somewhere to send the paper" do
       expect { build(carrier: nil) }
         .to raise_error(Einvoice::UnsupportedError, /CustomerName is required.*CustomerAddr is required/m)

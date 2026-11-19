@@ -192,7 +192,13 @@ module Einvoice
       breakdown = input.tax_breakdown(provider: provider)
       total = breakdown.total_amount
       tax = input.resolved_category == InvoiceCategory::B2B ? breakdown.tax_amount : 0
-      AmountSummary.new(sales_amount: total - tax, tax_amount: tax, total_amount: total)
+      totals = { sales_amount: total - tax, tax_amount: tax, total_amount: total }
+      # Discount lines can take the items below zero. A given amount cannot be
+      # negative, so a derived one cannot be either.
+      totals.each do |field, value|
+        fail!("amount.#{field} must not be negative, got #{value}", provider) if value.negative?
+      end
+      AmountSummary.new(**totals)
     end
 
     def allowance_amount(input, provider)

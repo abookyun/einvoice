@@ -116,6 +116,12 @@ module Einvoice
         errors = []
         relate = data["RelateNumber"].to_s
         errors << "RelateNumber is required" if relate.empty?
+        # A zero-rated invoice needs ClearanceMark (MIG, 5000007). The adapter
+        # sets it, but provider_options[:data] can change TaxType after that.
+        # TaxType 9 needs it only with a zero-rated item, which the core checks.
+        if data["TaxType"] == "2" && data["ClearanceMark"].to_s.empty?
+          errors << "ClearanceMark is required when TaxType is 2"
+        end
 
         # 發票金額(含稅) must equal round(Σ ItemAmount) — 5000022. Only checked for
         # 含稅 (vat=1). With vat=0, ECPay does not read ItemAmount: it stores

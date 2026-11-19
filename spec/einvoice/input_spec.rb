@@ -175,6 +175,15 @@ RSpec.describe Einvoice::Input do
       expect(lines).to eq([[100, 5, 105], [-20, -1, -21]])
     end
 
+    # A discount larger than the sale would take the derived totals below
+    # zero, which a given amount may not be either.
+    it "rejects negative totals that the core derives" do
+      items = [{ "description" => "a", "quantity" => 1, "unit_price" => 100, "amount" => 100 },
+               { "description" => "discount", "quantity" => 1, "unit_price" => -200, "amount" => -200 }]
+      expect(error_for { issue("amount" => nil, "tax_type" => "TAX_FREE", "items" => items) })
+        .to match(/amount.sales_amount must not be negative, got -100/)
+    end
+
     it "rejects negative totals" do
       expect(error_for { issue(amount: { "sales_amount" => -100, "tax_amount" => 0, "total_amount" => -100 }) })
         .to match(/sales_amount must not be negative/)
