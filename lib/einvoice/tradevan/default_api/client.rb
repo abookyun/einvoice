@@ -71,10 +71,11 @@ module Einvoice
           http.use_ssl = uri.scheme == "https"
           http.open_timeout = @timeout
           http.read_timeout = @timeout
-          response = http.request(build_request(path, uri))
+          response = nil
+          http.request(build_request(path, uri)) { |res| (response = res).read_body }
           [parse(response), response]
         rescue *Error::NETWORK_ERRORS => e
-          raise NetworkError.new("Tradevan request failed: #{e.message}", provider: PROVIDER, cause: e)
+          raise NetworkError.for_failure(e, provider: PROVIDER, name: "Tradevan", response: response)
         end
 
         def build_request(path, uri)

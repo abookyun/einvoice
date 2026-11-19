@@ -70,9 +70,11 @@ module Einvoice
         post["Content-Type"] = "application/x-www-form-urlencoded"
         post["Accept"] = "application/json"
         post.body = self.class.encode_form(form)
-        parse(http.request(post))
+        response = nil
+        http.request(post) { |res| (response = res).read_body }
+        parse(response)
       rescue *Error::NETWORK_ERRORS => e
-        raise NetworkError.new("Amego request failed: #{e.message}", provider: PROVIDER, cause: e)
+        raise NetworkError.for_failure(e, provider: PROVIDER, name: "Amego", response: response)
       end
 
       # A body that Amego wrote (a JSON object with +code+) decides the error,

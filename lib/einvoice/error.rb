@@ -174,6 +174,19 @@ module Einvoice
       reason = status == 429 ? Reason::RATE_LIMITED : nil
       new("#{provider} returned HTTP #{status}", provider: provider, reason: reason, raw_code: response.code)
     end
+
+    # The error for a connection failure. +response+ is the response whose
+    # headers had arrived before the failure, or nil. Its status is kept, so a
+    # body that failed to arrive after HTTP 429 is still RATE_LIMITED. +name+
+    # is the provider's name for the message, such as "ECPay".
+    def self.for_failure(cause, provider:, name: provider, response: nil)
+      message = "#{name} request failed: #{cause.message}"
+      return new(message, provider: provider, cause: cause) unless response
+
+      reason = response.code.to_i == 429 ? Reason::RATE_LIMITED : nil
+      new("#{message} (HTTP #{response.code})", provider: provider, reason: reason, raw_code: response.code,
+                                                 cause: cause)
+    end
   end
 
   # Provider returned an error we could not map.

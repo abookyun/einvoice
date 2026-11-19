@@ -49,6 +49,19 @@ RSpec.shared_examples "a provider client" do
     expect { send_request }.to raise_error(Einvoice::NetworkError)
   end
 
+  # The headers arrived, then the body did not. The status must not be lost.
+  it "keeps the HTTP status when the body fails after the headers" do
+    respond(429, "")
+    allow_any_instance_of(Net::HTTPResponse) # rubocop:disable RSpec/AnyInstance
+      .to receive(:read_body).and_raise(Net::ReadTimeout)
+
+    expect { send_request }.to raise_error(Einvoice::NetworkError) { |error|
+      expect(error.cause).to be_a(Net::ReadTimeout)
+      expect(error.raw_code).to eq("429")
+      expect(error.reason).to eq(Einvoice::Reason::RATE_LIMITED)
+    }
+  end
+
   # Only connection errors are rescued: a bug must not look like a network
   # problem that the caller retries.
   it "lets a bug through as it is" do
