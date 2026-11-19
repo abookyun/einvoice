@@ -332,7 +332,7 @@ Unknown. The sources say nothing about upload times or void deadlines. The MOF r
 - **Tax types are letters.** `T`, `Z`, `O` stand for MIG `1`, `2`, `3` (inferred). There is no letter for MIG `4` or `9` (6.1).
 - **Carrier types are the MIG codes** (6.2).
 - **`checkNumber` on type `G`.** MIG 4.0 dropped `CheckNumber` from F0401 `[mig]`. We do not know what Tradevan does with it today.
-- **No zero rated details.** `issueData` has no fields for `CustomsClearanceMark` or `ZeroTaxRateReason`, which F0401 requires for zero rated invoices `[mig 表 15-3]`. Tradevan must fill them, or zero rated invoices do not work through this API.
+- **No zero rated details.** `issueData` has no fields for `CustomsClearanceMark` or `ZeroTaxRateReason`, which F0401 requires for zero rated invoices `[mig 表 15-3]`. The adapter does not send `customs_clearance_mark` or `zero_tax_rate_reason`. Tradevan must fill them, or zero rated invoices do not work through this API.
 - **No void reason.** `voidData` has no reason. MIG F0501 requires `CancelReason`, so Tradevan fills it (inferred).
 - **No void date.** `voidData` has no invoice date. Tradevan finds it from `saleIdentifier` and `invoiceNumber` (inferred).
 - **Allowances carry the invoice date per item,** as MIG G0401 does.

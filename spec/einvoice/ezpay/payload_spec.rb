@@ -66,7 +66,7 @@ RSpec.describe Einvoice::EzPay::Payload do
                            { description: "免稅", quantity: 1, unit_price: 50, amount: 50, tax_type: "TAX_FREE" },
                            { description: "零稅", quantity: 1, unit_price: 20, amount: 20, tax_type: "ZERO_RATED" }],
                    amount: { sales_amount: 175, tax_amount: 0, total_amount: 175 },
-                   provider_options: { customs_clearance: 1 })
+                   customs_clearance_mark: 1)
       expect(data).to include("TaxType" => "9", "TaxRate" => "5", "ItemTaxType" => "1|3|2",
                               "AmtSales" => 100, "AmtFree" => 50, "AmtZero" => 20,
                               "Amt" => 170, "TaxAmt" => 5, "TotalAmt" => 175, "CustomsClearance" => "1")
@@ -83,7 +83,9 @@ RSpec.describe Einvoice::EzPay::Payload do
     it "sends a zero-rated or tax-free invoice with rate 0 and no tax" do
       data = issue(tax_type: "TAX_FREE")
       expect(data).to include("TaxType" => "3", "TaxRate" => "0", "Amt" => 100, "TaxAmt" => 0)
-      expect { issue(tax_type: "ZERO_RATED") }.to raise_error(Einvoice::ValidationError, /customs_clearance/)
+      expect { issue(tax_type: "ZERO_RATED") }.to raise_error(Einvoice::ValidationError, /customs_clearance_mark/)
+      expect(issue(tax_type: "ZERO_RATED", customs_clearance_mark: 2, zero_tax_rate_reason: 71))
+        .to include("CustomsClearance" => "2").and(satisfy { |data| data.none? { |_, value| value == "71" } })
     end
 
     describe "carriers and donations" do

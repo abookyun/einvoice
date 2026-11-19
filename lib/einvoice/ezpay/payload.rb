@@ -39,7 +39,7 @@ module Einvoice
         options = string_keys(parsed.provider_options)
         types = parsed.items.map { |item| item.tax_type || parsed.tax_type }
         mixed = types.uniq.size > 1
-        check_issue!(parsed, b2b, types, mixed, options)
+        check_issue!(parsed, b2b, types, mixed)
 
         breakdown = parsed.tax_breakdown(provider: Client::PROVIDER)
 
@@ -57,7 +57,8 @@ module Einvoice
           "TaxType" => mixed ? MIXED_TAX_CODE : TAX_TYPE.fetch(types.first),
           "TaxRate" => TAX_RATES.fetch(parsed.tax_rate)
         }
-        fields["CustomsClearance"] = options["customs_clearance"].to_s if types.include?(TaxType::ZERO_RATED)
+        # ezPay has no field for zero_tax_rate_reason (docs, section 4.6).
+        fields["CustomsClearance"] = parsed.customs_clearance_mark if parsed.zero_rated?
         fields.merge!(issue_amounts(breakdown, mixed))
         fields.merge!(item_fields(parsed.items, breakdown.lines, net: b2b))
         fields["ItemTaxType"] = types.map { |type| TAX_TYPE.fetch(type) }.join(ITEM_SEPARATOR) if mixed
@@ -111,7 +112,7 @@ module Einvoice
 
       # --- issue -------------------------------------------------------------
 
-      def check_issue!(parsed, b2b, types, mixed, options)
+      def check_issue!(parsed, b2b, types, mixed)
         unless parsed.order_id.to_s.match?(ORDER_ID)
           unsupported!("ezPay takes an order_id of 1 to 20 letters, digits or _")
         end
@@ -127,9 +128,6 @@ module Einvoice
         invalid!("a B2B invoice cannot be donated") if b2b && parsed.donation
         unsupported!("ezPay takes a carrier only on a B2C invoice") if b2b && parsed.carrier
         unsupported!("ezPay does not take a carrier together with a donation") if parsed.carrier && parsed.donation
-        if types.include?(TaxType::ZERO_RATED) && !options.key?("customs_clearance")
-          invalid!("a zero-rated sale needs provider_options[:customs_clearance]")
-        end
         check_rate!(parsed.tax_rate)
       end
 

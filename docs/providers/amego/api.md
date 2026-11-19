@@ -169,7 +169,7 @@ A track is set to one mode in the back office (發票作業 > 發票字軌列表
 
 | Unified | Endpoint | Reference fields | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `f0401` | | `track_api_code`, `customs_clearance_mark`, `zero_tax_rate_reason`, `brand_name`, `detail_amount_round`, `tax_adjustment` |
+| `issue` | `f0401` | | `track_api_code`, `brand_name`, `detail_amount_round`, `tax_adjustment` |
 | `void` | `f0501` | `number` | |
 | `allowance` | `g0401` | `number`, `invoice_datetime`, `buyer_ubn` | `buyer_name` |
 | `void_allowance` | `g0501` | `allowance_number` | |
@@ -198,8 +198,8 @@ Each call sends one entry, also to the array endpoints (2.3).
 | `tax_rate` | `TaxRate` | As a decimal string, for example `0.05`. Only `0` and `0.05`. Any other rate: `UnsupportedError`. The core gives `0` when no item is taxed. Amego accepted `0` on a tax-free invoice `[live]` |
 | `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` `0`, else `1`. `0` only for B2B: B2C with `TAX_EXCLUSIVE` is a `ValidationError` |
 | `amount` | `SalesAmount`, `FreeTaxSalesAmount`, `ZeroTaxSalesAmount`, `TaxAmount`, `TotalAmount` | Computed from the items. See 4.3 |
-| `provider_options[:customs_clearance_mark]` | `CustomsClearanceMark` | `1` or `2`. Required when a zero rated item is present |
-| `provider_options[:zero_tax_rate_reason]` | `ZeroTaxRateReason` | `71` to `79`. Required when a zero rated item is present |
+| `customs_clearance_mark` | `CustomsClearanceMark` | `1` or `2`. Sent when a zero rated item is present. The core requires it then |
+| `zero_tax_rate_reason` | `ZeroTaxRateReason` | `71` to `79`. Sent when a zero rated item is present. The adapter requires it then: `ValidationError` |
 | `items[]` | `ProductItem` | `description` → `Description` (max 256), `quantity` → `Quantity`, `unit` → `Unit`, `unit_price` → `UnitPrice`, `amount` → `Amount`, `remark` → `Remark`, `tax_type` → `TaxType` (the item's, else the invoice's) |
 | `currency` | (none) | Not TWD: `UnsupportedError` (see 7) |
 | `category` | (none) | Decides B2B, as in the core |

@@ -97,23 +97,21 @@ RSpec.describe Einvoice::ECPay::Payload do
       expect(payload).to include("TaxType" => "1")
     end
 
-    it "requires a clearance mark for a zero-rated invoice" do
-      expect { build(tax_type: "ZERO_RATED") }
-        .to raise_error(Einvoice::ValidationError, /ClearanceMark is required/)
-    end
-
-    it "accepts a zero-rated invoice once the clearance mark is supplied" do
-      payload = build(tax_type: "ZERO_RATED", provider_options: { clearance_mark: "2" })
+    # The core asks for the mark. The reason may come from ECPay's back office.
+    it "sends the clearance mark of a zero-rated invoice, and the reason when given" do
+      payload = build(tax_type: "ZERO_RATED", customs_clearance_mark: "2")
       expect(payload).to include("TaxType" => "2", "ClearanceMark" => "2")
+      expect(payload).not_to have_key("ZeroTaxRateReason")
+
+      payload = build(tax_type: "ZERO_RATED", customs_clearance_mark: 1, zero_tax_rate_reason: 71)
+      expect(payload).to include("ClearanceMark" => "1", "ZeroTaxRateReason" => "71")
     end
 
-    it "requires a clearance mark when a zero-rated item is mixed in" do
-      expect do
-        build(items: [
-                { description: "a", quantity: 1, unit_price: 50, amount: 50, tax_type: "TAXABLE" },
-                { description: "b", quantity: 1, unit_price: 50, amount: 50, tax_type: "ZERO_RATED" }
-              ])
-      end.to raise_error(Einvoice::ValidationError, /ClearanceMark is required/)
+    it "sends the clearance mark when a zero-rated item is mixed in, and leaves it out otherwise" do
+      items = [{ description: "a", quantity: 1, unit_price: 50, amount: 50, tax_type: "TAXABLE" },
+               { description: "b", quantity: 1, unit_price: 50, amount: 50, tax_type: "ZERO_RATED" }]
+      expect(build(items: items, customs_clearance_mark: "1")).to include("TaxType" => "9", "ClearanceMark" => "1")
+      expect(build(customs_clearance_mark: "1")).not_to have_key("ClearanceMark")
     end
   end
 
@@ -232,11 +230,6 @@ RSpec.describe Einvoice::ECPay::Payload do
   end
 
   describe "provider options" do
-    it "passes 零稅率 and 特種稅額 details through" do
-      payload = build(tax_type: "ZERO_RATED",
-                      provider_options: { clearance_mark: "1", zero_tax_rate_reason: "71" })
-      expect(payload).to include("ClearanceMark" => "1", "ZeroTaxRateReason" => "71")
-    end
 
     it "lets a raw data override reach fields the mapper does not model" do
       payload = build(provider_options: { data: { "ChannelPartner" => "1" } })

@@ -334,7 +334,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 - **課稅別是英文字母。** `T`、`Z`、`O` 代表 MIG 的 `1`、`2`、`3`（推論）。沒有對應 MIG `4` 或 `9` 的字母（6.1）。
 - **載具類別就是 MIG 的代碼**（6.2）。
 - **type `G` 的 `checkNumber`。** MIG 4.0 已經從 F0401 拿掉 `CheckNumber` `[mig]`。我們不知道關貿現在怎麼處理它。
-- **沒有零稅率的細節欄位。** `issueData` 沒有 `CustomsClearanceMark` 和 `ZeroTaxRateReason`，但 F0401 的零稅率發票要求這兩個欄位 `[mig 表 15-3]`。關貿一定要自己補上，否則零稅率發票無法透過這個 API 開立。
+- **沒有零稅率的細節欄位。** `issueData` 沒有 `CustomsClearanceMark` 和 `ZeroTaxRateReason`，但 F0401 的零稅率發票要求這兩個欄位 `[mig 表 15-3]`。adapter 不送 `customs_clearance_mark` 和 `zero_tax_rate_reason`。關貿一定要自己補上，否則零稅率發票無法透過這個 API 開立。
 - **沒有作廢原因。** `voidData` 沒有原因欄位。MIG F0501 要求 `CancelReason`，所以關貿一定是自己補上（推論）。
 - **沒有作廢日期。** `voidData` 沒有發票日期。關貿是從 `saleIdentifier` 和 `invoiceNumber` 找出日期（推論）。
 - **折讓的每個品項都帶發票日期**，和 MIG G0401 一樣。

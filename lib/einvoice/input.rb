@@ -27,6 +27,9 @@ module Einvoice
     }.freeze
     # MIG F0501 and G0501 allow a reason of 1 to 20 characters.
     MAX_REASON_LENGTH = 20
+    # MIG CustomsClearanceMarkEnum and ZeroTaxRateReasonEnum [mig 表 4-9, 4-19].
+    CUSTOMS_CLEARANCE_MARKS = %w[1 2].freeze
+    ZERO_TAX_RATE_REASONS = ("71".."79").to_a.freeze
     DEFAULT_VOID_ALLOWANCE_REASON = "作廢折讓"
     # The rates the MIG allows [mig 表 4-18].
     TAX_RATES = [0, Rational(1, 100), Rational(2, 100), Rational(5, 100), Rational(15, 100),
@@ -59,9 +62,14 @@ module Einvoice
         remark: h[:remark],
         currency: h[:currency],
         exchange_rate: h[:exchange_rate],
+        customs_clearance_mark: code!(h[:customs_clearance_mark], CUSTOMS_CLEARANCE_MARKS,
+                                      :customs_clearance_mark, provider),
+        zero_tax_rate_reason: code!(h[:zero_tax_rate_reason], ZERO_TAX_RATE_REASONS,
+                                    :zero_tax_rate_reason, provider),
         provider_options: h[:provider_options]
       )
       check_issue_amount!(parsed, provider)
+      check_zero_rated!(parsed, provider)
       parsed
     end
 
@@ -347,6 +355,24 @@ module Einvoice
               provider)
       end
       rate
+    end
+
+    # A MIG code given as a String or an Integer. nil when it is not given.
+    def code!(value, codes, field, provider)
+      return nil if blank?(value)
+
+      code = value.to_s
+      fail!("#{field} must be one of #{codes.join(', ')}, got #{value.inspect}", provider) unless codes.include?(code)
+      code
+    end
+
+    # The MIG requires CustomsClearanceMark on a zero-rated invoice. It requires
+    # ZeroTaxRateReason too, but ECPay lets a merchant set the reason in its
+    # back office, so the core does not ask for it. Amego asks for it itself.
+    def check_zero_rated!(parsed, provider)
+      return unless parsed.zero_rated? && parsed.customs_clearance_mark.nil?
+
+      fail!("a zero-rated invoice needs customs_clearance_mark (1 or 2)", provider)
     end
 
     def reason!(reason, provider)

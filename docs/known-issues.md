@@ -26,11 +26,6 @@ Each item says what is wrong, where, and what it would take. Items under "Decide
 - **What:** ECPay and Amego return `ISSUED`, `VOIDED` or `ALLOWANCE`. ezPay returns only `VOIDED` and else `nil`, because its status does not show an allowance. Tradevan returns only `ALLOWANCE` and else `nil`, because its status codes are unknown. The shared contract accepts `nil` everywhere, so a caller cannot tell in advance which values a provider gives.
 - **Options:** a capability that says the status is complete, or a list on each adapter of the statuses it can return.
 
-### 5. The zero-rated fields have a different key per adapter
-
-- **What:** The customs clearance mark is `provider_options[:clearance_mark]` for ECPay, `:customs_clearance_mark` (with `:zero_tax_rate_reason`) for Amego, and `:customs_clearance` for ezPay. Tradevan does not send it. An export invoice cannot switch providers without code changes.
-- **Option:** unified input fields for the MIG `CustomsClearanceMark` and `ZeroTaxRateReason`.
-
 ### 6. Two provider limits still raise ValidationError
 
 The unified model now says that an input the MIG allows but a provider does not take is an `UnsupportedError`. ECPay, Amego and ezPay follow it. Two places do not yet:

@@ -172,7 +172,7 @@ All paths start with `/B2CInvoice/`. Page 49890 is an older copy of the issue pa
 
 | Unified | Endpoint | Reference fields | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `Issue` | | `customer_id`, `clearance_mark`, `zero_tax_rate_reason`, `special_tax_type`, `data` (merges any raw `Issue` field) |
+| `issue` | `Issue` | | `customer_id`, `special_tax_type`, `data` (merges any raw `Issue` field) |
 | `void` | `Invalid` | `invoice_datetime` | |
 | `allowance` | `Allowance` | `invoice_datetime` | `allowance_notify`, `notify_mail`, `notify_phone`, `customer_name`, `reason` |
 | `void_allowance` | `AllowanceInvalid` | `invoice_number` of the allowance reference | |
@@ -202,8 +202,8 @@ All `provider_options` keys are strings or symbols.
 | `price_mode` | `vat` | `TAX_EXCLUSIVE` `0`, else `1` |
 | `amount.total_amount` | `SalesAmount` | See 4.3 |
 | `tax_rate` | (none) | ECPay fixes the rate by `TaxType`. A taxable invoice with a rate other than `0.05` raises `UnsupportedError`. `SPECIAL` uses `special_tax_type` |
-| `provider_options[:clearance_mark]` | `ClearanceMark` | Required when a zero rated item is present |
-| `provider_options[:zero_tax_rate_reason]` | `ZeroTaxRateReason` | `71` to `79`. Passed through. ECPay requires it for `TaxType` `2` and `9` from 2026-01-01, unless it is set in the back office, so the adapter cannot check it |
+| `customs_clearance_mark` | `ClearanceMark` | Sent when a zero rated item is present. The core requires it then |
+| `zero_tax_rate_reason` | `ZeroTaxRateReason` | `71` to `79`. Sent when given and a zero rated item is present. ECPay requires it for `TaxType` `2` and `9` from 2026-01-01, unless it is set in the back office, so the adapter cannot check it |
 | `remark` | `InvoiceRemark` | |
 | `items[]` | `Items` | See below |
 | `currency` | (none) | Not TWD: `UnsupportedError` |

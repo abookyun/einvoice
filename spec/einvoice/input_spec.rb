@@ -184,9 +184,18 @@ RSpec.describe Einvoice::Input do
       expect([input.carrier, input.donation]).to all(be_truthy)
     end
 
+    it "needs the MIG clearance mark on a zero-rated invoice, and checks both MIG codes" do
+      expect(error_for { issue(tax_type: "ZERO_RATED") }).to match(/needs customs_clearance_mark/)
+      zero = issue(tax_type: "ZERO_RATED", customs_clearance_mark: 2, zero_tax_rate_reason: 71)
+      expect(zero).to have_attributes(customs_clearance_mark: "2", zero_tax_rate_reason: "71", zero_rated?: true)
+      expect(error_for { issue(customs_clearance_mark: "3") }).to match(/customs_clearance_mark must be one of 1, 2/)
+      expect(error_for { issue(zero_tax_rate_reason: "70") }).to match(/zero_tax_rate_reason must be one of 71/)
+      expect(issue(customs_clearance_mark: "")).to have_attributes(customs_clearance_mark: nil, zero_rated?: false)
+    end
+
     it "defaults tax_rate by the tax types of the lines" do
       expect(issue.tax_rate).to eq(Rational(5, 100))
-      expect(issue(tax_type: "ZERO_RATED").tax_rate).to eq(0)
+      expect(issue(tax_type: "ZERO_RATED", customs_clearance_mark: "1").tax_rate).to eq(0)
       expect(error_for { issue(tax_type: "SPECIAL") }).to match(/tax_rate is required for a special line/)
 
       # A taxable line under a tax-free header is still taxed at 5%.

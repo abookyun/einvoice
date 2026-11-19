@@ -69,6 +69,7 @@ The checks:
 - Totals are whole numbers and not negative. Item quantity, price and amount are numbers with at most 7 decimal places.
 - A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits. These formats come from the providers' docs; the MIG lists the carrier types only.
 - `tax_rate` is a decimal, such as `0.05`, and has to be a MIG rate. On an issue the lines decide its default, not the header: `0.05` when a line is taxable, else `0`. A special-tax line needs it. A taxable line cannot have rate `0`.
+- A zero-rated invoice needs `customs_clearance_mark`, `"1"` or `"2"` (MIG CustomsClearanceMark). `zero_tax_rate_reason` is `"71"` to `"79"` (MIG ZeroTaxRateReason). The MIG requires it on a zero-rated invoice too, but ECPay can take it from its back office, so the core does not ask for it. Amego does.
 - The amounts agree with the items (below).
 - A void reason is at most 20 characters. A void allowance reason defaults to `作廢折讓`.
 

@@ -171,7 +171,7 @@ Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部
 
 | Unified | Endpoint | Reference 欄位 | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `f0401` | | `track_api_code`、`customs_clearance_mark`、`zero_tax_rate_reason`、`brand_name`、`detail_amount_round`、`tax_adjustment` |
+| `issue` | `f0401` | | `track_api_code`、`brand_name`、`detail_amount_round`、`tax_adjustment` |
 | `void` | `f0501` | `number` | |
 | `allowance` | `g0401` | `number`、`invoice_datetime`、`buyer_ubn` | `buyer_name` |
 | `void_allowance` | `g0501` | `allowance_number` | |
@@ -200,8 +200,8 @@ Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部
 | `tax_rate` | `TaxRate` | 小數字串，例如 `0.05`。只接受 `0` 和 `0.05`，其他稅率：`UnsupportedError`。沒有應稅品項時，core 給 `0`。Amego 在免稅發票上接受了 `0` `[live]` |
 | `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` 為 `0`，否則為 `1`。`0` 只能用在 B2B：B2C 用 `TAX_EXCLUSIVE` 會丟出 `ValidationError` |
 | `amount` | `SalesAmount`、`FreeTaxSalesAmount`、`ZeroTaxSalesAmount`、`TaxAmount`、`TotalAmount` | 從品項計算。見 4.3 |
-| `provider_options[:customs_clearance_mark]` | `CustomsClearanceMark` | `1` 或 `2`。有零稅率品項時必填 |
-| `provider_options[:zero_tax_rate_reason]` | `ZeroTaxRateReason` | `71` 到 `79`。有零稅率品項時必填 |
+| `customs_clearance_mark` | `CustomsClearanceMark` | `1` 或 `2`。有零稅率品項時送出。這時 core 會要求必填 |
+| `zero_tax_rate_reason` | `ZeroTaxRateReason` | `71` 到 `79`。有零稅率品項時送出。這時 adapter 會要求必填：`ValidationError` |
 | `items[]` | `ProductItem` | `description` → `Description`（最多 256）、`quantity` → `Quantity`、`unit` → `Unit`、`unit_price` → `UnitPrice`、`amount` → `Amount`、`remark` → `Remark`、`tax_type` → `TaxType`（品項的課稅別，沒有時用發票的） |
 | `currency` | （無） | 不是新台幣時丟出 `UnsupportedError`（見第 7 節） |
 | `category` | （無） | 和 core 一樣，用來判斷是否為 B2B |

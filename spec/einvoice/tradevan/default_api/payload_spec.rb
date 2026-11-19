@@ -62,7 +62,8 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Payload do
         { description: "B", quantity: 1, unit_price: 30, amount: 30, tax_type: "TAX_FREE" },
         { description: "C", quantity: 1, unit_price: 20, amount: 20, tax_type: "ZERO_RATED" }
       ]
-      data = build(issue_input(items: items, amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }))
+      data = build(issue_input(items: items, amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 },
+                               customs_clearance_mark: "1"))
 
       expect(data["itemList"].map { |row| row.values_at("serialNumber", "taxType") })
         .to eq([%w[0001 T], %w[0002 O], %w[0003 Z]])

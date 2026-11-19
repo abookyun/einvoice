@@ -159,7 +159,7 @@ Other endpoints. An adapter can reach them through a `raw` method:
 
 | Unified | Endpoint | Reference fields | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `invoice_issue`, `Status` `1` | | `customs_clearance` |
+| `issue` | `invoice_issue`, `Status` `1` | | |
 | `void` | `invoice_invalid` | `number` | |
 | `allowance` | `allowance_issue`, `Status` `1` | `number`, `order_id`, `buyer_ubn` | `tax_type_for_mixed`, `buyer_email` |
 | `void_allowance` | `allowanceInvalid` | `allowance_number` | |
@@ -363,7 +363,7 @@ The query has no allowance data and no cancelled status. So the adapter cannot t
 - **An allowance on a mixed invoice is split.** One allowance covers one tax type (`TaxTypeForMixed`). A mixed invoice needs one allowance per tax type `[inv 六]`.
 - **Allowance prices may include tax.** MIG G0401 wants amounts without tax and a tax per item. The adapter sends prices with tax for a consumer, and leaves the split to ezPay.
 - **The allowance number is longer than the MIG's.** ezPay returns an `AllowanceNo` of up to 20 characters (25 in `allowanceInvalid`). MIG `AllowanceNumber` is max 16. The manual's example is 16 characters (`A151015111705007`).
-- **No zero tax rate reason.** The manual was last changed before MIG 4.0 and has no field for `ZeroTaxRateReason`.
+- **No zero tax rate reason.** The manual was last changed before MIG 4.0 and has no field for `ZeroTaxRateReason`. The adapter sends `customs_clearance_mark` as `CustomsClearance`, and does not send `zero_tax_rate_reason`.
 
 ### 4.8 Contract and live tests
 

@@ -174,7 +174,7 @@ adapter 另外對應了兩個檢查：`/B2CInvoice/CheckBarcode`（手機條碼�
 
 | Unified | Endpoint | Reference 欄位 | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `Issue` | | `customer_id`、`clearance_mark`、`zero_tax_rate_reason`、`special_tax_type`、`data`（合併任何 `Issue` 的原始欄位） |
+| `issue` | `Issue` | | `customer_id`、`special_tax_type`、`data`（合併任何 `Issue` 的原始欄位） |
 | `void` | `Invalid` | `invoice_datetime` | |
 | `allowance` | `Allowance` | `invoice_datetime` | `allowance_notify`、`notify_mail`、`notify_phone`、`customer_name`、`reason` |
 | `void_allowance` | `AllowanceInvalid` | 折讓 reference 的 `invoice_number` | |
@@ -204,8 +204,8 @@ adapter 另外對應了兩個檢查：`/B2CInvoice/CheckBarcode`（手機條碼�
 | `price_mode` | `vat` | `TAX_EXCLUSIVE` 為 `0`，否則為 `1` |
 | `amount.total_amount` | `SalesAmount` | 見 4.3 |
 | `tax_rate` | （無） | ECPay 依 `TaxType` 決定稅率。應稅發票的稅率不是 `0.05` 時，丟出 `UnsupportedError`。`SPECIAL` 用 `special_tax_type` |
-| `provider_options[:clearance_mark]` | `ClearanceMark` | 有零稅率品項時必填 |
-| `provider_options[:zero_tax_rate_reason]` | `ZeroTaxRateReason` | `71` 到 `79`，原樣送出。自 2026-01-01 起，`TaxType` 為 `2` 和 `9` 時 ECPay 要求必填，但也可以在後台設定，所以 adapter 無法檢查 |
+| `customs_clearance_mark` | `ClearanceMark` | 有零稅率品項時送出。這時 core 會要求必填 |
+| `zero_tax_rate_reason` | `ZeroTaxRateReason` | `71` 到 `79`。有給而且有零稅率品項時送出。自 2026-01-01 起，`TaxType` 為 `2` 和 `9` 時 ECPay 要求必填，但也可以在後台設定，所以 adapter 無法檢查 |
 | `remark` | `InvoiceRemark` | |
 | `items[]` | `Items` | 見下方 |
 | `currency` | （無） | 不是新台幣時丟出 `UnsupportedError` |

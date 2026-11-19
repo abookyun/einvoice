@@ -63,9 +63,11 @@ module Einvoice
           "InvType" => parsed.tax_type == TaxType::SPECIAL ? "08" : "07",
           "vat" => parsed.price_mode == PriceMode::TAX_EXCLUSIVE ? "0" : "1"
         }
-        # 零稅率/特種稅額 details the unified model has no field for.
-        data["ClearanceMark"] = options["clearance_mark"] if options.key?("clearance_mark")
-        data["ZeroTaxRateReason"] = options["zero_tax_rate_reason"] if options.key?("zero_tax_rate_reason")
+        # The core asks for the clearance mark on a zero-rated invoice. ECPay
+        # takes the reason from its back office when it is not sent.
+        data["ClearanceMark"] = parsed.customs_clearance_mark if parsed.zero_rated?
+        data["ZeroTaxRateReason"] = parsed.zero_tax_rate_reason if parsed.zero_rated? && parsed.zero_tax_rate_reason
+        # 特種稅額 details the unified model has no field for.
         data["SpecialTaxType"] = options["special_tax_type"] if options.key?("special_tax_type")
         # Last-resort escape hatch for fields this mapper does not model.
         data.merge!(string_keys(options["data"])) if options["data"]
@@ -129,7 +131,6 @@ module Einvoice
 
         errors.concat(buyer_errors(data))
         errors.concat(carrier_errors(data))
-        errors << "ClearanceMark is required for a zero-rated invoice" if clearance_missing?(data)
 
         unless errors.empty?
           raise ValidationError.new("Invalid ECPay invoice payload — #{errors.join('; ')}",
@@ -186,17 +187,6 @@ module Einvoice
           limits << "A non-printed B2B invoice must use a carrier"
         end
         limits
-      end
-
-      # 零稅率 (TaxType 2, or 9 when a zero-rated item is mixed in) needs the
-      # customs-clearance mark — 5000007. The docs ask for it on any TaxType 9,
-      # but stage takes taxable plus tax-free without it (2026-11-15).
-      def clearance_missing?(data)
-        return false unless data["ClearanceMark"].to_s.empty?
-        return true if data["TaxType"] == "2"
-
-        data["TaxType"] == MIXED_TAX_CODE &&
-          data["Items"].any? { |item| item["ItemTaxType"] == "2" }
       end
 
       # The sum of ItemAmount has to equal AllowanceAmount [doc 7901], and on

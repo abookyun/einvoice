@@ -61,9 +61,10 @@ RSpec.describe Einvoice::Amego::Payload do
 
     it "needs the clearance mark and reason for a zero-rated sale" do
       expect { issue(tax_type: "ZERO_RATED") }.to raise_error(Einvoice::ValidationError, /customs_clearance_mark/)
+      expect { issue(tax_type: "ZERO_RATED", customs_clearance_mark: 1) }
+        .to raise_error(Einvoice::ValidationError, /zero_tax_rate_reason/)
 
-      data = issue(tax_type: "ZERO_RATED",
-                   provider_options: { customs_clearance_mark: 1, zero_tax_rate_reason: "71" })
+      data = issue(tax_type: "ZERO_RATED", customs_clearance_mark: 1, zero_tax_rate_reason: "71")
       expect(data).to include("TaxType" => "2", "TaxRate" => "0", "ZeroTaxSalesAmount" => 100, "SalesAmount" => 0,
                               "CustomsClearanceMark" => "1", "ZeroTaxRateReason" => "71")
     end

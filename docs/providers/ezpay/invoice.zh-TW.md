@@ -161,7 +161,7 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 
 | Unified | Endpoint | Reference 欄位 | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `invoice_issue`，`Status` `1` | | `customs_clearance` |
+| `issue` | `invoice_issue`，`Status` `1` | | |
 | `void` | `invoice_invalid` | `number` | |
 | `allowance` | `allowance_issue`，`Status` `1` | `number`、`order_id`、`buyer_ubn` | `tax_type_for_mixed`、`buyer_email` |
 | `void_allowance` | `allowanceInvalid` | `allowance_number` | |
@@ -365,7 +365,7 @@ adapter 依原發票的買方，從 `invoice.buyer_ubn` 決定用哪一種：
 - **混合稅率發票的折讓要拆開。** 一張折讓只能對應一種課稅別（`TaxTypeForMixed`）。混合稅率的發票，每種課稅別都要開一張折讓 `[inv 六]`。
 - **折讓價格可以含稅。** MIG G0401 要求未稅金額，以及每個品項的稅額。買方是消費者時，adapter 送出含稅價格，拆稅交給 ezPay。
 - **折讓單號比 MIG 長。** ezPay 回傳的 `AllowanceNo` 最多 20 字元（`allowanceInvalid` 最多 25）。MIG 的 `AllowanceNumber` 最多 16。手冊的範例是 16 字元（`A151015111705007`）。
-- **沒有零稅率原因。** 手冊最後一次更新早於 MIG 4.0，沒有 `ZeroTaxRateReason` 欄位。
+- **沒有零稅率原因。** 手冊最後一次更新早於 MIG 4.0，沒有 `ZeroTaxRateReason` 欄位。adapter 把 `customs_clearance_mark` 送成 `CustomsClearance`，不送 `zero_tax_rate_reason`。
 
 ### 4.8 Contract 與 live 測試
 
