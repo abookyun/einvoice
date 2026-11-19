@@ -45,6 +45,16 @@ module Einvoice
           productName qty price tax itemExclude itemTotal taxType description
         ].freeze
 
+        # Fields that carry the caller's input, with a DEFAULTAPI length limit of
+        # Tradevan's own: stricter than the MIG's (productName 300 against 500,
+        # receiverEmail 80 against 400, receiverMobile 15 against 26, carrierId
+        # 64 against 400), or with no MIG field (the order and allowance ids).
+        OWN_LIMITS = %w[
+          transactionNumber saleIdentifier allowanceIdentifier productName description
+          receiverEmail receiverMobile carrierId carrierIdHidden
+        ].freeze
+        TOO_LONG = /\Amust be \d+ characters or fewer\z/
+
         VOID_FIELDS = %w[
           type saleIdentifier invoiceNumber invoicePaperReturned allowanceNumber
           allowancePaperReturned companyUn
@@ -106,13 +116,24 @@ module Einvoice
           check.errors
         end
 
-        # Raise {ValidationError} listing every problem, or return +nil+.
+        # Raise an error listing every problem, or return +nil+. When every
+        # problem is a length over one of Tradevan's own limits, the MIG allows
+        # the input, so it is an UnsupportedError (docs/providers/README.md,
+        # "The unified model"). Anything else is a ValidationError.
         def validate!(errors, what)
           return if errors.empty?
 
           details = errors.flat_map { |field, messages| messages.map { |m| "#{field} #{m}" } }
+          if errors.all? { |field, messages| own_limit?(field, messages) }
+            raise UnsupportedError.new("Tradevan DEFAULTAPI does not take this #{what} — #{details.join('; ')}",
+                                       provider: Client::PROVIDER, raw_message: details.join("; "))
+          end
           raise ValidationError.new("Invalid Tradevan #{what} — #{details.join('; ')}",
                                     provider: Client::PROVIDER, raw_message: details.join("; "))
+        end
+
+        def own_limit?(field, messages)
+          OWN_LIMITS.include?(field.sub(/\AitemList\[\d+\]\./, "")) && messages.all?(TOO_LONG)
         end
 
         def issue_common(check, data)

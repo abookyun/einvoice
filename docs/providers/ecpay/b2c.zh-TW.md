@@ -313,7 +313,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 **折讓。**
 
 - ECPay 要的是含稅的單價和金額 `[doc 7901]`。`ItemPrice` 是 core `tax_breakdown` 中每一列的 `gross_unit_price`，`ItemAmount` 是它的 `gross_amount`。`AllowanceAmount` 是 `amount.total_amount`。
-- `ItemAmount` 和 `ItemPrice × ItemCount` 最多可以差 1。`ItemAmount` 的加總必須等於 `AllowanceAmount`。adapter 在呼叫前會檢查。
+- `ItemAmount` 和 `ItemPrice × ItemCount` 最多可以差 1。`ItemAmount` 的加總必須等於 `AllowanceAmount`。adapter 在呼叫前會檢查。加總不符時是 `ValidationError`。差距超過 1 時是 `UnsupportedError`，因為這是 ECPay 的規則，不是 MIG 的規則。
 - ECPay 會再替財政部把稅額拆出來（4.7）。
 
 **查詢。**

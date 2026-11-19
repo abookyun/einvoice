@@ -211,10 +211,11 @@ RSpec.describe Einvoice::ECPay::Payload do
 
     # ECPay allows ItemPrice × ItemCount to differ from ItemAmount by 1, for
     # the rounding of the line tax.
+    # The gap is ECPay's own rule, so a larger one is unsupported, not invalid.
     it "allows a difference of 1 between price × count and the amount" do
       expect { check(26.25, 2, 53) }.not_to raise_error
       expect { check(1000, 1, 1050) }
-        .to raise_error(Einvoice::ValidationError,
+        .to raise_error(Einvoice::UnsupportedError,
                         /ItemPrice × ItemCount \(1000\) must be within 1 of ItemAmount \(1050\)/)
     end
 

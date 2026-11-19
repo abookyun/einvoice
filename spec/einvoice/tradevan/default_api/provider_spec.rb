@@ -11,7 +11,9 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
   # 16 characters (docs, section 4.8).
   it_behaves_like "an invoice provider",
                   unknown_reference: { number: "ZZ00000000" },
-                  unknown_allowance_number: "ABCDE20260101999"
+                  unknown_allowance_number: "ABCDE20260101999",
+                  # An order id of 51 characters: Tradevan's limit, not the MIG's.
+                  unsupported_issue: { order_id: "O" * 51 }
 
   let(:issue_input) do
     {
@@ -90,10 +92,16 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
       }
     end
 
-    # Ported from the 1.x provider spec: invalid data never reaches the network.
-    it "raises ValidationError without a request when the data breaks the field rules" do
+    # Ported from the 1.x provider spec: data that breaks the field rules never
+    # reaches the network. A limit of Tradevan's own is unsupported, a limit
+    # that the MIG sets too is invalid input.
+    it "raises without a request when the data breaks the field rules" do
       expect { provider.issue(issue_input.merge(order_id: "x" * 51)) }
-        .to raise_error(Einvoice::ValidationError, /transactionNumber/)
+        .to raise_error(Einvoice::UnsupportedError, /transactionNumber/)
+      expect { provider.issue(issue_input.merge(buyer: { email: "b@x.com", address: "x" * 101 })) }
+        .to raise_error(Einvoice::ValidationError, /receiverAddrRoad/)
+      expect { provider.issue(issue_input.merge(order_id: "x" * 51, buyer: { email: "b@x.com", address: "x" * 101 })) }
+        .to raise_error(Einvoice::ValidationError, /transactionNumber.*receiverAddrRoad/)
       expect(tradevan.requests).to be_empty
     end
 

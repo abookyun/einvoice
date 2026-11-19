@@ -311,7 +311,7 @@ The unified rules are in [the unified model](../README.md#the-unified-model).
 **Allowance.**
 
 - ECPay wants prices and amounts with tax `[doc 7901]`. `ItemPrice` is each line's `gross_unit_price` and `ItemAmount` its `gross_amount`, from the core's `tax_breakdown`. `AllowanceAmount` is `amount.total_amount`.
-- `ItemAmount` may differ from `ItemPrice × ItemCount` by at most 1. The sum of `ItemAmount` must equal `AllowanceAmount`. The adapter checks this before the call.
+- `ItemAmount` may differ from `ItemPrice × ItemCount` by at most 1. The sum of `ItemAmount` must equal `AllowanceAmount`. The adapter checks this before the call. A wrong sum is a `ValidationError`. A larger gap is an `UnsupportedError`, because the gap is ECPay's rule, not the MIG's.
 - ECPay splits out the tax again for the MOF (4.7).
 
 **Query.**

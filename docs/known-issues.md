@@ -4,15 +4,6 @@ This note collects the issues that we found while the adapters went into `2.0.0-
 
 Each item says what is wrong, where, and what it would take. Items under "Decide first" need a decision before anyone writes code.
 
-## Left from the fixes
-
-### 6. Two provider limits still raise ValidationError
-
-The unified model now says that an input the MIG allows but a provider does not take is an `UnsupportedError`. ECPay, Amego and ezPay follow it. Two places do not yet:
-
-- **Tradevan:** `Rules.validate!` checks the whole `issueData` against the DEFAULTAPI schema and raises `ValidationError`. The schema mixes the caller's input, the merchant's settings and fields that the adapter builds, so each field needs a look before it can be split. Then its provider spec can pass `unsupported_issue:` to the shared contract, as the other three do.
-- **ECPay allowance:** `check_allowance!` refuses an item whose `ItemPrice × ItemCount` misses `ItemAmount` by more than 1. That is ECPay's rule, but it sits in one list with the MIG total check.
-
 ## Decide first
 
 ### 4. Query status means different things

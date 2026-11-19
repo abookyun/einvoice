@@ -189,25 +189,30 @@ module Einvoice
         limits
       end
 
-      # The sum of ItemAmount has to equal AllowanceAmount [doc 7901], and on
-      # each item ItemPrice × ItemCount may differ from ItemAmount by 1 at most.
+      # The sum of ItemAmount has to equal AllowanceAmount [doc 7901]: the
+      # totals must agree, as the MIG asks. On each item ItemPrice × ItemCount
+      # may differ from ItemAmount by 1 at most. That is ECPay's own rule, so
+      # it is an UnsupportedError (docs/providers/README.md, "The unified
+      # model").
       def check_allowance!(data)
-        errors = []
         total = data["Items"].sum { |item| item["ItemAmount"].to_r }
         unless total.round == data["AllowanceAmount"]
-          errors << "AllowanceAmount (#{data['AllowanceAmount']}) must equal the item total (#{total.round})"
+          raise ValidationError.new("Invalid ECPay allowance payload — AllowanceAmount " \
+                                    "(#{data['AllowanceAmount']}) must equal the item total (#{total.round})",
+                                    provider: Client::PROVIDER)
         end
-        data["Items"].each_with_index do |item, index|
+
+        gaps = data["Items"].each_with_index.filter_map do |item, index|
           product = item["ItemPrice"].to_r * item["ItemCount"].to_r
           next if (product - item["ItemAmount"].to_r).abs <= 1
 
-          errors << "Items[#{index}]: ItemPrice × ItemCount (#{Number.plain(product)}) must be within 1 of " \
-                    "ItemAmount (#{item['ItemAmount']})"
+          "Items[#{index}]: ItemPrice × ItemCount (#{Number.plain(product)}) must be within 1 of " \
+            "ItemAmount (#{item['ItemAmount']})"
         end
-        return if errors.empty?
+        return if gaps.empty?
 
-        raise ValidationError.new("Invalid ECPay allowance payload — #{errors.join('; ')}",
-                                  provider: Client::PROVIDER)
+        raise UnsupportedError.new("ECPay does not take this allowance — #{gaps.join('; ')}",
+                                   provider: Client::PROVIDER)
       end
 
       def string_keys(hash)

@@ -344,6 +344,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 - **沒有 live 測試。** 我們沒有帳號，也不知道主機。
 - **只能用 fake。** `spec/support/fake_tradevan.rb` 依照 1.x 的程式碼和 `[readme]` 的範例寫成。它的兩把金鑰用不同的值，所以 `key1` 和 `key2` 用反了會被發現。它會拒絕 schema 以外的欄位，和 `[prod]` 的回報一致。但它的失敗訊息是我們猜的（6.4），所以 contract 通過只能證明「猜的訊息被一致地分類了」。fake 不能使用 adapter 自己的規則檢查，否則規則寫錯時兩邊都會通過。
 - **Reference。** contract 把 `issue` 回傳的 reference 傳給後面的步驟。reference 有 `order_id` 和 `invoice_datetime`，所以作廢和折讓都能運作。
+- **欄位規則。** 呼叫前，adapter 會依 DEFAULTAPI 的欄位規則檢查 `issueData` 和 `voidData` `[rules]`。所有問題都是超過關貿自己的長度限制時，丟 `UnsupportedError`。這些限制是訂單編號和折讓編號、`productName`（300，MIG 允許 500）、`receiverEmail`（80，MIG 400）、`receiverMobile`（15，MIG 26）和 `carrierId`（64，MIG 400）。其他問題都丟 `ValidationError`。
 - **不存在的折讓單號。** adapter 在呼叫前會檢查折讓單號是否為 16 字元。所以 contract 收到 16 字元的 `unknown_allowance_number`（`ABCDE20260101999`）。
 - **加密。** `crypto_spec.rb` 把密文和 1.x 程式碼的輸出逐 byte 比對。關貿沒有公開測試向量。
 - **查詢狀態。** contract 會檢查作廢後的狀態，並接受 `nil`，所以狀態代碼的意思還不知道，也能通過。
