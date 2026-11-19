@@ -49,11 +49,8 @@ RSpec.describe Einvoice::EzPay::Payload do
         .to raise_error(Einvoice::UnsupportedError, /95 does not divide by 2/)
     end
 
-    # A name over the MIG's 60 characters is refused by the core.
     it "uses the 統一編號 as a B2B name that is missing" do
       expect(b2b(buyer: { ubn: "28080623" })["BuyerName"]).to eq("28080623")
-      expect { b2b(buyer: { ubn: "28080623", name: "名" * 61 }) }
-        .to raise_error(Einvoice::ValidationError, /buyer_name/)
     end
 
     it "joins the item fields with |" do
@@ -142,9 +139,6 @@ RSpec.describe Einvoice::EzPay::Payload do
           .to raise_error(Einvoice::UnsupportedError, /unit/)
         expect(issue(items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100, unit: "pieces" }])["ItemUnit"])
           .to eq("pieces")
-        # Over 6 ASCII characters is over the MIG's own limit, not only ezPay's.
-        expect { issue(items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100, unit: "PIECES1" }]) }
-          .to raise_error(Einvoice::ValidationError, /unit/)
       end
 
       it "needs whole numbers that multiply out" do
@@ -156,12 +150,10 @@ RSpec.describe Einvoice::EzPay::Payload do
         expect(issue(items: [{ description: "a", quantity: "2", unit_price: 50.0, amount: 100 }])["ItemCount"]).to eq("2")
       end
 
-      it "checks the buyer and remark lengths" do
-        # ezPay's own limits are unsupported. The address and remark limits are the MIG's.
+      # The core checks the MIG's lengths. These are ezPay's own, shorter ones.
+      it "checks ezPay's own buyer lengths" do
         expect { issue(buyer: { name: "名" * 31 }) }.to raise_error(Einvoice::UnsupportedError, /buyer name/)
         expect { issue(buyer: { email: "#{'x' * 45}@x.com" }) }.to raise_error(Einvoice::UnsupportedError, /email/)
-        expect { issue(buyer: { address: "x" * 101 }) }.to raise_error(Einvoice::ValidationError, /address/)
-        expect { issue(remark: "x" * 201) }.to raise_error(Einvoice::ValidationError, /remark/)
       end
     end
   end

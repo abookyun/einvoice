@@ -109,20 +109,12 @@ RSpec.describe Einvoice::Amego::Payload do
       expect(issue(donation: { npoban: "168001" })["NPOBAN"]).to eq("168001")
     end
 
-    it "refuses a buyer name of only zeros" do
-      expect { issue(buyer: { name: "000" }) }.to raise_error(Einvoice::ValidationError, /must not be "000"/)
-    end
-
-    # Amego's own limits are unsupported. The MIG's limits are invalid input.
-    it "checks the documented lengths" do
+    # The core checks the MIG's lengths. These are Amego's own, shorter ones.
+    it "checks Amego's own lengths" do
       expect { issue(order_id: "x" * 41) }.to raise_error(Einvoice::UnsupportedError, /order_id/)
-      expect { issue(remark: "x" * 201) }.to raise_error(Einvoice::ValidationError, /remark/)
       expect do
         issue(items: [{ description: "x" * 257, quantity: 1, unit_price: 100, amount: 100 }])
       end.to raise_error(Einvoice::UnsupportedError, /description/)
-      expect do
-        issue(items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100, unit: "x" * 7 }])
-      end.to raise_error(Einvoice::ValidationError, /unit/)
     end
 
     it "refuses an item number it cannot read, instead of reading it as 0" do
