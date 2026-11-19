@@ -190,7 +190,7 @@ All `provider_options` keys are strings or symbols.
 
 | Unified | ECPay | Rule or default |
 | --- | --- | --- |
-| `order_id` | `RelateNumber` | Max 50 |
+| `order_id` | `RelateNumber` | Max 50. Longer: `UnsupportedError`, because the MIG has no order id |
 | `buyer.ubn` | `CustomerIdentifier` | B2B only. Empty for B2C |
 | `buyer.name`, `.address`, `.phone`, `.email` | `CustomerName`, `CustomerAddr`, `CustomerPhone`, `CustomerEmail` | Empty string when missing. A printed invoice (`Print` `1`) needs the name and the address `[doc 7896]`, and an email or a phone (5.1) |
 | `carrier.type` | `CarrierType` | `MEMBER` `1`, `CITIZEN_CERTIFICATE` `2`, `MOBILE_BARCODE` `3` |

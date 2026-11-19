@@ -120,9 +120,7 @@ module Einvoice
         max!(parsed.buyer&.email.to_s, 50, "buyer email")
         max!(parsed.buyer&.address.to_s, 100, "buyer address", mig: true)
         refuse_special!(types)
-        if mixed && b2b
-          raise UnsupportedError.new("ezPay allows mixed tax only on a B2C invoice", provider: Client::PROVIDER)
-        end
+        unsupported!("ezPay allows mixed tax only on a B2C invoice") if mixed && b2b
         # A donation on a B2B invoice breaks the MIG. A carrier does not, but
         # ezPay refuses it, and it refuses a carrier with a donation too.
         invalid!("a B2B invoice cannot be donated") if b2b && parsed.donation
@@ -232,9 +230,11 @@ module Einvoice
 
       # ezPay counts "2 Chinese or 6 English characters". A text with any
       # non-ASCII character gets the Chinese limit.
+      # The ASCII limit is the MIG's own limit, so text longer than it breaks
+      # the MIG. The shorter limit for other text is ezPay's.
       def limited!(text, (ascii, other), field)
         limit = text.ascii_only? ? ascii : other
-        max!(text, limit, field)
+        max!(text, limit, field, mig: text.length > ascii)
       end
 
       # The core reads every number as exact, but allows decimals. ezPay does

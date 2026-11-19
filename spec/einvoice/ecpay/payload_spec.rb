@@ -246,7 +246,7 @@ RSpec.describe Einvoice::ECPay::Payload do
 
     it "is capped at 50 characters" do
       expect { described_class.issue(parse.with(order_id: "X" * 51)) }
-        .to raise_error(Einvoice::ValidationError, /50 characters or fewer/)
+        .to raise_error(Einvoice::UnsupportedError, /50 characters or fewer/)
     end
   end
 

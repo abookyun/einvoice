@@ -192,7 +192,7 @@ adapter 另外對應了兩個檢查：`/B2CInvoice/CheckBarcode`（手機條碼�
 
 | Unified | ECPay | 規則或預設值 |
 | --- | --- | --- |
-| `order_id` | `RelateNumber` | 最多 50 |
+| `order_id` | `RelateNumber` | 最多 50。超過時為 `UnsupportedError`，因為 MIG 沒有訂單編號 |
 | `buyer.ubn` | `CustomerIdentifier` | 只有 B2B 才送。B2C 為空 |
 | `buyer.name`、`.address`、`.phone`、`.email` | `CustomerName`、`CustomerAddr`、`CustomerPhone`、`CustomerEmail` | 沒有時送空字串。列印的發票（`Print` 為 `1`）需要姓名和地址 `[doc 7896]`，以及 email 或電話（5.1） |
 | `carrier.type` | `CarrierType` | `MEMBER` 為 `1`、`CITIZEN_CERTIFICATE` 為 `2`、`MOBILE_BARCODE` 為 `3` |

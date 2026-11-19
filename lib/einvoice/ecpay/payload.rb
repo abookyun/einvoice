@@ -116,8 +116,6 @@ module Einvoice
         errors = []
         relate = data["RelateNumber"].to_s
         errors << "RelateNumber is required" if relate.empty?
-        errors << "RelateNumber must be #{MAX_RELATE_NUMBER_LENGTH} characters or fewer" if
-          relate.length > MAX_RELATE_NUMBER_LENGTH
 
         # 發票金額(含稅) must equal round(Σ ItemAmount) — 5000022. Only checked for
         # 含稅 (vat=1). With vat=0, ECPay does not read ItemAmount: it stores
@@ -137,7 +135,7 @@ module Einvoice
                                     provider: Client::PROVIDER, raw_message: errors.join("; "))
         end
 
-        limits = print_limits(data)
+        limits = own_limits(data)
         return if limits.empty?
 
         raise UnsupportedError.new("ECPay does not take this invoice — #{limits.join('; ')}",
@@ -172,8 +170,12 @@ module Einvoice
       # ECPay's own rules, beyond the MIG. The MIG allows these invoices, so
       # they are UnsupportedError (docs/providers/README.md, "The unified
       # model"): another provider may take them.
-      def print_limits(data)
+      def own_limits(data)
         limits = []
+        # The MIG has no order id, so this limit is ECPay's own.
+        if data["RelateNumber"].to_s.length > MAX_RELATE_NUMBER_LENGTH
+          limits << "RelateNumber must be #{MAX_RELATE_NUMBER_LENGTH} characters or fewer"
+        end
         # A printed invoice needs somewhere to print to, and a way to notify.
         if data["Print"] == "1"
           limits << "CustomerName is required for a printed invoice" if data["CustomerName"].to_s.empty?

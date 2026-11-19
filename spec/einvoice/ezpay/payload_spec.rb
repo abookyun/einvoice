@@ -140,6 +140,9 @@ RSpec.describe Einvoice::EzPay::Payload do
           .to raise_error(Einvoice::UnsupportedError, /unit/)
         expect(issue(items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100, unit: "pieces" }])["ItemUnit"])
           .to eq("pieces")
+        # Over 6 ASCII characters is over the MIG's own limit, not only ezPay's.
+        expect { issue(items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100, unit: "PIECES1" }]) }
+          .to raise_error(Einvoice::ValidationError, /unit/)
       end
 
       it "needs whole numbers that multiply out" do
