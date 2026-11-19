@@ -68,8 +68,11 @@ module Einvoice
                                     :zero_tax_rate_reason, provider),
         provider_options: h[:provider_options]
       )
-      parsed = parsed.with(amount: issue_amount(parsed, provider)) if parsed.amount.nil?
-      check_issue_amount!(parsed, provider)
+      if parsed.amount.nil?
+        parsed = parsed.with(amount: issue_amount(parsed, provider))
+      else
+        check_issue_amount!(parsed, provider)
+      end
       check_zero_rated!(parsed, provider)
       parsed
     end
@@ -108,8 +111,11 @@ module Einvoice
         tax_rate: tax_rate,
         provider_options: h[:provider_options]
       )
-      parsed = parsed.with(amount: allowance_amount(parsed, provider)) if parsed.amount.nil?
-      check_allowance_amount!(parsed, provider)
+      if parsed.amount.nil?
+        parsed = parsed.with(amount: allowance_amount(parsed, provider))
+      else
+        check_allowance_amount!(parsed, provider)
+      end
       parsed
     end
 

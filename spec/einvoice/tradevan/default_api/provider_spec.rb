@@ -374,9 +374,17 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
         expect { provider.query({ invoice: "GX38551078" }) }.to raise_error(Einvoice::ProviderError, /qty/)
       end
 
+      search_reply("detailList" => [line.merge("qty" => " 2 ")])
+      expect(provider.query({ invoice: "GX38551078" }).items.first.quantity).to eq(2)
+
       search_reply("detailList" => [line.merge("qty" => "0", "price" => "0.5", "total" => "")])
       expect(provider.query({ invoice: "GX38551078" }).items.first)
         .to have_attributes(quantity: 0, unit_price: 0.5, amount: nil)
+    end
+
+    it "raises ProviderError for a header total that is not a decimal" do
+      search_reply("total" => "5abc")
+      expect { provider.query({ invoice: "GX38551078" }) }.to raise_error(Einvoice::ProviderError, /total/)
     end
 
     it "reads the rate of a mixed invoice without a taxable line as 0" do

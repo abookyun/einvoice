@@ -38,6 +38,9 @@ module Einvoice
         ].freeze
 
         API_VERSION = "defaultapi"
+        # Only hasAllowance is known. The status codes I and V have no source,
+        # so the adapter does not read them (4.4).
+        QUERY_STATUSES = [InvoiceStatus::ALLOWANCE].freeze
 
         attr_reader :capabilities, :client, :settings
 
@@ -64,10 +67,8 @@ module Einvoice
           Client::PROVIDER
         end
 
-        # Only hasAllowance is known. The status codes I and V have no source,
-        # so the adapter does not read them (4.4).
         def query_statuses
-          [InvoiceStatus::ALLOWANCE].freeze
+          QUERY_STATUSES
         end
 
         # Tells this adapter apart from a future one for a newer Tradevan API.
@@ -245,9 +246,9 @@ module Einvoice
             random_code: result["checkNumber"].to_s,
             order_id: Payload.order_id_from(@settings, result["saleIdentifier"]),
             status: result["hasAllowance"] == "Y" ? InvoiceStatus::ALLOWANCE : nil,
-            amount: AmountSummary.new(sales_amount: result["exclusiveAmount"].to_i,
-                                      tax_amount: result["tax"].to_i,
-                                      total_amount: result["total"].to_i),
+            amount: AmountSummary.new(sales_amount: total(result, "exclusiveAmount"),
+                                      tax_amount: total(result, "tax"),
+                                      total_amount: total(result, "total")),
             buyer: Buyer.new(name: presence(result["receiverName"]), ubn: nil, email: nil,
                              address: presence(result["receiverAddr"]),
                              phone: presence(result["receiverPhone"])),
@@ -309,15 +310,27 @@ module Einvoice
         # such as "unavailable" or "5abc", is an error: String#to_r would read
         # it as 0 or 5, a number that Tradevan did not send.
         def numeric(row, field)
-          value = row[field]
-          return nil if value.nil? || value.to_s.strip.empty?
-          unless value.to_s.match?(Rules::DECIMAL)
-            raise ProviderError.new("Tradevan returned a detailList #{field} that is not a number: #{value.inspect}",
-                                    provider: name, raw: row)
-          end
+          value = row[field].to_s.strip
+          return nil if value.empty?
 
-          rational = value.to_s.to_r
+          rational = decimal!(value, "detailList #{field}", row)
           rational.denominator == 1 ? rational.to_i : rational.to_f
+        end
+
+        # A header total as an Integer. A missing total is 0, as before. A
+        # value that is not a decimal number is an error, as in #numeric.
+        def total(result, field)
+          value = result[field].to_s.strip
+          return 0 if value.empty?
+
+          decimal!(value, field, result).to_i
+        end
+
+        def decimal!(value, field, raw)
+          return value.to_r if value.match?(Rules::DECIMAL)
+
+          raise ProviderError.new("Tradevan returned a #{field} that is not a number: #{value.inspect}",
+                                  provider: name, raw: raw)
         end
 
         def string_keys(hash)
