@@ -86,7 +86,7 @@ core 依品項算出稅額，也就是 input 的 `#tax_breakdown`。只有 core 
 - 作廢原因是 1 到 20 個字元。作廢折讓的原因可以不給，沒給時 core 補上 `作廢折讓`。
 - 捐贈和載具可以同時給，MIG 允許這樣做。
 
-**狀態。** 加值中心的狀態無法對應到 `InvoiceStatus` 時，`QueryInvoiceResult#status` 為 `nil`。
+**狀態。** 加值中心的狀態無法對應到 `InvoiceStatus` 時，`QueryInvoiceResult#status` 為 `nil`。`Provider#query_statuses` 列出 adapter 會回傳的狀態，預設是全部。加值中心分辨不出某些狀態時，adapter 會列得比較少，發票在其他狀態時回傳 `nil`。共用 contract 會依這份清單檢查每個 adapter：列出的狀態一定要回傳，沒列出的一定是 `nil`。
 
 **錯誤。** 每一種失敗都是 `Einvoice::Error`，不會是 Ruby 原生的錯誤。錯誤類別分成兩組：
 

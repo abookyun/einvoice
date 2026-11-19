@@ -6,12 +6,7 @@ The items that needed no decision are fixed. What is left needs a decision befor
 
 ## Decide first
 
-### 1. Query status means different things
-
-- **What:** ECPay and Amego return `ISSUED`, `VOIDED` or `ALLOWANCE`. ezPay returns only `VOIDED` and else `nil`, because its status does not show an allowance. Tradevan returns only `ALLOWANCE` and else `nil`, because its status codes are unknown. The shared contract accepts `nil` everywhere, so a caller cannot tell in advance which values a provider gives.
-- **Options:** a capability that says the status is complete, or a list on each adapter of the statuses it can return.
-
-### 2. ECPay's `RqHeader.Revision`
+### 1. ECPay's `RqHeader.Revision`
 
 - **What:** The adapter sends `Revision: "3.0.0"`. The current ECPay docs do not list it, and stage accepts a request without it. See open question 1 in `docs/providers/ecpay/b2c.md`.
 - **Decide:** keep the field or drop it.

@@ -84,7 +84,7 @@ The caller's `AmountSummary` is checked against the breakdown. It never tells th
 - A void reason is 1 to 20 characters. A void allowance reason is optional. The core fills `作廢折讓` when it is missing.
 - A donation and a carrier can both be set. The MIG allows it.
 
-**Status.** `QueryInvoiceResult#status` is `nil` when the provider's status cannot be mapped to `InvoiceStatus`.
+**Status.** `QueryInvoiceResult#status` is `nil` when the provider's status cannot be mapped to `InvoiceStatus`. `Provider#query_statuses` lists the statuses that the adapter can return. It is every status by default. An adapter whose provider cannot show some states lists fewer, and returns `nil` for an invoice in any other state. The shared contract holds each adapter to its list: a listed status has to come back, and an unlisted one is `nil`.
 
 **Errors.** Every failure is an `Einvoice::Error`, never a plain Ruby error. The classes fall into two groups:
 

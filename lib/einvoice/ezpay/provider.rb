@@ -38,6 +38,8 @@ module Einvoice
       # InvoiceStatus 1 is "not voided", with or without an allowance, so it
       # has no unified status (docs, section 4.4).
       STATUS = { "2" => InvoiceStatus::VOIDED }.freeze
+      # InvoiceStatus 1 is "not voided", with or without an allowance (4.4).
+      QUERY_STATUSES = STATUS.values.freeze
 
       attr_reader :capabilities, :client
 
@@ -50,6 +52,10 @@ module Einvoice
 
       def name
         Client::PROVIDER
+      end
+
+      def query_statuses
+        QUERY_STATUSES
       end
 
       # Call any ezPay path with raw fields, for example

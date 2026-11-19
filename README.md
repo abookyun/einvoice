@@ -54,7 +54,8 @@ result.invoice_number   # => "MK10000000"
 result.status           # => :issued
 
 invoice = provider.query(invoice: result.reference)
-invoice.status          # => :issued
+invoice.status          # => :issued, or nil when the provider cannot tell
+provider.query_statuses # => [:issued, :voided, :allowance]
 
 provider.void(invoice: result.reference, reason: "客戶取消")
 ```
@@ -187,7 +188,7 @@ provider = Einvoice::EzPay::Provider.new(
 - **Experimental.** ezPay has no shared test account, and nobody has run this adapter against ezPay. Its encryption and `CheckCode` match the samples in ezPay's manual byte for byte. Test it against your own test shop before you rely on it.
 - **A query needs the random code.** The reference from `issue` or `query` has it.
 - **An allowance needs the invoice's order id.** The reference has it. Without it, the adapter queries the invoice by number first. ezPay assigns the allowance number, so `allowance_id` is not sent. The allowance date is today (Asia/Taipei).
-- **A query cannot tell an allowance.** ezPay only says if an invoice is voided. An invoice that is not voided reads back with status `nil`.
+- **A query cannot tell an allowance.** ezPay only says if an invoice is voided. An invoice that is not voided reads back with status `nil`. `query_statuses` is `[:voided]`.
 - **A void waits for the upload.** ezPay uploads the day's invoices the next morning, and refuses a void before that.
 - **Prices follow the category.** ezPay wants B2C prices with tax and B2B prices without. The adapter takes them from the core's breakdown, so any `price_mode` works. Item counts and unit prices must be whole numbers.
 - **Not supported**: query by order id, special tax rates, foreign currency, mixed tax on a B2B invoice, and the carrier check APIs. `tax_rate` must be 0 or 0.05.
@@ -211,7 +212,7 @@ provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
 - **Experimental.** This adapter is ported from the 1.x client, its validators and its README examples. Tradevan does not publish its API docs, and nobody has run this adapter against the live API. Test it against your own account before you rely on it. The 1.x client stays on `1-x-stable`.
 - **Void and allowance need the original `saleIdentifier`.** DEFAULTAPI identifies an invoice by it. The adapter takes it from `provider_options: { sale_identifier: }` (use this for an invoice that the 1.x client issued), else builds it from the reference's order id, else queries the invoice by number. An allowance also needs the invoice date, from the reference or the same query. The reference from `issue` has all of these.
 - **An allowance needs the tax type and rate** before any lookup. They come from the reference of `issue` or `query`. With only an invoice number, pass `tax_type:` and, for taxable items, `tax_rate:` in the allowance input.
-- **Query status is often `nil`.** The meaning of DEFAULTAPI's status codes is unknown, so the adapter does not guess. `status` is `:allowance` when the invoice has an allowance, and `nil` otherwise. The raw code is in `result.raw["status"]`.
+- **Query status is often `nil`.** The meaning of DEFAULTAPI's status codes is unknown, so the adapter does not guess. `status` is `:allowance` when the invoice has an allowance, and `nil` otherwise. `query_statuses` is `[:allowance]`. The raw code is in `result.raw["status"]`.
 - **Prices include tax on the wire.** The adapter takes them from the core's breakdown, so any `price_mode` works. A taxable `tax_rate` must be 0.05. When the allowance response has no date, the allowance date is today (Asia/Taipei).
 - **Not supported**: query by order id, mixed tax, the special tax rate, and foreign currency.
 - **Anything else**: reach the other DEFAULTAPI endpoints through `provider.raw(path, params)`, for example `provider.raw("get/getInvoiceMarkInfo", { ... })`.

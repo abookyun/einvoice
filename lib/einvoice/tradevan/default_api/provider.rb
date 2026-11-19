@@ -64,6 +64,12 @@ module Einvoice
           Client::PROVIDER
         end
 
+        # Only hasAllowance is known. The status codes I and V have no source,
+        # so the adapter does not read them (4.4).
+        def query_statuses
+          [InvoiceStatus::ALLOWANCE].freeze
+        end
+
         # Tells this adapter apart from a future one for a newer Tradevan API.
         def api_version
           API_VERSION

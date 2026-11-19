@@ -56,7 +56,8 @@ result.invoice_number   # => "MK10000000"
 result.status           # => :issued
 
 invoice = provider.query(invoice: result.reference)
-invoice.status          # => :issued
+invoice.status          # => :issued，加值中心分辨不出時為 nil
+provider.query_statuses # => [:issued, :voided, :allowance]
 
 provider.void(invoice: result.reference, reason: "客戶取消")
 ```
@@ -196,7 +197,7 @@ provider = Einvoice::EzPay::Provider.new(
 - **實驗性質。** ezPay 沒有共用的測試帳號，也沒有人對 ezPay 執行過這個 adapter。它的加密和 `CheckCode` 和 ezPay 手冊的範例逐 byte 吻合。請先用你自己的測試商店測試，再正式使用。
 - **查詢需要隨機碼。** `issue` 或 `query` 回傳的 reference 裡有隨機碼。
 - **折讓需要原發票的訂單編號。** reference 裡有訂單編號。沒有時，adapter 會先用發票號碼查詢。折讓單號由 ezPay 配發，所以不會送出 `allowance_id`。折讓日期是今天（Asia/Taipei）。
-- **查詢分不出有沒有折讓。** ezPay 只說明發票是否已作廢。未作廢的發票，查詢結果的狀態是 `nil`。
+- **查詢分不出有沒有折讓。** ezPay 只說明發票是否已作廢。未作廢的發票，查詢結果的狀態是 `nil`。`query_statuses` 是 `[:voided]`。
 - **作廢要等上傳之後。** ezPay 在隔天早上上傳前一天的發票，上傳前不能作廢。
 - **價格依發票類別決定。** ezPay 要求 B2C 價格含稅，B2B 價格未稅。adapter 從 core 的明細取得價格，所以任何 `price_mode` 都可以。品項數量和單價必須是整數。
 - **不支援**：訂單編號查詢、特種稅率、外幣、B2B 發票的混合稅率，以及載具驗證 API。`tax_rate` 只能是 0 或 0.05。
@@ -220,7 +221,7 @@ provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
 - **實驗性質。** 這個 adapter 依據 1.x client、它的 validator 和 README 範例移植而來。關貿沒有公開 API 文件，也沒有人對 live API 執行過這個 adapter。請先用你自己的帳號測試，再正式使用。1.x client 繼續留在 `1-x-stable`。
 - **作廢和折讓需要原發票的 `saleIdentifier`。** DEFAULTAPI 用它識別發票。adapter 依序從 `provider_options: { sale_identifier: }` 取得（1.x client 開立的發票請用這個方式），或用 reference 的訂單編號組出，或用發票號碼查詢。折讓另外需要原發票日期，從 reference 或同一次查詢取得。`issue` 回傳的 reference 都有這些值。
 - **折讓需要稅別和稅率**，而且在查詢之前就要有。`issue` 或 `query` 回傳的 reference 都有。只有發票號碼時，請在折讓的輸入中傳入 `tax_type:`，有應稅品項時也要傳入 `tax_rate:`。
-- **查詢結果的 `status` 常常是 `nil`。** DEFAULTAPI 狀態代碼的意思還不清楚，所以 adapter 不猜。發票有折讓時 `status` 為 `:allowance`，其他情況為 `nil`。原始代碼在 `result.raw["status"]`。
+- **查詢結果的 `status` 常常是 `nil`。** DEFAULTAPI 狀態代碼的意思還不清楚，所以 adapter 不猜。發票有折讓時 `status` 為 `:allowance`，其他情況為 `nil`。`query_statuses` 是 `[:allowance]`。原始代碼在 `result.raw["status"]`。
 - **送出的價格含稅。** adapter 從 core 的稅額明細取得價格，所以任何 `price_mode` 都可以。應稅的 `tax_rate` 必須是 0.05。折讓的回應沒有日期時，折讓日期是今天（Asia/Taipei）。
 - **不支援**：用訂單編號查詢、混合稅率、特種稅率，以及外幣。
 - **其他功能**：其他 DEFAULTAPI endpoint 請用 `provider.raw(path, params)` 呼叫，例如 `provider.raw("get/getInvoiceMarkInfo", { ... })`。

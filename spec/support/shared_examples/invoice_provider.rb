@@ -27,6 +27,13 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
   unknown_allowance_number = options.fetch(:unknown_allowance_number, "NOPE00000000")
   unsupported_issue = options[:unsupported_issue]
 
+  # A status that the provider declares in #query_statuses has to come back.
+  # Any other one has to be nil, never a wrong status.
+  def expect_status(result, status)
+    expected = provider.query_statuses.include?(status) ? status : nil
+    expect(result.status).to eq(expected)
+  end
+
   def issue_payload(order_id: "ORDER_1", **overrides)
     {
       order_id: order_id,
@@ -42,6 +49,11 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
   it "declares a stable name and a capability set" do
     expect(provider.name).to be_a(String)
     expect(provider.capabilities).to all(be_a(Symbol))
+  end
+
+  it "declares the query statuses it can return" do
+    expect(provider.query_statuses).not_to be_empty
+    expect(Einvoice::InvoiceStatus::ALL).to include(*provider.query_statuses)
   end
 
   describe "#issue" do
@@ -101,6 +113,7 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       expect(found).to be_a(Einvoice::QueryInvoiceResult)
       expect(found.invoice_number).to eq(issued.invoice_number)
       expect(found.amount.total_amount).to eq(100)
+      expect_status(found, Einvoice::InvoiceStatus::ISSUED)
     end
 
     it "finds an issued invoice by order id when supported" do
@@ -122,9 +135,7 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       result = provider.void({ invoice: issued.reference, reason: "客戶取消" })
       expect(result).to be_a(Einvoice::VoidInvoiceResult)
       expect(result.status).to eq(Einvoice::InvoiceStatus::VOIDED)
-      # nil is allowed: a provider may not be able to tell.
-      expect(provider.query({ invoice: issued.reference }).status)
-        .to eq(Einvoice::InvoiceStatus::VOIDED).or be_nil
+      expect_status(provider.query({ invoice: issued.reference }), Einvoice::InvoiceStatus::VOIDED)
     end
   end
 
@@ -217,8 +228,7 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       issued = provider.issue(issue_payload(order_id: "ORDER_VAV"))
       provider.void_allowance({ allowance: credit(issued, "AL_VAV").reference })
 
-      expect(provider.query({ invoice: issued.reference }).status)
-        .to eq(Einvoice::InvoiceStatus::ISSUED).or be_nil
+      expect_status(provider.query({ invoice: issued.reference }), Einvoice::InvoiceStatus::ISSUED)
       expect(provider.void({ invoice: issued.reference, reason: "客戶取消" }).status)
         .to eq(Einvoice::InvoiceStatus::VOIDED)
     end
@@ -281,8 +291,7 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       expect(allowance).to be_a(Einvoice::AllowanceResult)
       expect(allowance.allowance_number).to be_a(String)
       expect(allowance.allowance_date).to be_a(Date)
-      expect(provider.query({ invoice: issued.reference }).status)
-        .to eq(Einvoice::InvoiceStatus::ALLOWANCE).or be_nil
+      expect_status(provider.query({ invoice: issued.reference }), Einvoice::InvoiceStatus::ALLOWANCE)
 
       cancelled = provider.void_allowance({ allowance: allowance.reference })
       expect(cancelled).to be_a(Einvoice::VoidAllowanceResult)

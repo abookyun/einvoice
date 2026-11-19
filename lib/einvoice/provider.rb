@@ -42,6 +42,14 @@ module Einvoice
       raise NotImplementedError, "#{self.class} must implement #void_allowance"
     end
 
+    # The {InvoiceStatus} values that {#query} can return. Any other invoice
+    # queries as +nil+. A provider whose status cannot show every state lists
+    # fewer, so a caller can check before it relies on one: code that reconciles
+    # voids needs +InvoiceStatus::VOIDED+ here.
+    def query_statuses
+      InvoiceStatus::ALL
+    end
+
     # 查詢發票.
     def query(_input)
       raise NotImplementedError, "#{self.class} must implement #query"
