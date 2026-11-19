@@ -6,18 +6,11 @@ Each item says what is wrong, where, and what it would take. Items under "Decide
 
 ## Consistency across the adapters
 
-### 3. Each client has its own HTTP handling
+### 3. A client loses the HTTP status when the body fails
 
-- **What:** Every client builds the request, reads the body and maps HTTP failures by itself. The same two bugs (an unchecked HTTP status, and `rescue StandardError`) had to be fixed in Amego (#41) and again in ezPay (#42). Tradevan still has `rescue StandardError` (see the Tradevan PR).
-- **Fix:** Move the shared part into the core: the network rescue, the "a body the provider wrote decides, else the HTTP status" rule, and the `base_url` check. Each client then keeps only its envelope and its crypto.
-- **When:** after all four adapters are merged, so the shared part is cut from four real clients.
-
-### 3a. `base_url` checks that every client needs
-
-- **Query or fragment:** `Redaction.base_url!` accepts `https://host/gateway?region=tw`. A client that appends its path builds `/gateway?region=tw/DEFAULTAPI/...`, and the request goes to the wrong path. The check should refuse a query and a fragment. It lives in the core, so it changes every client.
-- **Frozen:** the Tradevan client freezes `base_url` (#43), so a caller cannot change it after the checks. The ECPay, Amego and ezPay clients do not.
-- **Status lost when the body fails:** every client calls `http.request` and reads the body in one step. When the headers arrive but reading the body fails, for example a read timeout, the error is a plain `NetworkError`. The HTTP status is lost, so an HTTP 429 does not get `RATE_LIMITED`. Read the status before the body, and keep it in the error. Found by CodeRabbit on #43.
-- **Found by:** CodeRabbit, in the review of the Tradevan adapter (#43). Fix it with item 3.
+- **What:** every client calls `http.request` and reads the body in one step. When the headers arrive but reading the body fails, for example a read timeout, the error is a plain `NetworkError`. The HTTP status is lost, so an HTTP 429 does not get `RATE_LIMITED`.
+- **Fix:** read the status before the body, and keep it in the error. Each client sends its own requests, so each one changes. Then add the case to `spec/support/shared_examples/provider_client.rb`.
+- **Found by:** CodeRabbit, in the review of the Tradevan adapter (#43).
 
 ## Decide first
 

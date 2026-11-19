@@ -11,6 +11,18 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
   let(:base_url) { "https://tradevan.test/" }
   let(:crypto) { Einvoice::Tradevan::DefaultAPI::Crypto }
 
+  it_behaves_like "a provider client" do
+    let(:stub_host) { /tradevan\.test/ }
+    let(:secrets) { [password, key1, key2] }
+    let(:error_body) { JSON.generate("Success" => "E", "Message" => "帳號或密碼錯誤") }
+
+    def send_request = client.request("post/issue", {})
+
+    def build_client(base_url:)
+      described_class.new(acnt: "acnt", acntp: password, key1: key1, key2: key2, base_url: base_url)
+    end
+  end
+
   def respond_with(body, status = 200)
     stub_request(:any, %r{\Ahttps://tradevan\.test/DEFAULTAPI/})
       .to_return(status: status, headers: { "Content-Type" => "application/json" },

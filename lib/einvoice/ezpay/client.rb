@@ -31,7 +31,7 @@ module Einvoice
         @mode = mode
         @base_url = Redaction.base_url!(base_url || BASE_URL.fetch(mode) do
           raise ValidationError.new("Unknown ezPay mode: #{mode.inspect}", provider: PROVIDER)
-        end, provider: PROVIDER).chomp("/")
+        end, provider: PROVIDER)
         @timeout = timeout
         @clock = clock
       end

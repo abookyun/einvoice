@@ -62,6 +62,21 @@ RSpec.describe Einvoice::Redaction do
       expect(check("http://127.0.0.1")).to eq("http://127.0.0.1")
     end
 
+    it "drops a trailing slash and returns a frozen string" do
+      url = check("https://einvoice.example/gateway/")
+      expect(url).to eq("https://einvoice.example/gateway")
+      expect(url).to be_frozen
+    end
+
+    # A client appends its path, so a query or a fragment would end up in the
+    # middle of the request path.
+    it "refuses a query or a fragment" do
+      expect { check("https://einvoice.example/gw?region=tw") }
+        .to raise_error(Einvoice::ValidationError, /query or a fragment/)
+      expect { check("https://einvoice.example/gw#top") }
+        .to raise_error(Einvoice::ValidationError, /query or a fragment/)
+    end
+
     it "refuses plain http to another host" do
       expect { check("http://einvoice.example") }
         .to raise_error(Einvoice::ValidationError, /base_url must use https/)

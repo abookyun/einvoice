@@ -30,11 +30,19 @@ module Einvoice
     # A base URL for a provider. It has to use https. Only localhost may use
     # http, for tests. Credentials and buyer data must not go over plain HTTP.
     # It must not carry userinfo either, because Client#inspect prints the base URL.
+    # A query or a fragment is refused: a client appends its path, so
+    # +https://host/gw?a=1+ would send +/gw?a=1/path+ to the wrong place.
+    #
+    # Returns the URL without a trailing slash, frozen, so a client can append
+    # a path and nobody can change it after the checks.
     def base_url!(url, provider:)
       uri = URI.parse(url.to_s)
       raise ValidationError.new("base_url must not contain a user or password", provider: provider) if uri.userinfo
-      return url if uri.scheme == "https" && !uri.host.to_s.empty?
-      return url if uri.scheme == "http" && LOCALHOST.include?(uri.host)
+      if uri.query || uri.fragment
+        raise ValidationError.new("base_url must not contain a query or a fragment", provider: provider)
+      end
+      return url.to_s.chomp("/").freeze if uri.scheme == "https" && !uri.host.to_s.empty?
+      return url.to_s.chomp("/").freeze if uri.scheme == "http" && LOCALHOST.include?(uri.host)
 
       raise ValidationError.new("base_url must use https (http is allowed for localhost only), got #{url}",
                                 provider: provider)

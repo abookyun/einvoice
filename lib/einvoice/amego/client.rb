@@ -28,7 +28,7 @@ module Einvoice
 
         @ban = ban.to_s
         @app_key = app_key.to_s
-        @base_url = Redaction.base_url!(base_url, provider: PROVIDER).chomp("/")
+        @base_url = Redaction.base_url!(base_url, provider: PROVIDER)
         @timeout = timeout
         @clock = clock
       end

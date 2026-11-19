@@ -6,6 +6,16 @@ RSpec.describe Einvoice::Amego::Client do
   let(:base_url) { "https://amego.test/" }
   let(:clock) { -> { Time.at(1_729_000_000) } }
 
+  it_behaves_like "a provider client" do
+    let(:client) { described_class.new(ban: "12345678", app_key: "s3cret-app-key", base_url: "https://amego.test") }
+    let(:stub_host) { /amego\.test/ }
+    let(:secrets) { ["s3cret-app-key"] }
+    let(:error_body) { JSON.generate("code" => 71, "msg" => "查無資料") }
+
+    def send_request = client.request("/json/f0401", {})
+    def build_client(base_url:) = described_class.new(ban: "1", app_key: "k", base_url: base_url)
+  end
+
   def respond_with(body, status = 200)
     stub_request(:post, %r{\Ahttps://amego\.test/json/})
       .to_return(status: status, headers: { "Content-Type" => "application/json" },

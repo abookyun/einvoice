@@ -9,6 +9,15 @@ RSpec.describe Einvoice::ECPay::Client do
   let(:iv) { Einvoice::ECPay::SANDBOX[:hash_iv] }
   let(:url) { "https://ecpay.test/B2CInvoice/Issue" }
 
+  it_behaves_like "a provider client" do
+    let(:stub_host) { /ecpay\.test/ }
+    let(:secrets) { [key, iv] }
+    let(:error_body) { JSON.generate("MerchantID" => "2000132", "TransCode" => 110, "TransMsg" => "decrypt fail") }
+
+    def send_request = client.request("/B2CInvoice/Issue", {})
+    def build_client(base_url:) = described_class.new(**Einvoice::ECPay::SANDBOX, base_url: base_url)
+  end
+
   def envelope(body)
     { status: 200, headers: { "Content-Type" => "application/json" }, body: JSON.generate(body) }
   end

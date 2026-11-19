@@ -34,7 +34,7 @@ module Einvoice
           @key1 = key1.to_s
           @key2 = key2.to_s
           # Frozen: the checks above must hold for every request after this.
-          @base_url = Redaction.base_url!(base_url.to_s, provider: PROVIDER).chomp("/").freeze
+          @base_url = Redaction.base_url!(base_url, provider: PROVIDER)
           @timeout = timeout
         end
 

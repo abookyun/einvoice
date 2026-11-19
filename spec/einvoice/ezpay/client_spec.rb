@@ -10,6 +10,15 @@ RSpec.describe Einvoice::EzPay::Client do
   let(:iv) { "0123456789abcdef" }
   let(:crypto) { Einvoice::EzPay::Crypto }
 
+  it_behaves_like "a provider client" do
+    let(:stub_host) { /ezpay\.test/ }
+    let(:secrets) { [key, iv] }
+    let(:error_body) { JSON.generate("Status" => "INV90000", "Message" => "error") }
+
+    def send_request = client.request("/Api/x", "1.0", {})
+    def build_client(base_url:) = described_class.new(merchant_id: "1", hash_key: key, hash_iv: iv, base_url: base_url)
+  end
+
   def respond_with(body, status = 200)
     stub_request(:post, %r{\Ahttps://ezpay\.test/})
       .to_return(status: status, body: body.is_a?(String) ? body : JSON.generate(body))

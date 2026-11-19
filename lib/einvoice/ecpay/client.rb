@@ -83,7 +83,7 @@ module Einvoice
       end
 
       def post(path, body)
-        uri = URI("#{@base_url.chomp('/')}#{path}")
+        uri = URI("#{@base_url}#{path}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = uri.scheme == "https"
         http.open_timeout = @timeout
