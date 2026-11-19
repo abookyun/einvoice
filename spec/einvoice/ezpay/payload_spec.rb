@@ -152,10 +152,10 @@ RSpec.describe Einvoice::EzPay::Payload do
       end
 
       it "checks the buyer and remark lengths" do
-        # ezPay's own limits are unsupported. The remark limit is the MIG's.
+        # ezPay's own limits are unsupported. The address and remark limits are the MIG's.
         expect { issue(buyer: { name: "名" * 31 }) }.to raise_error(Einvoice::UnsupportedError, /buyer name/)
         expect { issue(buyer: { email: "#{'x' * 45}@x.com" }) }.to raise_error(Einvoice::UnsupportedError, /email/)
-        expect { issue(buyer: { address: "x" * 101 }) }.to raise_error(Einvoice::UnsupportedError, /address/)
+        expect { issue(buyer: { address: "x" * 101 }) }.to raise_error(Einvoice::ValidationError, /address/)
         expect { issue(remark: "x" * 201) }.to raise_error(Einvoice::ValidationError, /remark/)
       end
     end

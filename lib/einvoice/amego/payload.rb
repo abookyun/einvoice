@@ -168,7 +168,8 @@ module Einvoice
 
       def buyer_name(buyer, b2b)
         name = buyer&.name.to_s
-        unsupported!("Amego does not take a buyer name of #{name.inspect}") if name.match?(/\A0{1,4}\z/)
+        # The MIG forbids 0 to 0000 as a buyer's name [mig 表 4-2].
+        invalid!("buyer name must not be #{name.inspect}") if name.match?(/\A0{1,4}\z/)
         return name unless name.empty?
 
         b2b ? buyer.ubn.to_s : CONSUMER_NAME

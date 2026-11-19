@@ -110,7 +110,7 @@ RSpec.describe Einvoice::Amego::Payload do
     end
 
     it "refuses a buyer name of only zeros" do
-      expect { issue(buyer: { name: "000" }) }.to raise_error(Einvoice::UnsupportedError, /"000"/)
+      expect { issue(buyer: { name: "000" }) }.to raise_error(Einvoice::ValidationError, /must not be "000"/)
     end
 
     # Amego's own limits are unsupported. The MIG's limits are invalid input.

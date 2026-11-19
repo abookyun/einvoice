@@ -118,7 +118,7 @@ module Einvoice
         end
         max!(parsed.remark.to_s, 200, "remark", mig: true)
         max!(parsed.buyer&.email.to_s, 50, "buyer email")
-        max!(parsed.buyer&.address.to_s, 100, "buyer address")
+        max!(parsed.buyer&.address.to_s, 100, "buyer address", mig: true)
         refuse_special!(types)
         if mixed && b2b
           raise UnsupportedError.new("ezPay allows mixed tax only on a B2C invoice", provider: Client::PROVIDER)
