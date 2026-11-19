@@ -2,23 +2,19 @@
 
 RSpec.describe Einvoice::EzPay::Errors do
   describe ".classify" do
-    {
-      "KEY10002" => [:auth, Einvoice::Reason::CREDENTIALS_INVALID],
-      "KEY10007" => [:auth, Einvoice::Reason::STALE_TIMESTAMP],
-      "KEY10014" => [:network, nil],
-      "INV20006" => [:not_found, nil],
-      "INV90005" => [:auth, Einvoice::Reason::CONTRACT_EXPIRED],
-      "INV90006" => [:number_exhausted, nil],
-      "LIB10003" => [:conflict, Einvoice::Reason::DUPLICATE_ORDER],
-      "LIB10005" => [:conflict, Einvoice::Reason::ALREADY_VOIDED],
-      "LIB10007" => [:conflict, Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE],
-      "LIB10009" => [:conflict, Einvoice::Reason::RETRY_LATER],
-      "IAI10002" => [:provider, nil],
-      "XYZ00000" => [:provider, nil]
-    }.each do |code, expected|
-      it "maps #{code} to #{expected.inspect}" do
-        expect(described_class.classify(code)).to eq(expected)
-      end
+    # The note's table is the mapping. Both ways: what the note says holds,
+    # and nothing is mapped that the note leaves out.
+    rows = NoteErrorTable.tables("ezpay/invoice.md").flatten
+    it "maps every code as the note says" do
+      expect(NoteErrorTable.mismatches(rows) { |code| described_class.classify(code) }).to be_empty
+    end
+
+    it "maps no code that the note leaves out" do
+      expect(described_class::CODES.keys - rows.flat_map(&:codes)).to be_empty
+    end
+
+    it "falls back to :provider for a code outside the table" do
+      expect(described_class.classify("XYZ00000")).to eq([:provider, nil])
     end
 
     # The code list has no code for these cases, so the operation decides.

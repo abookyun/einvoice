@@ -1,6 +1,23 @@
 # frozen_string_literal: true
 
 RSpec.describe Einvoice::ECPay::Errors do
+  # The note's two code tables are the mapping. Both ways: what the note says
+  # holds, and nothing is mapped that the note leaves out.
+  describe "the code tables in the note" do
+    transport, business = NoteErrorTable.tables("ecpay/b2c.md")
+
+    it "maps every code as the note says" do
+      expect(NoteErrorTable.mismatches(transport) { |code| described_class.classify_transport(Integer(code)) })
+        .to be_empty
+      expect(NoteErrorTable.mismatches(business) { |code| described_class.classify(Integer(code), "") }).to be_empty
+    end
+
+    it "maps no code that the note leaves out" do
+      expect(described_class::TRANSPORT.keys.map(&:to_s) - transport.flat_map(&:codes)).to be_empty
+      expect(described_class::BUSINESS.keys.map(&:to_s) - business.flat_map(&:codes)).to be_empty
+    end
+  end
+
   describe ".classify_transport" do
     it "reads a decrypt failure as bad credentials, not a provider fault" do
       expect(described_class.classify_transport(110))

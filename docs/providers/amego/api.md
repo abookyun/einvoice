@@ -608,7 +608,15 @@ Common codes:
 | `4050135` | Past the time limit | `ConflictError` | `PAST_DEADLINE` |
 | `4050141` | Waiting for a queued change | `ConflictError` | `RETRY_LATER` |
 
-`barcode` codes: `9000111` empty, `9000112` wrong format, `9000113` does not exist. For a carrier check, `9000113` means "not registered", not an error. A barcode that is not registered gave `9000113` `[live]`.
+`barcode` codes:
+
+| Code | Meaning | Unified error | `Reason` |
+| --- | --- | --- | --- |
+| `9000111` | Barcode empty | `ValidationError` | |
+| `9000112` | Barcode format wrong | `ValidationError` | |
+| `9000113` | Barcode does not exist | | |
+
+For a carrier check, `9000113` means "not registered", not an error, so it has no class. A barcode that is not registered gave `9000113` `[live]`.
 
 ## 7. Open questions
 
