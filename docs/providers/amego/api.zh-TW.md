@@ -198,7 +198,7 @@ Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部
 | `remark` | `MainRemark` | 最多 200 |
 | `tax_type`、`items[].tax_type` | `TaxType` | 品項的課稅別不同時為 `9`，否則為對應代碼（6.1）。`SPECIAL`：`UnsupportedError` |
 | `tax_rate` | `TaxRate` | 小數字串，例如 `0.05`。只接受 `0` 和 `0.05`，其他稅率：`UnsupportedError`。沒有應稅品項時，core 給 `0`。Amego 在免稅發票上接受了 `0` `[live]` |
-| `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` 為 `0`，否則為 `1`。`0` 只能用在 B2B：B2C 用 `TAX_EXCLUSIVE` 會丟出 `ValidationError` |
+| `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` 為 `0`，否則為 `1`。`0` 只能用在 B2B：B2C 用 `TAX_EXCLUSIVE` 會丟出 `UnsupportedError` |
 | `amount` | `SalesAmount`、`FreeTaxSalesAmount`、`ZeroTaxSalesAmount`、`TaxAmount`、`TotalAmount` | 從品項計算。見 4.3 |
 | `customs_clearance_mark` | `CustomsClearanceMark` | `1` 或 `2`。有零稅率品項時送出。這時 core 會要求必填 |
 | `zero_tax_rate_reason` | `ZeroTaxRateReason` | `71` 到 `79`。有零稅率品項時送出。這時 adapter 會要求必填：`ValidationError` |

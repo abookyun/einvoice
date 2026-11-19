@@ -196,7 +196,7 @@ Each call sends one entry, also to the array endpoints (2.3).
 | `remark` | `MainRemark` | Max 200 |
 | `tax_type`, `items[].tax_type` | `TaxType` | `9` when items have different tax types, else the code (6.1). `SPECIAL`: `UnsupportedError` |
 | `tax_rate` | `TaxRate` | As a decimal string, for example `0.05`. Only `0` and `0.05`. Any other rate: `UnsupportedError`. The core gives `0` when no item is taxed. Amego accepted `0` on a tax-free invoice `[live]` |
-| `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` `0`, else `1`. `0` only for B2B: B2C with `TAX_EXCLUSIVE` is a `ValidationError` |
+| `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` `0`, else `1`. `0` only for B2B: B2C with `TAX_EXCLUSIVE` is an `UnsupportedError` |
 | `amount` | `SalesAmount`, `FreeTaxSalesAmount`, `ZeroTaxSalesAmount`, `TaxAmount`, `TotalAmount` | Computed from the items. See 4.3 |
 | `customs_clearance_mark` | `CustomsClearanceMark` | `1` or `2`. Sent when a zero rated item is present. The core requires it then |
 | `zero_tax_rate_reason` | `ZeroTaxRateReason` | `71` to `79`. Sent when a zero rated item is present. The adapter requires it then: `ValidationError` |

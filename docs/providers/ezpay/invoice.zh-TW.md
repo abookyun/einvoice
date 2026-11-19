@@ -201,10 +201,10 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 
 | Unified | ezPay | 規則 |
 | --- | --- | --- |
-| `description` | `ItemName` | 最多 **30**，超過就丟出 `ValidationError`。文字中有 `\|`：`ValidationError` |
-| `quantity` | `ItemCount` | **整數**。有小數：`ValidationError` |
+| `description` | `ItemName` | 最多 **30**，超過就丟出 `UnsupportedError`。文字中有 `\|`：`UnsupportedError` |
+| `quantity` | `ItemCount` | **整數**。有小數：`UnsupportedError` |
 | `unit` | `ItemUnit` | 必填。最多中文 2 字或英數 6 字。沒有時為 `個` |
-| `unit_price` | `ItemPrice` | **整數**：`ItemAmt / ItemCount`。不是整數時：`ValidationError` |
+| `unit_price` | `ItemPrice` | **整數**：`ItemAmt / ItemCount`。不是整數時：`UnsupportedError` |
 | `amount` | `ItemAmt` | 整數。core 明細中該列的金額：B2B 未稅，B2C 含稅 |
 | `tax_type` | `ItemTaxType` | 只用在混合稅率 |
 | `remark` | （無） | 沒有這個欄位，不送出 |

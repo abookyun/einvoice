@@ -199,10 +199,10 @@ Items, each joined with `|`:
 
 | Unified | ezPay | Rule |
 | --- | --- | --- |
-| `description` | `ItemName` | Max **30**. Longer: `ValidationError`. A `\|` in the text: `ValidationError` |
-| `quantity` | `ItemCount` | **Integer**. A decimal: `ValidationError` |
+| `description` | `ItemName` | Max **30**. Longer: `UnsupportedError`. A `\|` in the text: `UnsupportedError` |
+| `quantity` | `ItemCount` | **Integer**. A decimal: `UnsupportedError` |
 | `unit` | `ItemUnit` | M. Max 2 Chinese or 6 English characters. `個` when missing |
-| `unit_price` | `ItemPrice` | **Integer**: `ItemAmt / ItemCount`. Not a whole number: `ValidationError` |
+| `unit_price` | `ItemPrice` | **Integer**: `ItemAmt / ItemCount`. Not a whole number: `UnsupportedError` |
 | `amount` | `ItemAmt` | Integer. The line's amount from the core's breakdown: without tax for B2B, with tax for B2C |
 | `tax_type` | `ItemTaxType` | Mixed tax only |
 | `remark` | (none) | No field. Dropped |
