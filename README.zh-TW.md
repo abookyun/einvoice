@@ -46,7 +46,6 @@ result = provider.issue(
   items: [
     { description: "咖啡拿鐵", quantity: 1, unit_price: 100, amount: 100 }
   ],
-  amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }, # integer TWD
   tax_type: "TAXABLE",
   price_mode: "TAX_INCLUSIVE",
   carrier: { type: "MEMBER" }
@@ -80,7 +79,7 @@ provider.void(invoice: result.reference, reason: "客戶取消")
 
 稅額由 core 依品項計算。`price_mode` 說明品項金額是否含稅，`tax_type` 是整張發票的稅別（品項可以有自己的），`tax_rate` 是稅率。計算結果是 `input.tax_breakdown`：每一列的未稅金額、稅額、含稅金額，以及 MIG 的各項合計。adapter 讀取它，不自己計算稅額。core 不會改動你的品項。
 
-你給的 `amount` 會拿來和它核對。發票照 F0401：買方是消費者時，稅額含在 `sales_amount` 裡，`tax_amount` 是 `0`。買方是營業人時，`tax_amount` 是 `round(應稅銷售額 × tax_rate)`：
+`amount` 是選填。沒給時，core 從計算結果填入。有給時，會拿來和計算結果核對，所以你自己算的合計不會和品項對不上。發票照 F0401：買方是消費者時，稅額含在 `sales_amount` 裡，`tax_amount` 是 `0`。買方是營業人時，`tax_amount` 是 `round(應稅銷售額 × tax_rate)`：
 
 ```ruby
 amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }  # 含稅 100，開給營業人

@@ -144,7 +144,7 @@ module Einvoice
     :carrier, :donation, :remark, :currency, :exchange_rate, :customs_clearance_mark,
     :zero_tax_rate_reason, :provider_options
   ) do
-    def initialize(order_id:, buyer:, items:, amount:, tax_type:, price_mode:, tax_rate: nil,
+    def initialize(order_id:, buyer:, items:, tax_type:, price_mode:, amount: nil, tax_rate: nil,
                    category: nil, carrier: nil, donation: nil, remark: nil, currency: nil,
                    exchange_rate: nil, customs_clearance_mark: nil, zero_tax_rate_reason: nil,
                    provider_options: nil)
@@ -257,7 +257,7 @@ module Einvoice
   # against #tax_breakdown, which holds the tax of each line.
   AllowanceInput = Data.define(:invoice, :allowance_id, :items, :amount, :price_mode, :tax_type, :tax_rate,
                                :provider_options) do
-    def initialize(invoice:, allowance_id:, items:, amount:, price_mode:, tax_type:, tax_rate:,
+    def initialize(invoice:, allowance_id:, items:, price_mode:, tax_type:, tax_rate:, amount: nil,
                    provider_options: nil)
       super
     end

@@ -73,7 +73,7 @@ core 依品項算出稅額，也就是 input 的 `#tax_breakdown`。只有 core 
 - 合計有 `sales_amount`（未稅）、`taxable_amount`、`zero_rated_amount`、`tax_free_amount`、`tax_amount` 和 `total_amount`。稅額是 `round(應稅銷售額 × tax_rate)`。
 - 零稅率和免稅的品項稅額為 `0`。
 
-呼叫端給的 `AmountSummary` 拿來和明細核對，不會用來指示 core 怎麼算，core 也不會改動呼叫端的品項。發票照 F0401：買方是消費者時，`sales_amount` 含稅，`tax_amount` 為 `0`；買方是營業人時，`tax_amount` 必須等於明細的稅額。折讓照 G0401：`sales_amount` 不含稅，`tax_amount` 是明細的稅額。
+呼叫端的 `AmountSummary` 是選填。沒給時，core 依下面的規則從明細填入。有給時，拿來和明細核對，不會用來指示 core 怎麼算，core 也不會改動呼叫端的品項。發票照 F0401：買方是消費者時，`sales_amount` 含稅，`tax_amount` 為 `0`；買方是營業人時，`tax_amount` 必須等於明細的稅額。折讓照 G0401：`sales_amount` 不含稅，`tax_amount` 是明細的稅額。
 
 **稅率。** `tax_rate` 是小數，例如 `0.05`。core 只接受 MIG 的稅率：`0`、`0.01`、`0.02`、`0.05`、`0.15`、`0.25` `[mig 表 4-18]`。開立時的預設值由品項決定，不看表頭：有應稅品項時是 `0.05`，否則是 `0`。特種稅額品項沒有預設值。應稅品項的稅率不能是 `0`。加值中心無法送出某個稅率時，adapter 丟出 `UnsupportedError`。
 

@@ -70,6 +70,11 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
                                                   tax_rate: Rational(5, 100))
     end
 
+    it "issues without amount, which the core derives from the items" do
+      result = provider.issue(issue_payload(order_id: "ORDER_NA").except(:amount))
+      expect(result.total_amount).to eq(100)
+    end
+
     it "refuses a second invoice for the same order id" do
       provider.issue(issue_payload(order_id: "ORDER_DUP"))
       expect { provider.issue(issue_payload(order_id: "ORDER_DUP")) }

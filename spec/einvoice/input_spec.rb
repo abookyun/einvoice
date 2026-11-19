@@ -73,6 +73,28 @@ RSpec.describe Einvoice::Input do
     end
   end
 
+  # The caller may leave amount out. The core derives it by the rules that
+  # check a given one.
+  describe "an issue without amount" do
+    let(:items) { [{ "description" => "a", "quantity" => 2, "unit_price" => 525, "amount" => 1050 }] }
+
+    it "puts the tax inside sales_amount for a consumer (F0401)" do
+      input = described_class.issue(issue_hash.except("amount").merge("items" => items))
+      expect(input.amount).to eq(Einvoice::AmountSummary.new(sales_amount: 1050, tax_amount: 0, total_amount: 1050))
+    end
+
+    it "keeps the tax apart for a business (F0401)" do
+      input = described_class.issue(issue_hash.except("amount", "carrier")
+        .merge("items" => items, "buyer" => { "ubn" => "53538851", "name" => "Acme", "email" => "b@x.com" }))
+      expect(input.amount).to eq(Einvoice::AmountSummary.new(sales_amount: 1000, tax_amount: 50, total_amount: 1050))
+    end
+
+    it "still checks an amount that the caller gives" do
+      expect { described_class.issue(issue_hash.merge("items" => items)) }
+        .to raise_error(Einvoice::ValidationError, /total_amount is 100, but the items add up to 1050/)
+    end
+  end
+
   describe "MIG checks on an issue" do
     def issue(**changes)
       described_class.issue(issue_hash.merge(changes.transform_keys(&:to_s)))
@@ -256,6 +278,11 @@ RSpec.describe Einvoice::Input do
 
     def taxes(input)
       input.tax_breakdown.lines.map { |line| [line.net_amount, line.tax] }
+    end
+
+    it "derives amount when the caller leaves it out, with sales_amount without tax (G0401)" do
+      input = allowance([item(100)], nil)
+      expect(input.amount).to eq(Einvoice::AmountSummary.new(sales_amount: 95, tax_amount: 5, total_amount: 100))
     end
 
     it "splits the tax out of tax-included items, and leaves the items as given" do

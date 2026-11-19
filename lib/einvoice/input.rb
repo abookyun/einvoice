@@ -68,6 +68,7 @@ module Einvoice
                                     :zero_tax_rate_reason, provider),
         provider_options: h[:provider_options]
       )
+      parsed = parsed.with(amount: issue_amount(parsed, provider)) if parsed.amount.nil?
       check_issue_amount!(parsed, provider)
       check_zero_rated!(parsed, provider)
       parsed
@@ -107,6 +108,7 @@ module Einvoice
         tax_rate: tax_rate,
         provider_options: h[:provider_options]
       )
+      parsed = parsed.with(amount: allowance_amount(parsed, provider)) if parsed.amount.nil?
       check_allowance_amount!(parsed, provider)
       parsed
     end
@@ -165,6 +167,22 @@ module Einvoice
         fail!("a B2C invoice has tax_amount 0 and the tax inside sales_amount (F0401), got tax_amount " \
               "#{amount.tax_amount}", provider)
       end
+    end
+
+    # The totals that the core derives when the caller gives no +amount+, by
+    # the same rules that check a given one: F0401 for an invoice, G0401 for an
+    # allowance.
+    def issue_amount(input, provider)
+      breakdown = input.tax_breakdown(provider: provider)
+      total = breakdown.total_amount
+      tax = input.resolved_category == InvoiceCategory::B2B ? breakdown.tax_amount : 0
+      AmountSummary.new(sales_amount: total - tax, tax_amount: tax, total_amount: total)
+    end
+
+    def allowance_amount(input, provider)
+      breakdown = input.tax_breakdown(provider: provider)
+      AmountSummary.new(sales_amount: breakdown.total_amount - breakdown.tax_amount,
+                        tax_amount: breakdown.tax_amount, total_amount: breakdown.total_amount)
     end
 
     # An allowance follows G0401: sales_amount excludes tax.
@@ -277,8 +295,9 @@ module Einvoice
       Donation.new(npoban: npoban)
     end
 
+    # nil when the caller gives no amount: the core derives it from the items.
     def build_amount(value, provider)
-      fail!("amount is required", provider) if value.nil?
+      return nil if value.nil?
 
       h = hash!(value, "amount", provider)
       sales, tax, total = %i[sales_amount tax_amount total_amount].map do |field|

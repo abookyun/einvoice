@@ -44,7 +44,6 @@ result = provider.issue(
   items: [
     { description: "咖啡拿鐵", quantity: 1, unit_price: 100, amount: 100 }
   ],
-  amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }, # integer TWD
   tax_type: "TAXABLE",
   price_mode: "TAX_INCLUSIVE",
   carrier: { type: "MEMBER" }
@@ -78,7 +77,7 @@ The checks:
 
 The core computes the tax from the items. `price_mode` says if the item amounts include tax, `tax_type` is the type of the whole invoice (an item can have its own), and `tax_rate` is the rate. The result is `input.tax_breakdown`: the net amount, tax and gross amount of each line, and the MIG totals. Adapters read it and do not compute tax themselves. The core never changes your items.
 
-Your `amount` is checked against it. An invoice follows F0401: for a consumer the tax is inside `sales_amount` and `tax_amount` is `0`. For a business buyer `tax_amount` is `round(taxable sales × tax_rate)`:
+`amount` is optional. Leave it out, and the core fills it from the breakdown. Give it, and it is checked against the breakdown, so your own totals cannot drift from the items. An invoice follows F0401: for a consumer the tax is inside `sales_amount` and `tax_amount` is `0`. For a business buyer `tax_amount` is `round(taxable sales × tax_rate)`:
 
 ```ruby
 amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }  # 100 with tax, to a business
