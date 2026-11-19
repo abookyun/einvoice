@@ -46,7 +46,7 @@ RSpec.describe Einvoice::EzPay::Payload do
     it "refuses an amount that does not divide into a whole unit price" do
       expect { b2b(price_mode: "TAX_INCLUSIVE", items: [{ description: "a", quantity: 2, unit_price: 50, amount: 100 }],
                    amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }) }
-        .to raise_error(Einvoice::ValidationError, /95 does not divide by 2/)
+        .to raise_error(Einvoice::UnsupportedError, /95 does not divide by 2/)
     end
 
     it "uses the 統一編號 as a B2B name that is missing or longer than 60" do
@@ -101,13 +101,16 @@ RSpec.describe Einvoice::EzPay::Payload do
         expect(issue(donation: { npoban: "168001" })).to include("LoveCode" => "168001", "PrintFlag" => "N")
       end
 
-      it "refuses a carrier or a donation on a B2B invoice" do
-        expect { b2b(donation: { npoban: "168001" }) }.to raise_error(Einvoice::ValidationError, /B2C/)
+      # A donation on B2B breaks the MIG. A carrier on B2B is ezPay's own limit.
+      it "refuses a donation on a B2B invoice as invalid, and a carrier as unsupported" do
+        expect { b2b(donation: { npoban: "168001" }) }.to raise_error(Einvoice::ValidationError, /donated/)
+        expect { b2b(carrier: { type: "MOBILE_BARCODE", code: "/ABC1234" }) }
+          .to raise_error(Einvoice::UnsupportedError, /B2C/)
       end
 
       it "refuses a carrier together with a donation" do
         expect { issue(carrier: { type: "MOBILE_BARCODE", code: "/ABC1234" }, donation: { npoban: "168001" }) }
-          .to raise_error(Einvoice::ValidationError, /together/)
+          .to raise_error(Einvoice::UnsupportedError, /together/)
       end
     end
 
@@ -122,17 +125,17 @@ RSpec.describe Einvoice::EzPay::Payload do
 
     describe "local checks" do
       it "checks the order id" do
-        expect { issue(order_id: "x" * 21) }.to raise_error(Einvoice::ValidationError, /order_id/)
-        expect { issue(order_id: "ORDER-1") }.to raise_error(Einvoice::ValidationError, /order_id/)
+        expect { issue(order_id: "x" * 21) }.to raise_error(Einvoice::UnsupportedError, /order_id/)
+        expect { issue(order_id: "ORDER-1") }.to raise_error(Einvoice::UnsupportedError, /order_id/)
       end
 
       it "checks the item text" do
         expect { issue(items: [{ description: "x" * 31, quantity: 1, unit_price: 100, amount: 100 }]) }
-          .to raise_error(Einvoice::ValidationError, /description/)
+          .to raise_error(Einvoice::UnsupportedError, /description/)
         expect { issue(items: [{ description: "a|b", quantity: 1, unit_price: 100, amount: 100 }]) }
-          .to raise_error(Einvoice::ValidationError, /\|/)
+          .to raise_error(Einvoice::UnsupportedError, /\|/)
         expect { issue(items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100, unit: "公斤盒" }]) }
-          .to raise_error(Einvoice::ValidationError, /unit/)
+          .to raise_error(Einvoice::UnsupportedError, /unit/)
         expect(issue(items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100, unit: "pieces" }])["ItemUnit"])
           .to eq("pieces")
       end
@@ -140,16 +143,17 @@ RSpec.describe Einvoice::EzPay::Payload do
       it "needs whole numbers that multiply out" do
         expect { issue(items: [{ description: "a", quantity: 1.5, unit_price: 100, amount: 150 }],
                        amount: { sales_amount: 150, tax_amount: 0, total_amount: 150 }) }
-          .to raise_error(Einvoice::ValidationError, /whole number/)
+          .to raise_error(Einvoice::UnsupportedError, /whole number/)
         expect { issue(items: [{ description: "a", quantity: 3, unit_price: 33, amount: 100 }]) }
-          .to raise_error(Einvoice::ValidationError, /does not divide by 3/)
+          .to raise_error(Einvoice::UnsupportedError, /does not divide by 3/)
         expect(issue(items: [{ description: "a", quantity: "2", unit_price: 50.0, amount: 100 }])["ItemCount"]).to eq("2")
       end
 
       it "checks the buyer and remark lengths" do
-        expect { issue(buyer: { name: "名" * 31 }) }.to raise_error(Einvoice::ValidationError, /buyer name/)
-        expect { issue(buyer: { email: "#{'x' * 45}@x.com" }) }.to raise_error(Einvoice::ValidationError, /email/)
-        expect { issue(buyer: { address: "x" * 101 }) }.to raise_error(Einvoice::ValidationError, /address/)
+        # ezPay's own limits are unsupported. The remark limit is the MIG's.
+        expect { issue(buyer: { name: "名" * 31 }) }.to raise_error(Einvoice::UnsupportedError, /buyer name/)
+        expect { issue(buyer: { email: "#{'x' * 45}@x.com" }) }.to raise_error(Einvoice::UnsupportedError, /email/)
+        expect { issue(buyer: { address: "x" * 101 }) }.to raise_error(Einvoice::UnsupportedError, /address/)
         expect { issue(remark: "x" * 201) }.to raise_error(Einvoice::ValidationError, /remark/)
       end
     end
@@ -163,7 +167,7 @@ RSpec.describe Einvoice::EzPay::Payload do
     it "checks the reason: 6 Chinese or 20 English characters" do
       expect(void("客戶取消")).to eq("InvoiceNumber" => "AB12345678", "InvalidReason" => "客戶取消")
       expect(void("x" * 20)["InvalidReason"]).to eq("x" * 20)
-      expect { void("客戶要求取消訂單") }.to raise_error(Einvoice::ValidationError, /reason/)
+      expect { void("客戶要求取消訂單") }.to raise_error(Einvoice::UnsupportedError, /reason/)
     end
 
     it "gives an allowance void a default reason" do
@@ -204,7 +208,7 @@ RSpec.describe Einvoice::EzPay::Payload do
       expect do
         allowance(business: true, items: [{ description: "a", quantity: 2, unit_price: 50, amount: 100 }],
                   amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 })
-      end.to raise_error(Einvoice::ValidationError, /does not divide/)
+      end.to raise_error(Einvoice::UnsupportedError, /does not divide/)
     end
 
     it "takes a tax rate of 0 or 0.05 only, and no special tax" do

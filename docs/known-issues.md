@@ -31,10 +31,12 @@ Each item says what is wrong, where, and what it would take. Items under "Decide
 - **What:** The customs clearance mark is `provider_options[:clearance_mark]` for ECPay, `:customs_clearance_mark` (with `:zero_tax_rate_reason`) for Amego, and `:customs_clearance` for ezPay. Tradevan does not send it. An export invoice cannot switch providers without code changes.
 - **Option:** unified input fields for the MIG `CustomsClearanceMark` and `ZeroTaxRateReason`.
 
-### 6. Provider limits raise different error classes
+### 6. Two provider limits still raise ValidationError
 
-- **What:** An input that the MIG allows but one provider refuses is sometimes `UnsupportedError` and sometimes `ValidationError`. ezPay shows both: mixed tax on B2B is `UnsupportedError`, a carrier on B2B is `ValidationError`. A caller who rescues `UnsupportedError` to fall back misses the second.
-- **Option:** a rule in the unified model: a provider limit is `UnsupportedError`, and `ValidationError` is only for input that breaks the MIG.
+The unified model now says that an input the MIG allows but a provider does not take is an `UnsupportedError`. ECPay, Amego and ezPay follow it. Two places do not yet:
+
+- **Tradevan:** `Rules.validate!` checks the whole `issueData` against the DEFAULTAPI schema and raises `ValidationError`. The schema mixes the caller's input, the merchant's settings and fields that the adapter builds, so each field needs a look before it can be split.
+- **ECPay allowance:** `check_allowance!` refuses an item whose `ItemPrice × ItemCount` misses `ItemAmount` by more than 1. That is ECPay's rule, but it sits in one list with the MIG total check.
 
 ### 8. ECPay's `RqHeader.Revision`
 

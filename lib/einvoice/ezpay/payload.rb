@@ -112,16 +112,21 @@ module Einvoice
       # --- issue -------------------------------------------------------------
 
       def check_issue!(parsed, b2b, types, mixed, options)
-        invalid!("order_id must be 1 to 20 letters, digits or _") unless parsed.order_id.to_s.match?(ORDER_ID)
-        max!(parsed.remark.to_s, 200, "remark")
+        unless parsed.order_id.to_s.match?(ORDER_ID)
+          unsupported!("ezPay takes an order_id of 1 to 20 letters, digits or _")
+        end
+        max!(parsed.remark.to_s, 200, "remark", mig: true)
         max!(parsed.buyer&.email.to_s, 50, "buyer email")
         max!(parsed.buyer&.address.to_s, 100, "buyer address")
         refuse_special!(types)
         if mixed && b2b
           raise UnsupportedError.new("ezPay allows mixed tax only on a B2C invoice", provider: Client::PROVIDER)
         end
-        invalid!("ezPay allows a carrier or a donation only on a B2C invoice") if b2b && (parsed.carrier || parsed.donation)
-        invalid!("ezPay does not take a carrier together with a donation") if parsed.carrier && parsed.donation
+        # A donation on a B2B invoice breaks the MIG. A carrier does not, but
+        # ezPay refuses it, and it refuses a carrier with a donation too.
+        invalid!("a B2B invoice cannot be donated") if b2b && parsed.donation
+        unsupported!("ezPay takes a carrier only on a B2C invoice") if b2b && parsed.carrier
+        unsupported!("ezPay does not take a carrier together with a donation") if parsed.carrier && parsed.donation
         if types.include?(TaxType::ZERO_RATED) && !options.key?("customs_clearance")
           invalid!("a zero-rated sale needs provider_options[:customs_clearance]")
         end
@@ -199,15 +204,17 @@ module Einvoice
       def item_row(item, amount)
         name = item.description.to_s
         unit = item.unit.to_s.empty? ? DEFAULT_UNIT : item.unit.to_s
-        [name, unit].each { |text| invalid!("item text must not contain |: #{text.inspect}") if text.include?("|") }
+        [name, unit].each do |text|
+          unsupported!("ezPay item text must not contain |: #{text.inspect}") if text.include?("|")
+        end
         max!(name, 30, "item description")
         limited!(unit, UNIT_LIMIT, "item unit")
 
         count = integer!(item.quantity, "item quantity")
-        invalid!("ezPay needs an item quantity above 0, got #{count}") unless count.positive?
+        unsupported!("ezPay needs an item quantity above 0, got #{count}") unless count.positive?
         amount = integer!(amount, "item amount")
         unless (amount % count).zero?
-          invalid!("ezPay needs a whole unit price, but the item amount #{amount} does not divide by #{count}")
+          unsupported!("ezPay needs a whole unit price, but the item amount #{amount} does not divide by #{count}")
         end
 
         { "ItemName" => name, "ItemCount" => count, "ItemUnit" => unit, "ItemPrice" => amount / count,
@@ -238,15 +245,27 @@ module Einvoice
         rational = value.to_r
         return rational.to_i if rational.denominator == 1
 
-        invalid!("ezPay needs a whole number for #{field}, got #{Number.plain(rational)}")
+        unsupported!("ezPay needs a whole number for #{field}, got #{Number.plain(rational)}")
       end
 
-      def max!(value, limit, field)
-        invalid!("#{field} is longer than #{limit} characters") if value.length > limit
+      # A limit that the MIG sets too (+mig: true+) is a ValidationError. A
+      # shorter limit of ezPay's own is UnsupportedError: another provider may
+      # take the value (docs/providers/README.md, "The unified model").
+      def max!(value, limit, field, mig: false)
+        return if value.length <= limit
+
+        invalid!("#{field} is longer than #{limit} characters") if mig
+        unsupported!("ezPay takes a #{field} of at most #{limit} characters")
       end
 
+      # The input breaks a MIG rule, or lacks what the call needs.
       def invalid!(message)
         raise ValidationError.new(message, provider: Client::PROVIDER)
+      end
+
+      # The MIG allows the input, but ezPay does not take it.
+      def unsupported!(message)
+        raise UnsupportedError.new(message, provider: Client::PROVIDER)
       end
 
       def string_keys(hash)

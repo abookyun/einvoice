@@ -48,7 +48,7 @@ RSpec.describe Einvoice::Amego::Payload do
 
     it "refuses tax-exclusive prices on a B2C invoice" do
       expect { issue(price_mode: "TAX_EXCLUSIVE", amount: { sales_amount: 105, tax_amount: 0, total_amount: 105 }) }
-        .to raise_error(Einvoice::ValidationError, /B2B/)
+        .to raise_error(Einvoice::UnsupportedError, /B2B/)
     end
 
     it "derives the mixed tax type 9 from items with different tax types" do
@@ -109,15 +109,16 @@ RSpec.describe Einvoice::Amego::Payload do
     end
 
     it "refuses a buyer name of only zeros" do
-      expect { issue(buyer: { name: "000" }) }.to raise_error(Einvoice::ValidationError, /must not be/)
+      expect { issue(buyer: { name: "000" }) }.to raise_error(Einvoice::UnsupportedError, /"000"/)
     end
 
+    # Amego's own limits are unsupported. The MIG's limits are invalid input.
     it "checks the documented lengths" do
-      expect { issue(order_id: "x" * 41) }.to raise_error(Einvoice::ValidationError, /order_id/)
+      expect { issue(order_id: "x" * 41) }.to raise_error(Einvoice::UnsupportedError, /order_id/)
       expect { issue(remark: "x" * 201) }.to raise_error(Einvoice::ValidationError, /remark/)
       expect do
         issue(items: [{ description: "x" * 257, quantity: 1, unit_price: 100, amount: 100 }])
-      end.to raise_error(Einvoice::ValidationError, /description/)
+      end.to raise_error(Einvoice::UnsupportedError, /description/)
       expect do
         issue(items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100, unit: "x" * 7 }])
       end.to raise_error(Einvoice::ValidationError, /unit/)

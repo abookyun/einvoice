@@ -131,10 +131,16 @@ module Einvoice
         errors.concat(carrier_errors(data))
         errors << "ClearanceMark is required for a zero-rated invoice" if clearance_missing?(data)
 
-        return if errors.empty?
+        unless errors.empty?
+          raise ValidationError.new("Invalid ECPay invoice payload — #{errors.join('; ')}",
+                                    provider: Client::PROVIDER, raw_message: errors.join("; "))
+        end
 
-        raise ValidationError.new("Invalid ECPay invoice payload — #{errors.join('; ')}",
-                                  provider: Client::PROVIDER, raw_message: errors.join("; "))
+        limits = print_limits(data)
+        return if limits.empty?
+
+        raise UnsupportedError.new("ECPay does not take this invoice — #{limits.join('; ')}",
+                                   provider: Client::PROVIDER, raw_message: limits.join("; "))
       end
 
       def buyer_errors(data)
@@ -149,28 +155,37 @@ module Einvoice
           errors << "LoveCode (3–7 digits) is required when donating"
         end
 
-        # A printed invoice needs somewhere to print to, and a way to notify.
-        if data["Print"] == "1"
-          errors << "CustomerName is required for a printed invoice" if data["CustomerName"].to_s.empty?
-          errors << "CustomerAddr is required for a printed invoice" if data["CustomerAddr"].to_s.empty?
-          if data["CustomerEmail"].to_s.empty? && data["CustomerPhone"].to_s.empty?
-            errors << "CustomerEmail or CustomerPhone is required for a printed invoice"
-          end
-        end
         errors
       end
 
       def carrier_errors(data)
         errors = []
         carrier = data["CarrierType"].to_s
-        if data["CustomerIdentifier"].to_s.empty?
-          # A B2C carrier invoice is electronic and cannot also print — 5000015.
-          errors << "Print must be 0 for a carrier invoice" if !carrier.empty? && data["Print"] == "1"
-        elsif data["Print"] == "0" && carrier.empty?
-          # A 統編 invoice that is not printed has to live in a carrier — 5000028.
-          errors << "A non-printed B2B invoice must use a carrier"
+        # A B2C carrier invoice is electronic and cannot also print — 5000015.
+        if data["CustomerIdentifier"].to_s.empty? && !carrier.empty? && data["Print"] == "1"
+          errors << "Print must be 0 for a carrier invoice"
         end
         errors
+      end
+
+      # ECPay's own rules, beyond the MIG. The MIG allows these invoices, so
+      # they are UnsupportedError (docs/providers/README.md, "The unified
+      # model"): another provider may take them.
+      def print_limits(data)
+        limits = []
+        # A printed invoice needs somewhere to print to, and a way to notify.
+        if data["Print"] == "1"
+          limits << "CustomerName is required for a printed invoice" if data["CustomerName"].to_s.empty?
+          limits << "CustomerAddr is required for a printed invoice" if data["CustomerAddr"].to_s.empty?
+          if data["CustomerEmail"].to_s.empty? && data["CustomerPhone"].to_s.empty?
+            limits << "CustomerEmail or CustomerPhone is required for a printed invoice"
+          end
+        end
+        # A 統編 invoice that is not printed has to live in a carrier — 5000028.
+        if !data["CustomerIdentifier"].to_s.empty? && data["Print"] == "0" && data["CarrierType"].to_s.empty?
+          limits << "A non-printed B2B invoice must use a carrier"
+        end
+        limits
       end
 
       # 零稅率 (TaxType 2, or 9 when a zero-rated item is mixed in) needs the

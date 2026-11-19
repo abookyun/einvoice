@@ -93,6 +93,7 @@ The caller's `AmountSummary` is checked against the breakdown. It never tells th
 | The invoice | `ValidationError`, `NotFoundError`, `ConflictError`, `NumberExhaustedError` | The request breaks a rule of the MOF, or the invoice is not in the state it needs. These mean the same at every provider |
 | The provider | `AuthError`, `NetworkError`, `ProviderError`, `UnsupportedError` | The account, the connection, the provider's own service, or a feature it lacks |
 
+- An input that the MIG allows but this provider does not take is an `UnsupportedError`, for example a field longer than the provider's own limit, or an item price that must be whole. Another provider may take it. A `ValidationError` means the input breaks a MIG rule, or lacks data that the call needs, so no provider takes it as it is.
 - A query that the adapter makes on its own, to fill a missing field, belongs to the provider group. If it fails, the adapter raises `ProviderError` with `Reason::LOOKUP_FAILED`. The message names the field it needed, and `cause` holds the error of the query. So a `NotFoundError` always means the invoice of the call itself.
 - Each provider has its own default class for an error code that we do not know. Section 6.4 gives it, with the evidence.
 - When the body is not a provider response, HTTP 5xx and 429 are a `NetworkError`, so the caller can retry. A body that the adapter can read decides the error, whatever the status. ECPay, for example, sends a wrong key as HTTP 500 with a normal envelope.

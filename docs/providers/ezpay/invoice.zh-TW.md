@@ -315,7 +315,7 @@ adapter 依原發票的買方，從 `invoice.buyer_ubn` 決定用哪一種：
 - **消費者**（`buyer_ubn` 為 `nil`）：含稅價格。`ItemAmt` 是 core 明細中每一列的 `gross_amount`，`ItemTaxAmt` 為 `0`。「買方不能扣抵」這條規則不影響，因為消費者本來就不扣抵營業稅。含稅價格也比較容易整除：2 件、每件 50 元，仍然是每件 50。
 - **營業人**：未稅價格（G0401）。`ItemAmt` 是每一列的 `net_amount`，`ItemTaxAmt` 是它的 `tax`。
 
-兩種情況的 `TotalAmt` 都是 `amount.total_amount`。`ItemPrice` 是 `ItemAmt / ItemCount`。ezPay 要求 `ItemAmt = ItemCount × ItemPrice` 完全相等，而且是整數，所以除不盡時，adapter 丟出 `ValidationError`。未稅時可能發生這種情況，例如 2 件共 95 元（見第 7 節）。
+兩種情況的 `TotalAmt` 都是 `amount.total_amount`。`ItemPrice` 是 `ItemAmt / ItemCount`。ezPay 要求 `ItemAmt = ItemCount × ItemPrice` 完全相等，而且是整數，所以除不盡時，adapter 丟出 `UnsupportedError`。未稅時可能發生這種情況，例如 2 件共 95 元（見第 7 節）。
 
 **整數。** 品項數量和價格都是整數。unified model 允許小數，所以要在呼叫前檢查。
 

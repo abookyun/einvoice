@@ -39,14 +39,20 @@ RSpec.describe Einvoice::ECPay::Payload do
       expect(payload).to include("Print" => "1")
     end
 
+    # Print can only clash with a carrier through a raw provider_options[:data].
+    it "refuses a carrier invoice that also prints, as invalid input" do
+      expect { build(provider_options: { data: { "Print" => "1" } }) }
+        .to raise_error(Einvoice::ValidationError, /Print must be 0 for a carrier invoice/)
+    end
+
     it "refuses to print without somewhere to send the paper" do
       expect { build(carrier: nil) }
-        .to raise_error(Einvoice::ValidationError, /CustomerName is required.*CustomerAddr is required/m)
+        .to raise_error(Einvoice::UnsupportedError, /CustomerName is required.*CustomerAddr is required/m)
     end
 
     it "refuses to print without a way to reach the buyer" do
       expect { build(carrier: nil, buyer: { name: "王小明", address: "台北市信義路一段1號" }) }
-        .to raise_error(Einvoice::ValidationError, /CustomerEmail or CustomerPhone is required/)
+        .to raise_error(Einvoice::UnsupportedError, /CustomerEmail or CustomerPhone is required/)
     end
 
     it "accepts a phone in place of an email on a printed invoice" do
@@ -160,7 +166,7 @@ RSpec.describe Einvoice::ECPay::Payload do
         build(carrier: nil, buyer: { ubn: "53538851", name: "測試公司" }, amount: b2b_amount,
               donation: { npoban: "168001" })
       end
-        .to raise_error(Einvoice::ValidationError, /non-printed B2B invoice must use a carrier/)
+        .to raise_error(Einvoice::UnsupportedError, /non-printed B2B invoice must use a carrier/)
     end
 
     it "maps each carrier type to its ECPay code" do

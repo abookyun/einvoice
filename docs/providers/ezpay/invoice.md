@@ -313,7 +313,7 @@ The adapter picks the form by the buyer of the original invoice, from `invoice.b
 - **A consumer** (`buyer_ubn` is `nil`): prices with tax. `ItemAmt` is each line's `gross_amount` from the core's breakdown, and `ItemTaxAmt` is `0`. The "cannot deduct" rule does not matter, because a consumer does not deduct business tax. Prices with tax also divide well: two items of 50 stay 50 each.
 - **A business**: prices without tax (G0401). `ItemAmt` is each line's `net_amount`, and `ItemTaxAmt` is its `tax`.
 
-`TotalAmt` is `amount.total_amount` in both forms. `ItemPrice` is `ItemAmt / ItemCount`. ezPay wants `ItemAmt = ItemCount × ItemPrice` exactly, in integers, so the adapter raises `ValidationError` when that is not a whole number. Without tax, this can happen: 2 items for 95 (see 7).
+`TotalAmt` is `amount.total_amount` in both forms. `ItemPrice` is `ItemAmt / ItemCount`. ezPay wants `ItemAmt = ItemCount × ItemPrice` exactly, in integers, so the adapter raises `UnsupportedError` when that is not a whole number. Without tax, this can happen: 2 items for 95 (see 7).
 
 **Integers.** Item counts and prices are integers. The unified model allows decimals, so check before the call.
 
