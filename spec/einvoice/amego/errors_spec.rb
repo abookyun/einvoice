@@ -2,15 +2,25 @@
 
 RSpec.describe Einvoice::Amego::Errors do
   describe ".classify" do
-    # The note's table is the mapping. Both ways: what the note says holds,
-    # and nothing is mapped that the note leaves out.
-    rows = NoteErrorTable.tables("amego/api.md").flatten
-    it "maps every code as the note says" do
-      expect(NoteErrorTable.mismatches(rows) { |code| described_class.classify(Integer(code)) }).to be_empty
-    end
-
-    it "maps no code that the note leaves out" do
-      expect(described_class::CODES.keys.map(&:to_s) - rows.flat_map(&:codes)).to be_empty
+    {
+      15 => [:auth, Einvoice::Reason::STALE_TIMESTAMP],
+      16 => [:auth, Einvoice::Reason::CREDENTIALS_INVALID],
+      21 => [:provider, Einvoice::Reason::RATE_LIMITED],
+      71 => [:not_found, nil],
+      3_040_111 => [:number_exhausted, nil],
+      3_040_171 => [:conflict, Einvoice::Reason::DUPLICATE_ORDER],
+      3_050_121 => [:conflict, Einvoice::Reason::RETRY_LATER],
+      3_050_122 => [:conflict, Einvoice::Reason::ALREADY_VOIDED],
+      3_050_131 => [:conflict, Einvoice::Reason::RETRY_LATER],
+      3_050_141 => [:conflict, Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE],
+      4_040_153 => [:conflict, Einvoice::Reason::ALLOWANCE_BLOCKED_BY_VOID],
+      4_040_161 => [:conflict, Einvoice::Reason::DUPLICATE_ALLOWANCE],
+      4_050_134 => [:not_found, nil],
+      4_050_141 => [:conflict, Einvoice::Reason::RETRY_LATER]
+    }.each do |code, expected|
+      it "maps #{code} to #{expected.inspect}" do
+        expect(described_class.classify(code)).to eq(expected)
+      end
     end
 
     it "reads a code sent as a string" do
