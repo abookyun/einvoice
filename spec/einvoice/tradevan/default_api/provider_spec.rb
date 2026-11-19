@@ -93,16 +93,24 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
     end
 
     # Ported from the 1.x provider spec: data that breaks the field rules never
-    # reaches the network. A limit of Tradevan's own is unsupported, a limit
-    # that the MIG sets too is invalid input.
+    # reaches the network. A limit of Tradevan's own is unsupported. A limit
+    # that the MIG sets too is checked by the core first, as invalid input.
     it "raises without a request when the data breaks the field rules" do
       expect { provider.issue(issue_input.merge(order_id: "x" * 51)) }
         .to raise_error(Einvoice::UnsupportedError, /transactionNumber/)
+      expect { provider.issue(issue_input.merge(buyer: { email: "#{'x' * 80}@x.com" })) }
+        .to raise_error(Einvoice::UnsupportedError, /receiverEmail/)
       expect { provider.issue(issue_input.merge(buyer: { email: "b@x.com", address: "x" * 101 })) }
-        .to raise_error(Einvoice::ValidationError, /receiverAddrRoad/)
-      expect { provider.issue(issue_input.merge(order_id: "x" * 51, buyer: { email: "b@x.com", address: "x" * 101 })) }
-        .to raise_error(Einvoice::ValidationError, /transactionNumber.*receiverAddrRoad/)
+        .to raise_error(Einvoice::ValidationError, /buyer_address/)
       expect(tradevan.requests).to be_empty
+    end
+
+    # A wrong orgId comes from the merchant's settings, not a limit of
+    # Tradevan's own, so the whole error is a ValidationError.
+    it "raises ValidationError when another field rule fails too" do
+      wrong = described_class.new(**FakeTradevan::CREDENTIALS.merge(org_id: "ABCDEF"))
+      expect { wrong.issue(issue_input.merge(order_id: "x" * 51)) }
+        .to raise_error(Einvoice::ValidationError, /orgId.*transactionNumber/)
     end
 
     it "lets validate_payload: false send the data as it is" do

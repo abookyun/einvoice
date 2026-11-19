@@ -73,6 +73,7 @@ provider.void(invoice: result.reference, reason: "客戶取消")
 - `tax_rate` 是小數，例如 `0.05`，而且必須是 MIG 規定的稅率。開立時的預設值由品項決定，不看表頭：有應稅品項時是 `0.05`，否則是 `0`。有特種稅額品項時一定要給。應稅品項的稅率不能是 `0`。
 - 零稅率發票必須給 `customs_clearance_mark`，值是 `"1"` 或 `"2"`，對應 MIG 的 CustomsClearanceMark。`zero_tax_rate_reason` 是 `"71"` 到 `"79"`，對應 MIG 的 ZeroTaxRateReason。MIG 也規定零稅率發票要有零稅率原因，但 ECPay 可以從後台設定取得，所以 core 不要求。Amego 會要求。
 - 金額必須和品項一致（見下一節）。
+- MIG 的欄位長度：`remark` 200、買方 `name` 60、`address` 100、`email` 400、`phone` 26、載具 `code` 400、品項 `description` 500、`unit` 6、`remark` 120。消費者的名稱不能是 `0` 到 `0000`，載具號碼的開頭和結尾不能有空白。provider 自己的上限比較短時，丟 `UnsupportedError`。
 - 作廢原因最多 20 個字。作廢折讓的原因沒給時，預設是 `作廢折讓`。
 
 ### 金額與稅額

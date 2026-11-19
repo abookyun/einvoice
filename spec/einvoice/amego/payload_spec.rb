@@ -228,11 +228,13 @@ RSpec.describe Einvoice::Amego::Payload do
         .to raise_error(Einvoice::UnsupportedError, /special/)
     end
 
+    # Amego sends allowance_id as the AllowanceNumber. Other providers number
+    # an allowance themselves, so the limit is Amego's.
     it "refuses an allowance number longer than 16" do
       expect do
         allowance(allowance_id: "x" * 17, items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100 }],
                   amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 })
-      end.to raise_error(Einvoice::ValidationError, /allowance_id/)
+      end.to raise_error(Einvoice::UnsupportedError, /allowance_id/)
     end
   end
 

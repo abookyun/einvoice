@@ -49,9 +49,11 @@ RSpec.describe Einvoice::EzPay::Payload do
         .to raise_error(Einvoice::UnsupportedError, /95 does not divide by 2/)
     end
 
-    it "uses the 統一編號 as a B2B name that is missing or longer than 60" do
+    # A name over the MIG's 60 characters is refused by the core.
+    it "uses the 統一編號 as a B2B name that is missing" do
       expect(b2b(buyer: { ubn: "28080623" })["BuyerName"]).to eq("28080623")
-      expect(b2b(buyer: { ubn: "28080623", name: "名" * 61 })["BuyerName"]).to eq("28080623")
+      expect { b2b(buyer: { ubn: "28080623", name: "名" * 61 }) }
+        .to raise_error(Einvoice::ValidationError, /buyer_name/)
     end
 
     it "joins the item fields with |" do
@@ -103,9 +105,9 @@ RSpec.describe Einvoice::EzPay::Payload do
         expect(issue(donation: { npoban: "168001" })).to include("LoveCode" => "168001", "PrintFlag" => "N")
       end
 
-      # A donation on B2B breaks the MIG. A carrier on B2B is ezPay's own limit.
-      it "refuses a donation on a B2B invoice as invalid, and a carrier as unsupported" do
-        expect { b2b(donation: { npoban: "168001" }) }.to raise_error(Einvoice::ValidationError, /donated/)
+      # The MIG allows both on a B2B invoice. ezPay does not.
+      it "refuses a donation or a carrier on a B2B invoice as unsupported" do
+        expect { b2b(donation: { npoban: "168001" }) }.to raise_error(Einvoice::UnsupportedError, /donation/)
         expect { b2b(carrier: { type: "MOBILE_BARCODE", code: "/ABC1234" }) }
           .to raise_error(Einvoice::UnsupportedError, /B2C/)
       end

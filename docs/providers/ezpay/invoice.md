@@ -177,14 +177,14 @@ Other endpoints. An adapter can reach them through a `raw` method:
 | --- | --- | --- |
 | `order_id` | `MerchantOrderNo` | Max **20**, letters, digits and `_`. Other providers allow longer ids |
 | `category` (or the buyer's 統一編號) | `Category` | `B2B` / `B2C` |
-| `buyer.name` | `BuyerName` | M. B2C without a name: `消費者`. B2B: the company name, max 60 |
+| `buyer.name` | `BuyerName` | M. B2C without a name: `消費者`. B2B without a name: the 統一編號. The core refuses a name over 60, the MIG's limit |
 | `buyer.ubn` | `BuyerUBN` | B2B only |
 | `buyer.address` | `BuyerAddress` | |
 | `buyer.email` | `BuyerEmail` | Max 50. M for the ezPay member carrier |
 | `buyer.phone` | (none) | No field on issue. Dropped |
-| `carrier.type` | `CarrierType` | `MOBILE_BARCODE` `0`, `CITIZEN_CERTIFICATE` `1`, `MEMBER` `2`. B2C only: a carrier on a B2B invoice is a `ValidationError` |
+| `carrier.type` | `CarrierType` | `MOBILE_BARCODE` `0`, `CITIZEN_CERTIFICATE` `1`, `MEMBER` `2`. B2C only: a carrier on a B2B invoice is an `UnsupportedError` |
 | `carrier.code` | `CarrierNum` | `rawurlencode` first (2.2). For `MEMBER` without a code, use the buyer's email |
-| `donation.npoban` | `LoveCode` | B2C only. ezPay does not take it together with a carrier `[inv 四]`, so both together are a `ValidationError` |
+| `donation.npoban` | `LoveCode` | B2C only: a donation on a B2B invoice is an `UnsupportedError`. ezPay does not take it together with a carrier `[inv 四]`, so both together are an `UnsupportedError` too |
 | (derived) | `PrintFlag` | `Y` for B2B, and for B2C with no carrier and no donation. Else `N` |
 | `tax_type`, `items[].tax_type` | `TaxType` | `9` when items differ. Mixed tax is B2C only: B2B with mixed items is an `UnsupportedError`. `SPECIAL`: `UnsupportedError` (6.1) |
 | `tax_rate` | `TaxRate` | A percent: `tax_rate × 100`, so `5` or `0`. Any other rate: `UnsupportedError` |

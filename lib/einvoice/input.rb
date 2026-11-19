@@ -27,6 +27,15 @@ module Einvoice
     }.freeze
     # MIG F0501 and G0501 allow a reason of 1 to 20 characters.
     MAX_REASON_LENGTH = 20
+    # MIG 4.1 field lengths, checked here once so that every provider gets the
+    # same answer [mig 表 4-2, 15-2, 15-5, 18-2]. A shorter limit of one
+    # provider is that adapter's UnsupportedError.
+    MIG_LENGTHS = {
+      remark: 200, buyer_name: 60, buyer_address: 100, buyer_email: 400, buyer_phone: 26,
+      carrier_code: 400, item_description: 500, item_unit: 6, item_remark: 120
+    }.freeze
+    # MIG 表 4-2: a consumer's name must not be 0 to 0000.
+    ZERO_NAME = /\A0{1,4}\z/
     # MIG CustomsClearanceMarkEnum and ZeroTaxRateReasonEnum [mig 表 4-9, 4-19].
     CUSTOMS_CLEARANCE_MARKS = %w[1 2].freeze
     ZERO_TAX_RATE_REASONS = ("71".."79").to_a.freeze
@@ -48,6 +57,7 @@ module Einvoice
       tax_type = enum!(h[:tax_type], TaxType::ALL, :tax_type, provider)
       category = h[:category] && enum!(h[:category], InvoiceCategory::ALL, :category, provider)
       check_category!(category, buyer, provider)
+      check_consumer_name!(category, buyer, provider)
       parsed = IssueInvoiceInput.new(
         order_id: fetch!(h, :order_id, provider),
         buyer: buyer,
@@ -59,7 +69,7 @@ module Einvoice
         category: category,
         carrier: build_carrier(h[:carrier], provider),
         donation: build_donation(h[:donation], provider),
-        remark: h[:remark],
+        remark: length!(h[:remark], :remark, provider),
         currency: h[:currency],
         exchange_rate: h[:exchange_rate],
         customs_clearance_mark: code!(h[:customs_clearance_mark], CUSTOMS_CLEARANCE_MARKS,
@@ -272,8 +282,10 @@ module Einvoice
       ubn = blank?(h[:ubn]) ? nil : h[:ubn].to_s
       fail!("buyer ubn must be 8 digits, got #{ubn.inspect}", provider) if ubn && !ubn.match?(UBN_FORMAT)
 
-      Buyer.new(name: h[:name], ubn: ubn, email: h[:email], address: h[:address],
-                phone: h[:phone])
+      Buyer.new(name: length!(h[:name], :buyer_name, provider), ubn: ubn,
+                email: length!(h[:email], :buyer_email, provider),
+                address: length!(h[:address], :buyer_address, provider),
+                phone: length!(h[:phone], :buyer_phone, provider))
     end
 
     def build_carrier(value, provider)
@@ -285,7 +297,11 @@ module Einvoice
       if format && !h[:code].to_s.match?(format)
         fail!("carrier code for #{type} must match #{format.source}, got #{h[:code].inspect}", provider)
       end
-      Carrier.new(type: type, code: h[:code])
+      # MIG 表 15-3: no space, half-width or full-width, at either end.
+      if h[:code].to_s.match?(/\A[\s\u3000]|[\s\u3000]\z/)
+        fail!("carrier code must not start or end with a space, got #{h[:code].inspect}", provider)
+      end
+      Carrier.new(type: type, code: length!(h[:code], :carrier_code, provider))
     end
 
     def build_donation(value, provider)
@@ -326,13 +342,13 @@ module Einvoice
           Number.decimal!(fetch!(h, field, provider), field: "items[#{index}].#{field}", provider: provider)
         end
         InvoiceItem.new(
-          description: fetch!(h, :description, provider),
+          description: length!(fetch!(h, :description, provider), :item_description, provider),
           quantity: fetch!(h, :quantity, provider),
           unit_price: fetch!(h, :unit_price, provider),
           amount: fetch!(h, :amount, provider),
-          unit: h[:unit],
+          unit: length!(h[:unit], :item_unit, provider),
           tax_type: h[:tax_type] && enum!(h[:tax_type], TaxType::ALL, :tax_type, provider),
-          remark: h[:remark]
+          remark: length!(h[:remark], :item_remark, provider)
         )
       end
     end
@@ -352,6 +368,21 @@ module Einvoice
     end
 
     # A B2B invoice needs a 統一編號. An explicit category has to agree with it.
+    # The value as it is, after a check against its MIG length.
+    def length!(value, field, provider)
+      limit = MIG_LENGTHS.fetch(field)
+      length = value.to_s.length
+      fail!("#{field} must be #{limit} characters or fewer (MIG), got #{length}", provider) if length > limit
+      value
+    end
+
+    def check_consumer_name!(category, buyer, provider)
+      return if buyer.nil? || buyer.business? || category == InvoiceCategory::B2B
+      return unless buyer.name.to_s.match?(ZERO_NAME)
+
+      fail!("a consumer's buyer name must not be #{buyer.name.inspect} (MIG)", provider)
+    end
+
     def check_category!(category, buyer, provider)
       business = buyer&.business? || false
       if category == InvoiceCategory::B2B && !business

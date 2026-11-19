@@ -179,14 +179,14 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 | --- | --- | --- |
 | `order_id` | `MerchantOrderNo` | 最多 **20**，英文字母、數字和 `_`。其他加值中心允許更長的編號 |
 | `category`（或買方的統一編號） | `Category` | `B2B` / `B2C` |
-| `buyer.name` | `BuyerName` | 必填。B2C 沒有名稱時為 `消費者`。B2B 為公司名稱，最多 60 |
+| `buyer.name` | `BuyerName` | 必填。B2C 沒有名稱時為 `消費者`。B2B 沒有名稱時為統一編號。名稱超過 MIG 上限 60 時，core 會拒絕 |
 | `buyer.ubn` | `BuyerUBN` | 只有 B2B 才送 |
 | `buyer.address` | `BuyerAddress` | |
 | `buyer.email` | `BuyerEmail` | 最多 50。使用 ezPay 會員載具時必填 |
 | `buyer.phone` | （無） | 開立時沒有這個欄位，不送出 |
-| `carrier.type` | `CarrierType` | `MOBILE_BARCODE` 為 `0`、`CITIZEN_CERTIFICATE` 為 `1`、`MEMBER` 為 `2`。只限 B2C：B2B 發票帶載具會丟出 `ValidationError` |
+| `carrier.type` | `CarrierType` | `MOBILE_BARCODE` 為 `0`、`CITIZEN_CERTIFICATE` 為 `1`、`MEMBER` 為 `2`。只限 B2C：B2B 發票帶載具會丟出 `UnsupportedError` |
 | `carrier.code` | `CarrierNum` | 先做 `rawurlencode`（2.2）。`MEMBER` 沒有 code 時，用買方的 email |
-| `donation.npoban` | `LoveCode` | 只限 B2C。ezPay 不接受和載具同時送出 `[inv 四]`，所以兩者同時給會丟出 `ValidationError` |
+| `donation.npoban` | `LoveCode` | 只限 B2C：B2B 發票捐贈會丟出 `UnsupportedError`。ezPay 不接受和載具同時送出 `[inv 四]`，所以兩者同時給也會丟出 `UnsupportedError` |
 | （推導） | `PrintFlag` | B2B 為 `Y`；B2C 沒有載具也沒有捐贈時為 `Y`。其他為 `N` |
 | `tax_type`、`items[].tax_type` | `TaxType` | 品項不一致時為 `9`。混合稅率只限 B2C：B2B 有混合品項時丟出 `UnsupportedError`。`SPECIAL`：`UnsupportedError`（6.1） |
 | `tax_rate` | `TaxRate` | 百分比：`tax_rate × 100`，也就是 `5` 或 `0`。其他稅率：`UnsupportedError` |

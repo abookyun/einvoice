@@ -95,6 +95,7 @@ core 依品項算出稅額，也就是 input 的 `#tax_breakdown`。只有 core 
 | 發票 | `ValidationError`、`NotFoundError`、`ConflictError`、`NumberExhaustedError` | 請求違反財政部的規則，或發票不在需要的狀態。在每一家加值中心的意思都相同 |
 | 加值中心 | `AuthError`、`NetworkError`、`ProviderError`、`UnsupportedError` | 帳號、連線、加值中心自己的服務，或它不支援的功能 |
 
+- core 會檢查所有加值中心都適用的 MIG 規則，例如欄位長度，所以每一家的結果都相同。adapter 只檢查自己加值中心的規則。
 - MIG 允許、但這家加值中心不接受的輸入，丟 `UnsupportedError`。例如欄位超過加值中心自己的長度限制，或品項單價必須是整數。換一家加值中心可能就能接受。`ValidationError` 表示輸入違反 MIG 的規則，或缺少這次呼叫需要的資料，所以任何一家都不會照原樣接受。
 - adapter 為了補上缺少的欄位而自己發出的查詢，屬於加值中心這一組。查詢失敗時，adapter 丟出帶有 `Reason::LOOKUP_FAILED` 的 `ProviderError`。錯誤訊息會指出它需要哪個欄位，`cause` 是查詢本身的錯誤。所以 `NotFoundError` 一定是指這次呼叫的那張發票。
 - 遇到我們不認得的錯誤代碼時，每家加值中心有自己的預設類別。第 6.4 節寫明預設類別和依據。

@@ -206,6 +206,29 @@ RSpec.describe Einvoice::Input do
       expect([input.carrier, input.donation]).to all(be_truthy)
     end
 
+    # The MIG lengths are checked once here, so every provider answers alike.
+    it "checks the MIG field lengths" do
+      item = issue_hash["items"].first
+      {
+        { remark: "x" * 201 } => /remark must be 200/,
+        { buyer: { email: "b@x.com", name: "x" * 61 } } => /buyer_name must be 60/,
+        { buyer: { email: "b@x.com", address: "x" * 101 } } => /buyer_address must be 100/,
+        { buyer: { email: "#{'x' * 400}@x.com" } } => /buyer_email must be 400/,
+        { buyer: { email: "b@x.com", phone: "1" * 27 } } => /buyer_phone must be 26/,
+        { carrier: { type: "MEMBER", code: "x" * 401 } } => /carrier_code must be 400/,
+        { items: [item.merge("description" => "x" * 501)] } => /item_description must be 500/,
+        { items: [item.merge("unit" => "x" * 7)] } => /item_unit must be 6/,
+        { items: [item.merge("remark" => "x" * 121)] } => /item_remark must be 120/
+      }.each { |changes, message| expect(error_for { issue(**changes) }).to match(message) }
+      expect(issue(remark: "x" * 200).remark).to eq("x" * 200)
+    end
+
+    it "refuses a consumer name of 0 to 0000, and a carrier code with a space at an end (MIG)" do
+      expect(error_for { issue(buyer: { email: "b@x.com", name: "000" }) }).to match(/must not be "000"/)
+      expect(issue(buyer: { email: "b@x.com", name: "0000A" }).buyer.name).to eq("0000A")
+      expect(error_for { issue(carrier: { type: "MEMBER", code: "abc\u3000" }) }).to match(/space/)
+    end
+
     it "needs the MIG clearance mark on a zero-rated invoice, and checks both MIG codes" do
       expect(error_for { issue(tax_type: "ZERO_RATED") }).to match(/needs customs_clearance_mark/)
       zero = issue(tax_type: "ZERO_RATED", customs_clearance_mark: 2, zero_tax_rate_reason: 71)

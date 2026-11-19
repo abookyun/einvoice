@@ -71,6 +71,7 @@ The checks:
 - `tax_rate` is a decimal, such as `0.05`, and has to be a MIG rate. On an issue the lines decide its default, not the header: `0.05` when a line is taxable, else `0`. A special-tax line needs it. A taxable line cannot have rate `0`.
 - A zero-rated invoice needs `customs_clearance_mark`, `"1"` or `"2"` (MIG CustomsClearanceMark). `zero_tax_rate_reason` is `"71"` to `"79"` (MIG ZeroTaxRateReason). The MIG requires it on a zero-rated invoice too, but ECPay can take it from its back office, so the core does not ask for it. Amego does.
 - The amounts agree with the items (below).
+- The MIG field lengths: `remark` 200, buyer `name` 60, `address` 100, `email` 400, `phone` 26, carrier `code` 400, item `description` 500, `unit` 6 and `remark` 120. A consumer's name must not be `0` to `0000`, and a carrier code must not start or end with a space. A provider with a shorter limit of its own raises `UnsupportedError`.
 - A void reason is at most 20 characters. A void allowance reason defaults to `作廢折讓`.
 
 ### Amounts and tax

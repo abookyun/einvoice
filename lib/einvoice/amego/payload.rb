@@ -31,10 +31,7 @@ module Einvoice
       MOBILE_MEMBER = /\A09\d{8}\z/
 
       MAX_ORDER_ID = 40
-      MAX_REMARK = 200
       MAX_DESCRIPTION = 256
-      MAX_ITEM_REMARK = 120
-      MAX_UNIT = 6
       MAX_ALLOWANCE_NUMBER = 16
 
       # provider_options key => f0401 field, for fields with no unified home.
@@ -90,7 +87,9 @@ module Einvoice
       # +invoice_datetime+.
       def allowance(parsed, original, allowance_date)
         number = parsed.allowance_id.to_s
-        max!(number, MAX_ALLOWANCE_NUMBER, "allowance_id", mig: true)
+        # Amego sends allowance_id as the MIG AllowanceNumber. Other providers
+        # number an allowance themselves, so this limit is Amego's.
+        max!(number, MAX_ALLOWANCE_NUMBER, "allowance_id")
         breakdown = parsed.tax_breakdown(provider: Client::PROVIDER)
         refuse_special!(breakdown.lines.map(&:tax_type))
         check_rate!(parsed.tax_rate)
@@ -129,7 +128,6 @@ module Einvoice
 
       def check_issue!(parsed, types, b2b, exclusive)
         max!(parsed.order_id.to_s, MAX_ORDER_ID, "order_id")
-        max!(parsed.remark.to_s, MAX_REMARK, "remark", mig: true)
         unsupported!("Amego takes tax-exclusive prices only for a B2B invoice") if exclusive && !b2b
         refuse_special!(types)
         check_rate!(parsed.tax_rate)
@@ -168,8 +166,6 @@ module Einvoice
 
       def buyer_name(buyer, b2b)
         name = buyer&.name.to_s
-        # The MIG forbids 0 to 0000 as a buyer's name [mig 表 4-2].
-        invalid!("buyer name must not be #{name.inspect}") if name.match?(/\A0{1,4}\z/)
         return name unless name.empty?
 
         b2b ? buyer.ubn.to_s : CONSUMER_NAME
@@ -198,8 +194,6 @@ module Einvoice
       def issue_item(item, type)
         description = item.description.to_s
         max!(description, MAX_DESCRIPTION, "item description")
-        max!(item.remark.to_s, MAX_ITEM_REMARK, "item remark", mig: true)
-        max!(item.unit.to_s, MAX_UNIT, "item unit", mig: true)
         {
           "Description" => description,
           "Quantity" => number(item.quantity),
@@ -255,13 +249,12 @@ module Einvoice
         Taipei.date(time, provider: Client::PROVIDER).strftime("%Y%m%d")
       end
 
-      # A limit that the MIG sets too (+mig: true+) is a ValidationError. A
-      # shorter limit of Amego's own is UnsupportedError: another provider may
-      # take the value (docs/providers/README.md, "The unified model").
-      def max!(value, limit, field, mig: false)
+      # The core checks the MIG lengths. A shorter limit of Amego's own is
+      # UnsupportedError: another provider may take the value
+      # (docs/providers/README.md, "The unified model").
+      def max!(value, limit, field)
         return if value.length <= limit
 
-        invalid!("#{field} is longer than #{limit} characters") if mig
         unsupported!("Amego takes a #{field} of at most #{limit} characters")
       end
 

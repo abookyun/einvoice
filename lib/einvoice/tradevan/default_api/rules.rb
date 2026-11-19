@@ -49,8 +49,10 @@ module Einvoice
         # Tradevan's own: stricter than the MIG's (productName 300 against 500,
         # receiverEmail 80 against 400, receiverMobile 15 against 26, carrierId
         # 64 against 400), or with no MIG field (the order and allowance ids).
+        # The core refuses a value over the MIG's limit first, so a value here
+        # is over Tradevan's limit only.
         OWN_LIMITS = %w[
-          transactionNumber saleIdentifier allowanceIdentifier productName description
+          transactionNumber saleIdentifier allowanceIdentifier productName
           receiverEmail receiverMobile carrierId carrierIdHidden
         ].freeze
         TOO_LONG = /\Amust be \d+ characters or fewer\z/
