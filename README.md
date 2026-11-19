@@ -4,17 +4,17 @@ English | [繁體中文](README.zh-TW.md)
 
 [![Build Status](https://github.com/abookyun/einvoice/actions/workflows/build.yml/badge.svg)](https://github.com/abookyun/einvoice/actions/workflows/build.yml) [![codecov](https://codecov.io/github/abookyun/einvoice/graph/badge.svg?token=yxJNmXiUyp)](https://codecov.io/github/abookyun/einvoice)
 
-A provider-agnostic **Taiwan e-invoice SDK** (財政部 MIG 4.0). The core models the five operations once — issue (開立) / void (作廢) / allowance (折讓) / void-allowance (折讓作廢) / query (查詢) — as a unified value model plus a `Einvoice::Provider` contract. Each value-added center ships as a thin adapter mapping the unified model to/from its wire format, so switching providers is a one-line constructor change and never touches business code.
+A provider-agnostic **Taiwan e-invoice SDK** (財政部 MIG 4.1). The core models the five operations once: issue (開立), void (作廢), allowance (折讓), void-allowance (折讓作廢) and query (查詢). It has a unified value model and an `Einvoice::Provider` contract. Each value-added center is a thin adapter that maps the unified model to its wire format and back, so your business code does not depend on one center.
 
-> **2.0 is a ground-up rewrite, and the 1.x line is now in maintenance mode.** 1.x was a single-provider (Tradevan) wire-format client with a different API. If you depend on that, pin `~> 1.4` — it continues on the [`1-x-stable`](https://github.com/abookyun/einvoice/tree/1-x-stable) branch. 2.0's unified model is not backward compatible.
+> **2.0 is a ground-up rewrite, and the 1.x line is now in maintenance mode.** 1.x was a single-provider (Tradevan) wire-format client with a different API. If you depend on that, pin `~> 1.4`. It continues on the [`1-x-stable`](https://github.com/abookyun/einvoice/tree/1-x-stable) branch. 2.0's unified model is not backward compatible.
 
 ## What this is
 
-Every Taiwan value-added center wraps the same MOF MIG spec; only the wire format (field names, signing, envelope) differs. This SDK models the operations once and keeps each provider a thin adapter. Application code depends only on `Einvoice::Provider` and the unified types, so moving from one center to another is swapping the constructor.
+Every Taiwan value-added center wraps the same MOF MIG spec; only the wire format (field names, signing, envelope) differs. This SDK models the operations once and keeps each provider a thin adapter. Application code depends only on `Einvoice::Provider` and the unified types, so moving to another center starts with a new constructor. The centers still differ in what they can do. Each adapter says so through its capabilities, `query_statuses` and `UnsupportedError`, so you can check a center before you switch to it.
 
 ## Status
 
-Under active development toward 2.0. The provider-agnostic **core** — value types, the `Provider` contract, capabilities, the normalized error hierarchy, input validation, and an in-memory `MockProvider` — is in place, and the first real adapter, **ECPay (綠界)**, ships with it: the five operations plus carrier validation, verified against ECPay's public stage API.
+Under active development toward 2.0. The provider-agnostic **core** is in place: value types, the `Provider` contract, capabilities, the normalized error hierarchy, input validation, and an in-memory `MockProvider`. The first real adapter, **ECPay (綠界)**, ships with it. It has the five operations plus carrier validation, verified against ECPay's public stage API.
 
 A second adapter, **Amego 光貿**, covers the five operations and is checked against Amego's public test account.
 
@@ -26,8 +26,10 @@ Other centers follow. Coverage and completeness for those will vary: their docs 
 
 ## Installation
 
+2.0 is not on RubyGems yet. RubyGems has 1.x only. Install 2.0 from GitHub:
+
 ```ruby
-gem "einvoice", ">= 2.0.0.alpha1"
+gem "einvoice", git: "https://github.com/abookyun/einvoice", branch: "2.0.0-alpha"
 ```
 
 ## Usage
@@ -61,13 +63,13 @@ provider.void(invoice: result.reference, reason: "客戶取消")
 
 `result.reference` is an `InvoiceReference`. It holds the facts about the invoice that providers ask for when you void, credit or query it later: the number, `invoice_datetime`, `random_code`, `order_id`, `total_amount`, `buyer_ubn`, and its `tax_type` and `tax_rate`. Store `result.reference.to_h` with your order. It holds JSON-safe values only (`invoice_datetime` is an ISO 8601 string in UTC+8), so it survives a JSON column. Pass it back as it is as `invoice:`, or pass the reference itself. A stored time has to carry its offset: `"2026-08-01 10:00"` is refused rather than read in the wrong zone, and a plain `"2026-08-01"` is that day in Taipei. A plain invoice number also works, but a provider that needs more raises `ValidationError` and names the field. To find an invoice without its number, query `invoice: { order_id: "ORDER_1" }` on a provider that declares `QUERY_BY_ORDER_ID`. `void_allowance` takes `allowance:`, an `AllowanceReference` from `AllowanceResult#reference`.
 
-Inputs accept plain hashes (string or symbol keys) — enum fields take the canonical symbol (`:taxable`) or a wire-style string (`"TAXABLE"`). They are validated and coerced into immutable value objects before anything hits the network; a malformed request raises `Einvoice::ValidationError` locally. A value object you build with `.new` goes through the same checks.
+Inputs accept plain hashes (string or symbol keys). Enum fields take the canonical symbol (`:taxable`) or a wire-style string (`"TAXABLE"`). They are validated and coerced into immutable value objects before anything hits the network; a malformed request raises `Einvoice::ValidationError` locally. A value object you build with `.new` goes through the same checks.
 
 The checks:
 
 - A buyer `ubn` is 8 digits, a company's 統一編號. (MIG 表 4-7 allows a BAN of 8 to 10 digits; the 9- and 10-digit forms are not used for a buyer.) A B2B invoice needs one, and an explicit `category` has to agree with it.
-- Totals are whole numbers and not negative. Item quantity, price and amount are numbers with at most 7 decimal places.
-- A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits. These formats come from the providers' docs; the MIG lists the carrier types only.
+- Totals are whole numbers and not negative. Item quantity, price and amount are numbers with at most 7 decimal places. An invoice item may be negative, as a discount line. An allowance item may not (MIG 4.1).
+- A mobile barcode is `/` and 7 characters. A citizen certificate is 2 letters and 14 digits. These formats come from the providers' docs; the MIG lists the carrier types only. A 愛心碼 is 3 to 7 digits.
 - `tax_rate` is a decimal, such as `0.05`, and has to be a MIG rate. On an issue the lines decide its default, not the header: `0.05` when a line is taxable, else `0`. A special-tax line needs it. A taxable line cannot have rate `0`.
 - A zero-rated invoice needs `customs_clearance_mark`, `"1"` or `"2"` (MIG CustomsClearanceMark). `zero_tax_rate_reason` is `"71"` to `"79"` (MIG ZeroTaxRateReason). The MIG requires it on a zero-rated invoice too, but ECPay can take it from its back office, so the core does not ask for it. Amego does.
 - The amounts agree with the items (below).
@@ -108,10 +110,18 @@ rescue Einvoice::Error => e
 end
 ```
 
+The class tells you what to do next, the same way at every provider:
+
+- `ValidationError`: the input breaks a MIG rule, so no provider takes it. Fix the input.
+- `UnsupportedError`: this provider does not take the input, or lacks the feature. Another provider may take it.
+- `NetworkError`: the request may not have reached the provider. Retry it. After a timeout on `issue`, the invoice may exist anyway. Retry with the same `order_id`: a `ConflictError` with `reason: :duplicate_order` tells you that it does.
+- `reason: :rate_limited`, on any class: the provider asks you to slow down. Retry later.
+- `ConflictError` with `reason: :retry_later`: the provider is still working on the invoice. Try again later.
+
 ### Credentials and buyer data
 
 - `inspect`, `to_s` and `pp` show results with `raw=[FILTERED]`, because `raw` is the provider's response and holds the buyer's data. Read `#raw` directly when you need it. A `Buyer` shows its name, email, address and phone as `[FILTERED]` too, inside every input and result; its `ubn` stays. An adapter's client shows its keys as `[FILTERED]`.
-- `base_url` has to use https. Only localhost may use http, for tests.
+- `base_url` has to use https. Only localhost may use http, for tests. It must not carry a user, a password, a query or a fragment.
 
 ### Capabilities
 
@@ -120,6 +130,7 @@ A provider declares what it supports; feature-detect instead of discovering a ga
 ```ruby
 provider.supports?(Einvoice::Capability::FOREIGN_CURRENCY)  # => true / false
 provider.assert_supports!(Einvoice::Capability::B2B)        # raises UnsupportedError if absent
+provider.query_statuses                                     # => the statuses that query can return
 ```
 
 ## Providers
@@ -135,9 +146,9 @@ provider = Einvoice::ECPay::Provider.new(
 )
 ```
 
-Everything above works unchanged — `issue` / `void` / `allowance` / `void_allowance` / `query` take the same unified input and return the same value types. The AES-128-CBC envelope, ECPay's two layers of result codes, and its field rules stay inside the adapter.
+Everything above works unchanged. `issue` / `void` / `allowance` / `void_allowance` / `query` take the same unified input and return the same value types. The AES-128-CBC envelope, ECPay's two layers of result codes, and its field rules stay inside the adapter.
 
-To try it without an account, use ECPay's published sandbox credentials (shared with every other developer — never for anything real):
+To try it without an account, use ECPay's published sandbox credentials (shared with every other developer, never for anything real):
 
 ```ruby
 provider = Einvoice::ECPay::Provider.new(**Einvoice::ECPay::SANDBOX)
@@ -151,7 +162,7 @@ A few things worth knowing:
 - **Void allowance needs the invoice number**, so pass the `AllowanceReference`, not only the allowance number.
 - **No foreign currency.** ECPay's B2C API has no such field, so a non-TWD `currency` raises `UnsupportedError` rather than being filed as TWD.
 - **A taxable invoice is 5%.** ECPay fixes the rate by tax type, so another `tax_rate` raises `UnsupportedError`.
-- **Carrier validation**: `validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })` (the `Provider` method behind `CARRIER_VALIDATION`; ECPay can check a mobile barcode only), `validate_love_code("168001")`, `love_code_organ_name("168001")` — these ask ECPay, so they need this adapter and its credentials. For 愛心碼 there is also `Einvoice::MOF::DonationCodes` (below), which asks 財政部 directly and needs neither.
+- **Carrier validation**: `validate_carrier({ type: "MOBILE_BARCODE", code: "/ABC1234" })` (the `Provider` method behind `CARRIER_VALIDATION`; ECPay can check a mobile barcode only), `validate_love_code("168001")`, `love_code_organ_name("168001")`. These ask ECPay, so they need this adapter and its credentials. For 愛心碼 there is also `Einvoice::MOF::DonationCodes` (below), which asks 財政部 directly and needs neither.
 - **Anything else**: ECPay has ~25 further B2C endpoints (延遲開立, 字軌設定, 列印, 通知 …). Reach them through `provider.raw(path, payload)`, which applies the envelope, encryption and error mapping for you.
 
 ### Amego 光貿
@@ -220,7 +231,7 @@ provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
 
 ## 財政部 lookups
 
-Provider-independent clients for 財政部's own public services. They issue nothing and hold no credentials, so they work whichever center you use — or before you have picked one.
+Provider-independent clients for 財政部's own public services. They issue nothing and hold no credentials, so they work whichever center you use, or before you have picked one.
 
 ```ruby
 codes = Einvoice::MOF::DonationCodes.new
@@ -235,7 +246,7 @@ codes.for_ubn("92000392")    # => every 愛心碼 that organisation holds
 codes.all                    # => the whole dataset (~2,000, five requests)
 ```
 
-This is **not** wired into `Input`, and deliberately so: validation there is local and synchronous, and issuing an invoice must never depend on a third party being reachable. `Input` checks the shape of a 愛心碼; whether it is *registered* is a question you ask when it suits you — at order time, or once at boot via `#all` to build your own set for offline checks.
+This is **not** wired into `Input`, and deliberately so: validation there is local and synchronous, and issuing an invoice must never depend on a third party being reachable. `Input` checks the shape of a 愛心碼; whether it is *registered* is a question you ask when it suits you: at order time, or once at boot via `#all` to build your own set for offline checks.
 
 The dataset needs no credentials today. Its published OpenAPI declares `api_key` and `oauth2` schemes even so, so a 401/403 raises `Einvoice::AuthError` saying exactly that rather than surfacing as a parse failure.
 
@@ -247,14 +258,14 @@ bundle exec rspec  # run the specs
 bundle exec rake   # default task: rspec
 ```
 
-The `"an invoice provider"` shared examples (`spec/support/shared_examples/`) are the executable contract every adapter runs, so a new adapter proves it honours the unified model by including one line.
+The shared examples in `spec/support/shared_examples/` are the executable contract. Every adapter runs `"an invoice provider"`, and every adapter's client runs `"a provider client"`, so a new adapter proves that it honours the unified model by including them.
 
-To write a new adapter, start with the provider notes in [`docs/providers/`](docs/providers/README.md). Read them in this order: the MOF MIG note (the standard every provider follows), then the ECPay note (the one provider with an adapter, to see how a note maps to code), then the note for your provider, and then the shared examples above.
+To write a new adapter, start with the provider notes in [`docs/providers/`](docs/providers/README.md). Read them in this order: the MOF MIG note (the standard every provider follows), then the ECPay note (the first adapter, to see how a note maps to code), then the note for your provider, and then the shared examples above.
 
 The ECPay adapter is tested in three layers, two of which run offline in CI:
 
-1. **The contract, against a wire-format fake.** The shared examples run through an in-process fake that speaks the real protocol — AES envelope, PHP url-encoding, ECPay's own RtnCodes — so a request only passes if the encryption and field mapping are genuinely correct. It is stateful, which is what lets the contract drive issue → allowance → void as a sequence.
-2. **Recorded real responses (VCR).** `spec/einvoice/ecpay/recorded_spec.rb` replays cassettes captured from ECPay's stage host, so the field names, value types and error codes under test are ECPay's own rather than our reading of the docs. Re-record with `VCR_RECORD=1` after bumping the epoch in that spec — cassettes only ever hold sandbox traffic.
+1. **The contract, against a wire-format fake.** The shared examples run through an in-process fake that speaks the real protocol: the AES envelope, PHP url-encoding and ECPay's own RtnCodes. So a request only passes if the encryption and field mapping are genuinely correct. It is stateful, which is what lets the contract drive issue → allowance → void as a sequence.
+2. **Recorded real responses (VCR).** `spec/einvoice/ecpay/recorded_spec.rb` replays cassettes captured from ECPay's stage host, so the field names, value types and error codes under test are ECPay's own rather than our reading of the docs. Re-record with `VCR_RECORD=1` after bumping the epoch in that spec. Cassettes only ever hold sandbox traffic.
 3. **The live API, opt-in.** What keeps the other two honest:
 
    ```bash
@@ -262,6 +273,12 @@ The ECPay adapter is tested in three layers, two of which run offline in CI:
    ```
 
    It defaults to the public sandbox credentials, so no setup is needed; override with `ECPAY_MERCHANT_ID` / `ECPAY_HASH_KEY` / `ECPAY_HASH_IV` to point it at your own stage account. Excluded from CI because it needs the network and a shared sandbox.
+
+Amego has a live spec too. It runs against Amego's public test account:
+
+```bash
+AMEGO_LIVE=1 bundle exec rspec spec/einvoice/amego/live_spec.rb
+```
 
 ## License
 

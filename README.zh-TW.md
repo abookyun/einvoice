@@ -6,13 +6,13 @@
 
 [![Build Status](https://github.com/abookyun/einvoice/actions/workflows/build.yml/badge.svg)](https://github.com/abookyun/einvoice/actions/workflows/build.yml) [![codecov](https://codecov.io/github/abookyun/einvoice/graph/badge.svg?token=yxJNmXiUyp)](https://codecov.io/github/abookyun/einvoice)
 
-不綁定特定加值中心的**台灣電子發票 SDK**（財政部 MIG 4.0）。核心只定義一次五個操作：開立（issue）、作廢（void）、折讓（allowance）、折讓作廢（void-allowance）、查詢（query）。這些操作由一套 unified value model 和 `Einvoice::Provider` contract 表達。每一家加值中心是一個輕量的 adapter，負責在 unified model 和該家的傳輸格式之間轉換。所以更換加值中心只需要改一行 constructor，不會動到業務程式碼。
+不綁定特定加值中心的**台灣電子發票 SDK**（財政部 MIG 4.1）。核心只定義一次五個操作：開立（issue）、作廢（void）、折讓（allowance）、折讓作廢（void-allowance）、查詢（query）。這些操作由一套 unified value model 和 `Einvoice::Provider` contract 表達。每一家加值中心是一個輕量的 adapter，負責在 unified model 和該家的傳輸格式之間轉換。所以業務程式碼不會綁定在某一家加值中心。
 
 > **2.0 是全新改寫的版本，1.x 已經進入維護模式。** 1.x 是只支援關貿（Tradevan）一家的傳輸格式 client，API 也不一樣。如果你依賴 1.x，請鎖定 `~> 1.4`。1.x 會在 [`1-x-stable`](https://github.com/abookyun/einvoice/tree/1-x-stable) branch 繼續維護。2.0 的 unified model 和 1.x 不相容。
 
 ## 這是什麼
 
-台灣每一家加值中心包裝的都是財政部同一份 MIG 規格，差別只在傳輸格式：欄位名稱、簽章、封包結構。這個 SDK 只定義一次操作，每一家加值中心都只是輕量的 adapter。應用程式只依賴 `Einvoice::Provider` 和 unified 型別，所以從一家加值中心換到另一家，只要換 constructor。
+台灣每一家加值中心包裝的都是財政部同一份 MIG 規格，差別只在傳輸格式：欄位名稱、簽章、封包結構。這個 SDK 只定義一次操作，每一家加值中心都只是輕量的 adapter。應用程式只依賴 `Einvoice::Provider` 和 unified 型別，所以換到另一家加值中心，第一步是換 constructor。各家能做的事仍然不同。每個 adapter 會透過 capabilities、`query_statuses` 和 `UnsupportedError` 說明這些差異，所以你可以在換之前先檢查。
 
 ## 狀態
 
@@ -28,8 +28,10 @@
 
 ## 安裝
 
+2.0 還沒有發佈到 RubyGems，RubyGems 上只有 1.x。請從 GitHub 安裝 2.0：
+
 ```ruby
-gem "einvoice", ">= 2.0.0.alpha1"
+gem "einvoice", git: "https://github.com/abookyun/einvoice", branch: "2.0.0-alpha"
 ```
 
 ## 使用方式
@@ -68,8 +70,8 @@ provider.void(invoice: result.reference, reason: "客戶取消")
 檢查的規則：
 
 - 買方的 `ubn` 是 8 位數字，也就是企業的統一編號。（MIG 表 4-7 允許 8 到 10 位的 BAN，9 位和 10 位的形式不用在買方。）B2B 發票一定要有統編；明確指定 `category` 時，必須和統編一致。
-- 總計是整數，而且不能是負數。品項的數量、單價、金額是數字，最多 7 位小數。
-- 手機條碼是 `/` 加 7 個字元。自然人憑證是 2 個英文字母加 14 個數字。這些格式來自加值中心的文件，MIG 只列出載具類別。
+- 總計是整數，而且不能是負數。品項的數量、單價、金額是數字，最多 7 位小數。發票的品項可以是負數，作為折扣列。折讓的品項不能是負數（MIG 4.1）。
+- 手機條碼是 `/` 加 7 個字元。自然人憑證是 2 個英文字母加 14 個數字。這些格式來自加值中心的文件，MIG 只列出載具類別。愛心碼是 3 到 7 位數字。
 - `tax_rate` 是小數，例如 `0.05`，而且必須是 MIG 規定的稅率。開立時的預設值由品項決定，不看表頭：有應稅品項時是 `0.05`，否則是 `0`。有特種稅額品項時一定要給。應稅品項的稅率不能是 `0`。
 - 零稅率發票必須給 `customs_clearance_mark`，值是 `"1"` 或 `"2"`，對應 MIG 的 CustomsClearanceMark。`zero_tax_rate_reason` 是 `"71"` 到 `"79"`，對應 MIG 的 ZeroTaxRateReason。MIG 也規定零稅率發票要有零稅率原因，但 ECPay 可以從後台設定取得，所以 core 不要求。Amego 會要求。
 - 金額必須和品項一致（見下一節）。
@@ -117,10 +119,18 @@ rescue Einvoice::Error => e
 end
 ```
 
+錯誤類別說明下一步該怎麼做，每一家加值中心都一樣：
+
+- `ValidationError`：輸入違反 MIG 的規則，任何加值中心都不會接受。請修正輸入。
+- `UnsupportedError`：這家加值中心不接受這個輸入，或沒有這項功能。別家可能接受。
+- `NetworkError`：請求可能沒有送到加值中心。請重試。`issue` 逾時後，發票可能其實已經開立。請用同一個 `order_id` 重試：如果收到 `reason` 為 `:duplicate_order` 的 `ConflictError`，就代表發票已經存在。
+- 任何類別帶有 `reason: :rate_limited`：加值中心要求你放慢速度。請稍後重試。
+- `ConflictError` 帶有 `reason: :retry_later`：加值中心還在處理這張發票。請稍後再試。
+
 ### 帳號金鑰與買方資料
 
 - 結果物件的 `inspect`、`to_s` 和 `pp` 會把 `raw` 顯示成 `[FILTERED]`，因為 `raw` 是加值中心的回應，裡面有買方的資料。需要時，請直接讀 `#raw`。`Buyer` 的姓名、email、地址和電話也會顯示成 `[FILTERED]`，不論它在哪個輸入或結果裡；`ubn` 照常顯示。adapter 的 client 也會把金鑰顯示成 `[FILTERED]`。
-- `base_url` 必須使用 https。只有 localhost 可以用 http，方便測試。
+- `base_url` 必須使用 https。只有 localhost 可以用 http，方便測試。網址裡不能有帳號、密碼、查詢字串或 fragment。
 
 ### Capabilities
 
@@ -129,6 +139,7 @@ end
 ```ruby
 provider.supports?(Einvoice::Capability::FOREIGN_CURRENCY)  # => true / false
 provider.assert_supports!(Einvoice::Capability::B2B)        # raises UnsupportedError if absent
+provider.query_statuses                                     # => the statuses that query can return
 ```
 
 ## 加值中心
@@ -256,9 +267,9 @@ bundle exec rspec  # run the specs
 bundle exec rake   # default task: rspec
 ```
 
-`"an invoice provider"` shared examples（`spec/support/shared_examples/`）是每個 adapter 都要執行的 contract。新的 adapter 只要加一行引用它，就能證明自己遵守 unified model。
+`spec/support/shared_examples/` 裡的 shared examples 是可以執行的 contract。每個 adapter 都要執行 `"an invoice provider"`，每個 adapter 的 client 都要執行 `"a provider client"`。新的 adapter 只要引用它們，就能證明自己遵守 unified model。
 
-要寫新的 adapter，請從 [`docs/providers/`](docs/providers/README.zh-TW.md) 的加值中心筆記開始。閱讀順序：先讀財政部 MIG 筆記（所有加值中心都遵循的規格），再讀 ECPay 筆記（唯一已經有 adapter 的加值中心，可以看筆記怎麼對應到程式碼），接著讀你要做的那一家的筆記，最後讀上面提到的 shared examples。
+要寫新的 adapter，請從 [`docs/providers/`](docs/providers/README.zh-TW.md) 的加值中心筆記開始。閱讀順序：先讀財政部 MIG 筆記（所有加值中心都遵循的規格），再讀 ECPay 筆記（第一個 adapter，可以看筆記怎麼對應到程式碼），接著讀你要做的那一家的筆記，最後讀上面提到的 shared examples。
 
 ECPay adapter 的測試分成三層，其中兩層在 CI 中離線執行：
 
@@ -271,6 +282,12 @@ ECPay adapter 的測試分成三層，其中兩層在 CI 中離線執行：
    ```
 
    預設使用公開的測試帳號，所以不需要任何設定。如果要改用你自己的 stage 帳號，請設定 `ECPAY_MERCHANT_ID`、`ECPAY_HASH_KEY`、`ECPAY_HASH_IV`。這層不在 CI 中執行，因為它需要網路，而且測試帳號是共用的。
+
+Amego 也有 live 測試，使用 Amego 公開的測試帳號：
+
+```bash
+AMEGO_LIVE=1 bundle exec rspec spec/einvoice/amego/live_spec.rb
+```
 
 ## 授權
 
