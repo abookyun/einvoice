@@ -100,6 +100,7 @@ core 依品項算出稅額，也就是 input 的 `#tax_breakdown`。只有 core 
 - body 不是加值中心的回應時，HTTP 5xx 和 429 是 `NetworkError`，呼叫端可以重試。adapter 讀得懂的 body，不管 HTTP 狀態是什麼，都依 body 決定錯誤。例如 ECPay 金鑰錯誤時，回的是 HTTP 500 加上正常的 envelope。
 - client 只 rescue 連線錯誤。adapter 自己的 bug 不是 `NetworkError`。
 - `Reason::RETRY_LATER` 表示加值中心說「現在不行，晚一點再試」，例如發票上傳前就作廢。
+- 請求時間被拒絕時，每家都是 `AuthError`，reason 是 `Reason::STALE_TIMESTAMP`。原因是呼叫端伺服器的時鐘不準。provider 會連同時間一起驗證請求，所以時鐘修好之前，重試也會得到同樣的錯誤。
 
 **Capability。**
 

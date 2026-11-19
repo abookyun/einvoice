@@ -17,7 +17,7 @@ module Einvoice
         "KEY10002" => [:auth, Reason::CREDENTIALS_INVALID],    # cannot decrypt
         "KEY10004" => [:validation, nil],                      # data incomplete
         "KEY10006" => [:auth, Reason::NOT_ENROLLED],
-        "KEY10007" => [:validation, Reason::STALE_TIMESTAMP],  # open more than 30 minutes
+        "KEY10007" => [:auth, Reason::STALE_TIMESTAMP],  # open more than 30 minutes
         "KEY10010" => [:validation, nil],
         "KEY10011" => [:validation, nil],
         "KEY10012" => [:provider, nil],                        # data transfer error

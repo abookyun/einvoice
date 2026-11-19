@@ -17,7 +17,7 @@ module Einvoice
         12 => [:auth, Reason::CREDENTIALS_INVALID],       # invoice (統一編號) wrong
         13 => [:auth, Reason::NOT_ENROLLED],              # status not active
         14 => [:auth, Reason::IP_BLOCKED],
-        15 => [:validation, Reason::STALE_TIMESTAMP],     # time out of range
+        15 => [:auth, Reason::STALE_TIMESTAMP],     # time out of range
         16 => [:auth, Reason::CREDENTIALS_INVALID],       # sign wrong
         17 => [:validation, nil],                         # data empty
         18 => [:provider, nil],                           # database connection failed

@@ -37,6 +37,10 @@ module Einvoice
     CONTRACT_EXPIRED          = :contract_expired
     IP_BLOCKED                = :ip_blocked
     ACCOUNT_SUSPENDED         = :account_suspended
+    # The provider refused the request time. The caller's server clock is off.
+    # An AuthError at every provider: the request is checked with its time, and
+    # a retry fails the same way until the clock is fixed. The shared ECPay
+    # fixtures, which the TypeScript SDK runs too, pin it as AUTH.
     STALE_TIMESTAMP           = :stale_timestamp
     # The adapter queried the provider on its own, to fill a field the call did
     # not give, and that query failed. +cause+ holds the error of the query.

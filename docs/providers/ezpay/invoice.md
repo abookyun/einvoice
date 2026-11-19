@@ -543,7 +543,7 @@ For two cases without a code, the class depends on the operation (inferred): `LI
 | `KEY10002` | Cannot decrypt the data | `AuthError` | `CREDENTIALS_INVALID` |
 | `KEY10004` | Data incomplete | `ValidationError` | |
 | `KEY10006` | Shop has not applied for e-invoicing | `AuthError` | `NOT_ENROLLED` |
-| `KEY10007` | Page stayed open more than 30 minutes | `ValidationError` | `STALE_TIMESTAMP` |
+| `KEY10007` | Page stayed open more than 30 minutes | `AuthError` | `STALE_TIMESTAMP` |
 | `KEY10010`, `KEY10011`, `KEY10013` | Shop id, `PostData_` or data empty | `ValidationError` | |
 | `KEY10012` | Data transfer error | `ProviderError` | |
 | `KEY10014` | Timeout | `NetworkError` | |

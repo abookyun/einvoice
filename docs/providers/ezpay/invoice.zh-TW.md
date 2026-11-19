@@ -545,7 +545,7 @@ ezPay 的代碼是它自己定義的，不是 MIG 的代碼，也和 ECPay 的�
 | `KEY10002` | 資料解密失敗 | `AuthError` | `CREDENTIALS_INVALID` |
 | `KEY10004` | 資料不齊全 | `ValidationError` | |
 | `KEY10006` | 商店未申請電子發票 | `AuthError` | `NOT_ENROLLED` |
-| `KEY10007` | 頁面停留超過 30 分鐘 | `ValidationError` | `STALE_TIMESTAMP` |
+| `KEY10007` | 頁面停留超過 30 分鐘 | `AuthError` | `STALE_TIMESTAMP` |
 | `KEY10010`、`KEY10011`、`KEY10013` | 商店代號、`PostData_` 或資料空白 | `ValidationError` | |
 | `KEY10012` | 資料傳遞錯誤 | `ProviderError` | |
 | `KEY10014` | 逾時 | `NetworkError` | |

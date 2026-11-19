@@ -547,7 +547,7 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 | `11`、`12` | `invoice`（統一編號）空白或錯誤 | `AuthError` | `CREDENTIALS_INVALID` |
 | `13` | 狀態未啟用 | `AuthError` | `NOT_ENROLLED` |
 | `14` | IP 不允許 | `AuthError` | `IP_BLOCKED` |
-| `15` | `time` 超出範圍 | `ValidationError` | `STALE_TIMESTAMP` |
+| `15` | `time` 超出範圍 | `AuthError` | `STALE_TIMESTAMP` |
 | `16` | 簽章錯誤 | `AuthError` | `CREDENTIALS_INVALID` |
 | `17` | 資料空白 | `ValidationError` | |
 | `18` | 資料庫連線失敗 | `ProviderError` | |

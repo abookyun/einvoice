@@ -36,11 +36,6 @@ Each item says what is wrong, where, and what it would take. Items under "Decide
 - **What:** An input that the MIG allows but one provider refuses is sometimes `UnsupportedError` and sometimes `ValidationError`. ezPay shows both: mixed tax on B2B is `UnsupportedError`, a carrier on B2B is `ValidationError`. A caller who rescues `UnsupportedError` to fall back misses the second.
 - **Option:** a rule in the unified model: a provider limit is `UnsupportedError`, and `ValidationError` is only for input that breaks the MIG.
 
-### 7. A stale timestamp is a different error class
-
-- **What:** ECPay maps it to `AuthError`. Amego and ezPay map it to `ValidationError`. All three set `Reason::STALE_TIMESTAMP`.
-- **Option:** pick one class. It is a clock problem, not a credentials or an input problem.
-
 ### 8. ECPay's `RqHeader.Revision`
 
 - **What:** The adapter sends `Revision: "3.0.0"`. The current ECPay docs do not list it, and stage accepts a request without it. See open question 1 in `docs/providers/ecpay/b2c.md`.

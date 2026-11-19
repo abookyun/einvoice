@@ -98,6 +98,7 @@ The caller's `AmountSummary` is checked against the breakdown. It never tells th
 - When the body is not a provider response, HTTP 5xx and 429 are a `NetworkError`, so the caller can retry. A body that the adapter can read decides the error, whatever the status. ECPay, for example, sends a wrong key as HTTP 500 with a normal envelope.
 - The client rescues only connection errors. A bug in an adapter is not a `NetworkError`.
 - `Reason::RETRY_LATER` means the provider says "not now, try later", for example a void before the invoice is uploaded.
+- A refused request time is an `AuthError` with `Reason::STALE_TIMESTAMP` at every provider. The caller's server clock is off. The provider checks the request with its time, and a retry fails the same way until the clock is fixed.
 
 **Capabilities.**
 

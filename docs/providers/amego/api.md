@@ -545,7 +545,7 @@ Common codes:
 | `11`, `12` | `invoice` (統一編號) empty or wrong | `AuthError` | `CREDENTIALS_INVALID` |
 | `13` | Status not active | `AuthError` | `NOT_ENROLLED` |
 | `14` | IP not allowed | `AuthError` | `IP_BLOCKED` |
-| `15` | `time` out of range | `ValidationError` | `STALE_TIMESTAMP` |
+| `15` | `time` out of range | `AuthError` | `STALE_TIMESTAMP` |
 | `16` | Signature wrong | `AuthError` | `CREDENTIALS_INVALID` |
 | `17` | Data empty | `ValidationError` | |
 | `18` | Database connection failed | `ProviderError` | |
