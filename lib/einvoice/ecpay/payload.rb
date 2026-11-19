@@ -117,10 +117,11 @@ module Einvoice
         relate = data["RelateNumber"].to_s
         errors << "RelateNumber is required" if relate.empty?
         # A zero-rated invoice needs ClearanceMark (MIG, 5000007). The adapter
-        # sets it, but provider_options[:data] can change TaxType after that.
-        # TaxType 9 needs it only with a zero-rated item, which the core checks.
-        if data["TaxType"] == "2" && data["ClearanceMark"].to_s.empty?
-          errors << "ClearanceMark is required when TaxType is 2"
+        # sets it, but provider_options[:data] can change the payload after
+        # that, so the final payload is checked. A mixed invoice needs it only
+        # with a zero-rated item: stage takes taxable plus tax-free without it.
+        if zero_rated_payload?(data) && data["ClearanceMark"].to_s.empty?
+          errors << "ClearanceMark is required for a zero-rated item"
         end
 
         # 發票金額(含稅) must equal round(Σ ItemAmount) — 5000022. Only checked for
@@ -146,6 +147,13 @@ module Einvoice
 
         raise UnsupportedError.new("ECPay does not take this invoice — #{limits.join('; ')}",
                                    provider: Client::PROVIDER, raw_message: limits.join("; "))
+      end
+
+      def zero_rated_payload?(data)
+        zero = TAX_TYPE.fetch(TaxType::ZERO_RATED)
+        return true if data["TaxType"] == zero
+
+        data["TaxType"] == MIXED_TAX_CODE && Array(data["Items"]).any? { |item| item["ItemTaxType"] == zero }
       end
 
       def buyer_errors(data)

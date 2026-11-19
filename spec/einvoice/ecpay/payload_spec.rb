@@ -48,7 +48,14 @@ RSpec.describe Einvoice::ECPay::Payload do
     # TaxType can only become 2 without a mark through provider_options[:data].
     it "refuses a zero-rated payload without a clearance mark, as invalid input" do
       expect { build(provider_options: { data: { "TaxType" => "2" } }) }
-        .to raise_error(Einvoice::ValidationError, /ClearanceMark is required when TaxType is 2/)
+        .to raise_error(Einvoice::ValidationError, /ClearanceMark is required for a zero-rated item/)
+    end
+
+    it "refuses a mixed payload with a zero-rated item whose mark was cleared" do
+      items = [{ description: "a", quantity: 1, unit_price: 50, amount: 50, tax_type: "TAXABLE" },
+               { description: "b", quantity: 1, unit_price: 50, amount: 50, tax_type: "ZERO_RATED" }]
+      expect { build(items: items, customs_clearance_mark: "1", provider_options: { data: { "ClearanceMark" => "" } }) }
+        .to raise_error(Einvoice::ValidationError, /ClearanceMark is required for a zero-rated item/)
     end
 
     it "refuses to print without somewhere to send the paper" do
