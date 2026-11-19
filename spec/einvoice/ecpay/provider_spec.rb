@@ -12,7 +12,9 @@ RSpec.describe Einvoice::ECPay::Provider do
   # own RtnCodes included.
   it_behaves_like "an invoice provider",
                   unknown_reference: { number: "ZZ00000000", invoice_datetime: Einvoice::Taipei.today.iso8601 },
-                  unknown_allowance_number: "9999999999999999"
+                  unknown_allowance_number: "9999999999999999",
+                  # A printed invoice without an address: ECPay's rule, not the MIG's.
+                  unsupported_issue: { carrier: nil }
 
   it "identifies itself and declares what it can do" do
     expect(provider.name).to eq("ecpay")

@@ -17,10 +17,15 @@
 #     either fails as invalid, not missing. The default has a number and
 #     today's date, which is what ECPay needs. ezPay adds a random_code.
 #   unknown_allowance_number: the same, for a 折讓單號.
+#   unsupported_issue: overrides of the issue input for a sale that the MIG
+#     allows but this provider does not take. The contract checks that it is
+#     an UnsupportedError, not a ValidationError. Leave it out when the
+#     provider has no such limit.
 RSpec.shared_examples "an invoice provider" do |options = {}|
   unknown_reference = options.fetch(:unknown_reference, { number: "NOPE00000000",
                                                           invoice_datetime: Einvoice::Taipei.today.iso8601 })
   unknown_allowance_number = options.fetch(:unknown_allowance_number, "NOPE00000000")
+  unsupported_issue = options[:unsupported_issue]
 
   def issue_payload(order_id: "ORDER_1", **overrides)
     {
@@ -56,12 +61,36 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
     it "refuses a second invoice for the same order id" do
       provider.issue(issue_payload(order_id: "ORDER_DUP"))
       expect { provider.issue(issue_payload(order_id: "ORDER_DUP")) }
-        .to raise_error(Einvoice::ConflictError) { |error| expect(error.provider).to eq(provider.name) }
+        .to raise_error(Einvoice::ConflictError) { |error|
+          expect(error.provider).to eq(provider.name)
+          expect(error.reason).to eq(Einvoice::Reason::DUPLICATE_ORDER).or be_nil
+        }
     end
 
     it "raises a ValidationError (never a raw error) on invalid input" do
       expect { provider.issue(issue_payload(items: [])) }
         .to raise_error(Einvoice::ValidationError)
+    end
+
+    # The unified model: a limit of the provider's own is UnsupportedError, so
+    # the caller knows that another provider may take the sale.
+    it "raises UnsupportedError for a sale that the MIG allows but the provider does not take" do
+      skip "no provider limit given" unless unsupported_issue
+
+      expect { provider.issue(issue_payload(order_id: "ORDER_UN").merge(unsupported_issue)) }
+        .to raise_error(Einvoice::UnsupportedError)
+    end
+  end
+
+  # A caller stores the reference between calls, often as JSON. What comes
+  # back has to work for the next call.
+  describe "a stored reference" do
+    it "queries and voids with a reference that went through to_h and JSON" do
+      issued = provider.issue(issue_payload(order_id: "ORDER_JSON"))
+      stored = JSON.parse(JSON.generate(issued.reference.to_h))
+
+      expect(provider.query({ invoice: stored }).invoice_number).to eq(issued.invoice_number)
+      expect(provider.void({ invoice: stored, reason: "客戶取消" }).status).to eq(Einvoice::InvoiceStatus::VOIDED)
     end
   end
 
@@ -157,8 +186,8 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
   end
 
   # State conflicts are the errors callers branch on most, so every provider has
-  # to agree on the class. The finer `reason` is deliberately not asserted: it is
-  # documented as nil when an adapter cannot determine one.
+  # to agree on the class. The finer `reason` may be nil when an adapter cannot
+  # determine one, but it must not be a wrong one.
   describe "operations that conflict with the invoice's state" do
     def credit(issued, allowance_id)
       provider.allowance({
@@ -177,7 +206,9 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       credit(issued, "AL_VA")
 
       expect { provider.void({ invoice: issued.reference, reason: "客戶取消" }) }
-        .to raise_error(Einvoice::ConflictError)
+        .to raise_error(Einvoice::ConflictError) { |error|
+          expect(error.reason).to eq(Einvoice::Reason::VOID_BLOCKED_BY_ALLOWANCE).or be_nil
+        }
     end
 
     it "voids the invoice once its allowance is voided, and reads it back as issued" do
@@ -200,7 +231,9 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       provider.void_allowance({ allowance: allowance.reference })
 
       expect { provider.void_allowance({ allowance: allowance.reference }) }
-        .to raise_error(Einvoice::ConflictError)
+        .to raise_error(Einvoice::ConflictError) { |error|
+          expect(error.reason).to eq(Einvoice::Reason::ALREADY_VOIDED).or be_nil
+        }
     end
 
     it "refuses to void the same invoice twice" do
@@ -210,7 +243,9 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
       provider.void({ invoice: issued.reference, reason: "客戶取消" })
 
       expect { provider.void({ invoice: issued.reference, reason: "客戶取消" }) }
-        .to raise_error(Einvoice::ConflictError)
+        .to raise_error(Einvoice::ConflictError) { |error|
+          expect(error.reason).to eq(Einvoice::Reason::ALREADY_VOIDED).or be_nil
+        }
     end
 
     it "refuses to credit a voided invoice" do
@@ -227,7 +262,9 @@ RSpec.shared_examples "an invoice provider" do |options = {}|
           amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 },
           price_mode: "TAX_INCLUSIVE"
         })
-      end.to raise_error(Einvoice::ConflictError)
+      end.to raise_error(Einvoice::ConflictError) { |error|
+        expect(error.reason).to eq(Einvoice::Reason::ALLOWANCE_BLOCKED_BY_VOID).or be_nil
+      }
     end
   end
 

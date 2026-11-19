@@ -30,20 +30,13 @@ Each item says what is wrong, where, and what it would take. Items under "Decide
 
 The unified model now says that an input the MIG allows but a provider does not take is an `UnsupportedError`. ECPay, Amego and ezPay follow it. Two places do not yet:
 
-- **Tradevan:** `Rules.validate!` checks the whole `issueData` against the DEFAULTAPI schema and raises `ValidationError`. The schema mixes the caller's input, the merchant's settings and fields that the adapter builds, so each field needs a look before it can be split.
+- **Tradevan:** `Rules.validate!` checks the whole `issueData` against the DEFAULTAPI schema and raises `ValidationError`. The schema mixes the caller's input, the merchant's settings and fields that the adapter builds, so each field needs a look before it can be split. Then its provider spec can pass `unsupported_issue:` to the shared contract, as the other three do.
 - **ECPay allowance:** `check_allowance!` refuses an item whose `ItemPrice × ItemCount` misses `ItemAmount` by more than 1. That is ECPay's rule, but it sits in one list with the MIG total check.
 
 ### 8. ECPay's `RqHeader.Revision`
 
 - **What:** The adapter sends `Revision: "3.0.0"`. The current ECPay docs do not list it, and stage accepts a request without it. See open question 1 in `docs/providers/ecpay/b2c.md`.
 - **Decide:** keep the field or drop it.
-
-## Gaps in the shared contract
-
-### 9. The contract does not test some promises of the unified model
-
-- **What:** It does not test that a reference survives `to_h` and a JSON round trip, the `reason` of a `ConflictError`, or that a provider limit is `UnsupportedError`. Every case uses the same small input: one whole-number item, a member carrier, an ASCII order id and a short reason. So the gaps in items 4 to 6 pass the contract.
-- **Fix:** add these cases once items 4 to 6 are decided.
 
 ## Ideas from a user's point of view
 

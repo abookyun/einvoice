@@ -7,7 +7,9 @@ RSpec.describe Einvoice::Amego::Provider do
 
   # The contract runs without provider_options: an allowance queries the
   # invoice for its buyer and date.
-  it_behaves_like "an invoice provider", unknown_reference: { number: "ZZ00000000" }
+  # A buyer name of only zeros: Amego's rule, not the MIG's.
+  it_behaves_like "an invoice provider", unknown_reference: { number: "ZZ00000000" },
+                                         unsupported_issue: { buyer: { email: "b@x.com", name: "000" } }
 end
 
 RSpec.describe Einvoice::Amego::Provider, "adapter details" do

@@ -9,7 +9,9 @@ RSpec.describe Einvoice::EzPay::Provider do
   # reference from issue has both. The fake voids at once, unlike ezPay.
   it_behaves_like "an invoice provider",
                   unknown_reference: { number: "ZZ00000000", random_code: "0000" },
-                  unknown_allowance_number: "A000000000000000"
+                  unknown_allowance_number: "A000000000000000",
+                  # An order id with a hyphen: ezPay's rule, not the MIG's.
+                  unsupported_issue: { order_id: "ORDER-UN" }
 end
 
 RSpec.describe Einvoice::EzPay::Provider, "adapter details" do
