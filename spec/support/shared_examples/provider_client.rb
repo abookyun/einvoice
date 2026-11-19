@@ -9,8 +9,10 @@
 #   client           a client built with base_url "https://<host>"
 #   stub_host        a Regexp that matches every request URL of the client
 #   send_request     a method that sends one ordinary request
-#   error_body       a method that returns a JSON String: an error response
-#                    that the provider wrote, which the client can read
+#   error_body       a JSON String: an error response that the provider wrote,
+#                    which the client can read
+#   error_class      the Einvoice::Error class that error_body maps to
+#   success_body     a JSON String: a success response that the provider wrote
 #   secrets          the credentials that inspect must not show
 #   build_client     a method that takes base_url: and builds a client
 RSpec.shared_examples "a provider client" do
@@ -22,6 +24,10 @@ RSpec.shared_examples "a provider client" do
     it "is a NetworkError for HTTP 5xx, so the caller can retry" do
       respond(503, "<html>Service Unavailable</html>")
       expect { send_request }.to raise_error(Einvoice::NetworkError) { |error| expect(error.raw_code).to eq("503") }
+
+      # JSON, but not the provider's own shape, such as a gateway's error.
+      respond(502, JSON.generate("error" => "bad gateway"))
+      expect { send_request }.to raise_error(Einvoice::NetworkError) { |error| expect(error.raw_code).to eq("502") }
     end
 
     it "is a NetworkError with RATE_LIMITED for HTTP 429" do
@@ -38,7 +44,10 @@ RSpec.shared_examples "a provider client" do
 
   it "lets a body that the provider wrote decide, whatever the HTTP status" do
     respond(500, error_body)
-    expect { send_request }.to raise_error(Einvoice::Error) { |error| expect(error).not_to be_a(Einvoice::NetworkError) }
+    expect { send_request }.to raise_error(error_class)
+
+    respond(503, success_body)
+    expect { send_request }.not_to raise_error
   end
 
   it "raises NetworkError when the connection fails" do

@@ -15,6 +15,8 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
     let(:stub_host) { /tradevan\.test/ }
     let(:secrets) { [password, key1, key2] }
     let(:error_body) { JSON.generate("Success" => "E", "Message" => "帳號或密碼錯誤") }
+    let(:error_class) { Einvoice::AuthError }
+    let(:success_body) { JSON.generate("Success" => "Y", "Message" => encrypted("issueStatus" => "Y")) }
 
     def send_request = client.request("post/issue", {})
 
@@ -37,23 +39,6 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
     expect do
       described_class.new(acnt: "a", acntp: "b", key1: key1, key2: key2, base_url: "")
     end.to raise_error(Einvoice::ValidationError, /base_url/)
-  end
-
-  it "refuses a base_url without https" do
-    expect do
-      described_class.new(acnt: "a", acntp: "b", key1: key1, key2: key2, base_url: "http://tradevan.test")
-    end.to raise_error(Einvoice::ValidationError, /https/)
-  end
-
-  it "hides the password and both keys in inspect" do
-    expect(client.inspect).to include("acnt=\"acnt\"", "tradevan.test")
-    [client.inspect, client.to_s].each { |text| expect(text).not_to include(password, key1, key2) }
-    expect(client.to_s).to eq(client.inspect)
-  end
-
-  it "keeps the checked base_url from changing" do
-    expect(client.base_url).to be_frozen
-    expect { client.base_url << "@evil.test" }.to raise_error(FrozenError)
   end
 
   describe "#request" do
@@ -137,21 +122,6 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
       expect { client.request("post/issue", {}) }.to raise_error(Einvoice::ProviderError, /envelope/)
     end
 
-    it "raises ProviderError for a body that is not JSON" do
-      respond_with("<html>busy</html>", 200)
-
-      expect { client.request("post/issue", {}) }
-        .to raise_error(Einvoice::ProviderError, /non-JSON response \(HTTP 200\)/)
-    end
-
-    it "raises NetworkError for HTTP 5xx with a body that Tradevan did not write" do
-      respond_with("<html>busy</html>", 503)
-      expect { client.request("post/issue", {}) }.to raise_error(Einvoice::NetworkError, /HTTP 503/)
-
-      respond_with({ "error" => "bad gateway" }, 502)
-      expect { client.request("post/issue", {}) }.to raise_error(Einvoice::NetworkError, /HTTP 502/)
-    end
-
     it "lets the HTTP status decide when Success is not Y, N or E" do
       respond_with({ "Success" => nil }, 503)
       expect { client.request("post/issue", {}) }.to raise_error(Einvoice::NetworkError, /HTTP 503/)
@@ -175,21 +145,6 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
       expect { client.request("post/issue", {}) }.to raise_error(Einvoice::ConflictError)
     end
 
-    it "raises NetworkError with RATE_LIMITED for HTTP 429" do
-      respond_with("Too Many Requests", 429)
-      expect { client.request("post/issue", {}) }
-        .to raise_error(Einvoice::NetworkError) { |error| expect(error.reason).to eq(Einvoice::Reason::RATE_LIMITED) }
-    end
-
-    # The rule of the unified model: a body that the adapter can read decides.
-    it "lets a body that Tradevan wrote decide, whatever the HTTP status" do
-      respond_with({ "Success" => "Y", "Message" => encrypted("issueStatus" => "Y") }, 503)
-      expect(client.request("post/issue", {})).to include("issueStatus" => "Y")
-
-      respond_with({ "Success" => "E", "Message" => "帳號或密碼錯誤" }, 500)
-      expect { client.request("post/issue", {}) }.to raise_error(Einvoice::AuthError)
-    end
-
     it "lets the HTTP status decide for a Success E without readable text" do
       [nil, "", "  ", 42].each do |message|
         respond_with({ "Success" => "E", "Message" => message }, 503)
@@ -209,18 +164,6 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Client do
         expect(error).not_to be_a(Einvoice::AuthError)
         expect(error.raw).to include("Message" => { "password" => nil })
       }
-    end
-
-    it "raises NetworkError when the connection fails" do
-      stub_request(:any, /tradevan\.test/).to_timeout
-
-      expect { client.request("post/issue", {}) }.to raise_error(Einvoice::NetworkError)
-    end
-
-    it "does not report a bug as a NetworkError" do
-      stub_request(:any, /tradevan\.test/).to_raise(NoMethodError.new("a bug"))
-
-      expect { client.request("post/issue", {}) }.to raise_error(NoMethodError, /a bug/)
     end
   end
 
