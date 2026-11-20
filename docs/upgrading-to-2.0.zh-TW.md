@@ -196,4 +196,10 @@ Einvoice::MOF::DonationCodes.new.exist?("2718")  # => true
 
 ## 換到其他加值中心
 
-在 2.0，五個 unified 呼叫（`issue`、`void`、`allowance`、`void_allowance` 和 `query`）也適用於 ECPay、Amego 和 ezPay。換到其中一家，需要先和那一家簽約、開帳號，再改 `require` 和 constructor。上面表格裡的 `raw` 呼叫不能直接沿用，因為每一家都有自己的 endpoint，`raw` 的參數也不同。README 列出了每一家支援的功能。
+在 2.0，五個 unified 呼叫（`issue`、`void`、`allowance`、`void_allowance` 和 `query`）在 ECPay、Amego 和 ezPay 也收同樣的輸入。換到其中一家，需要先和那一家簽約、開帳號，再改 `require` 和 constructor。有些東西不會跟著換過去：
+
+- **發票留在開立它的加值中心。** 舊發票的作廢、折讓和查詢，請用那一家的 provider 處理。
+- **只有發票號碼不一定夠。** `issue` 回傳的 reference 包含每一家需要的資料。只有號碼時，ECPay 還需要開立日期或訂單編號，ezPay 還需要隨機碼。
+- **上面表格裡的 `raw` 呼叫。** 每一家都有自己的 endpoint，`raw` 的參數也不同。
+
+README 列出了每一家支援的功能。

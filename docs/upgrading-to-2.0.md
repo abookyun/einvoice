@@ -194,4 +194,10 @@ Einvoice::MOF::DonationCodes.new.exist?("2718")  # => true
 
 ## Switching to another center
 
-With 2.0, the five unified calls (`issue`, `void`, `allowance`, `void_allowance` and `query`) work for ECPay, Amego and ezPay too. Moving to one of them needs a contract and an account with that center, and you change the `require` and the constructor. The `raw` calls in the table above do not move with you. Each center has its own endpoints, and its own `raw` arguments. The README lists what each center supports.
+With 2.0, the five unified calls (`issue`, `void`, `allowance`, `void_allowance` and `query`) take the same input for ECPay, Amego and ezPay too. Moving to one of them needs a contract and an account with that center, and you change the `require` and the constructor. Some things do not move with you:
+
+- **Invoices stay at the center that issued them.** Void, credit and query an old invoice with the provider for that center.
+- **A plain invoice number is not always enough.** The reference from `issue` holds what each center needs. With a number alone, ECPay also needs the issue date or the order id, and ezPay needs the random code.
+- **The `raw` calls in the table above.** Each center has its own endpoints, and its own `raw` arguments.
+
+The README lists what each center supports.
