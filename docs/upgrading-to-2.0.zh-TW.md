@@ -196,4 +196,4 @@ Einvoice::MOF::DonationCodes.new.exist?("2718")  # => true
 
 ## 換到其他加值中心
 
-在 2.0，同樣的呼叫也適用於 ECPay、Amego 和 ezPay。換到其中一家，需要先和那一家簽約、開帳號，再改 `require` 和 constructor。README 列出了每一家支援的功能。
+在 2.0，五個 unified 呼叫（`issue`、`void`、`allowance`、`void_allowance` 和 `query`）也適用於 ECPay、Amego 和 ezPay。換到其中一家，需要先和那一家簽約、開帳號，再改 `require` 和 constructor。上面表格裡的 `raw` 呼叫不能直接沿用，因為每一家都有自己的 endpoint，`raw` 的參數也不同。README 列出了每一家支援的功能。

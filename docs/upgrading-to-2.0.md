@@ -194,4 +194,4 @@ Einvoice::MOF::DonationCodes.new.exist?("2718")  # => true
 
 ## Switching to another center
 
-With 2.0, the same calls work for ECPay, Amego and ezPay. Moving to one of them needs a contract and an account with that center, and you change the `require` and the constructor. The README lists what each center supports.
+With 2.0, the five unified calls (`issue`, `void`, `allowance`, `void_allowance` and `query`) work for ECPay, Amego and ezPay too. Moving to one of them needs a contract and an account with that center, and you change the `require` and the constructor. The `raw` calls in the table above do not move with you. Each center has its own endpoints, and its own `raw` arguments. The README lists what each center supports.
