@@ -17,6 +17,11 @@ SimpleCov.start do
 end
 
 require "einvoice"
+require "einvoice/ecpay"
+require "einvoice/amego"
+require "einvoice/ezpay"
+require "einvoice/tradevan"
+require "einvoice/mof"
 require "webmock/rspec"
 
 Dir[File.join(__dir__, "support", "**", "*.rb")].each { |f| require f }

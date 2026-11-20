@@ -32,6 +32,13 @@ Other centers follow. Coverage and completeness for those will vary: their docs 
 gem "einvoice", git: "https://github.com/abookyun/einvoice", branch: "2.0.0-alpha"
 ```
 
+`require "einvoice"` loads the core and `MockProvider` only. Require the provider you use, and only that one is loaded:
+
+```ruby
+require "einvoice/ecpay"  # or einvoice/amego, einvoice/ezpay, einvoice/tradevan
+require "einvoice/mof"    # the 財政部 lookups, if you use them
+```
+
 ## Usage
 
 Depend on the `Einvoice::Provider` contract, not a concrete adapter. Every provider is constructed per-instance (no global configuration), so a multi-merchant app just holds one provider per set of credentials.
@@ -138,6 +145,8 @@ provider.query_statuses                                     # => the statuses th
 ### ECPay 綠界
 
 ```ruby
+require "einvoice/ecpay"
+
 provider = Einvoice::ECPay::Provider.new(
   merchant_id: "2000132",
   hash_key: "...",          # 16 bytes, server-side only
@@ -168,6 +177,8 @@ A few things worth knowing:
 ### Amego 光貿
 
 ```ruby
+require "einvoice/amego"
+
 provider = Einvoice::Amego::Provider.new(
   ban: "12345678",          # the seller's 統一編號
   app_key: "..."            # from Amego support, server-side only
@@ -189,6 +200,8 @@ To try it without an account, use Amego's published test account (shared with ev
 ### ezPay 簡單行動支付 (experimental)
 
 ```ruby
+require "einvoice/ezpay"
+
 provider = Einvoice::EzPay::Provider.new(
   merchant_id: "...",               # 商店代號
   hash_key: "...", hash_iv: "...",  # 32 and 16 bytes, server-side only
@@ -209,6 +222,8 @@ provider = Einvoice::EzPay::Provider.new(
 ### Tradevan 關貿 (DEFAULTAPI, experimental)
 
 ```ruby
+require "einvoice/tradevan"
+
 provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
   acnt: "...", acntp: "...",
   key1: "...", key2: "...",          # 16 bytes each, server-side only
@@ -234,6 +249,8 @@ provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
 Provider-independent clients for 財政部's own public services. They issue nothing and hold no credentials, so they work whichever center you use, or before you have picked one.
 
 ```ruby
+require "einvoice/mof"
+
 codes = Einvoice::MOF::DonationCodes.new
 
 codes.lookup("2718")
@@ -258,7 +275,7 @@ bundle exec rspec  # run the specs
 bundle exec rake   # default task: rspec
 ```
 
-The shared examples in `spec/support/shared_examples/` are the executable contract. Every adapter runs `"an invoice provider"`, and every adapter's client runs `"a provider client"`, so a new adapter proves that it honours the unified model by including them.
+The shared examples in `spec/support/shared_examples/` are the executable contract. Every adapter runs `"an invoice provider"`, and every adapter's client runs `"a provider client"`, so a new adapter proves that it honours the unified model by including them. A new adapter also gets its own entry file, `lib/einvoice/<name>.rb`, that requires `einvoice`. `lib/einvoice.rb` does not load it, and `spec/spec_helper.rb` does.
 
 To write a new adapter, start with the provider notes in [`docs/providers/`](docs/providers/README.md). Read them in this order: the MOF MIG note (the standard every provider follows), then the ECPay note (the first adapter, to see how a note maps to code), then the note for your provider, and then the shared examples above.
 

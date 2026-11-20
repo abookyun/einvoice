@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "einvoice"
 require "einvoice/amego/errors"
 require "einvoice/amego/client"
 require "einvoice/amego/payload"

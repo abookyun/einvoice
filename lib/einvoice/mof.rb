@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "einvoice"
 require "einvoice/mof/donation_codes"
 
 module Einvoice

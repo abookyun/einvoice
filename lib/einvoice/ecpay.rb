@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "einvoice"
 require "einvoice/ecpay/crypto"
 require "einvoice/ecpay/errors"
 require "einvoice/ecpay/client"

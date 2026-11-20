@@ -34,6 +34,13 @@
 gem "einvoice", git: "https://github.com/abookyun/einvoice", branch: "2.0.0-alpha"
 ```
 
+`require "einvoice"` 只會載入 core 和 `MockProvider`。請 require 你使用的加值中心，只有它會被載入：
+
+```ruby
+require "einvoice/ecpay"  # or einvoice/amego, einvoice/ezpay, einvoice/tradevan
+require "einvoice/mof"    # the 財政部 lookups, if you use them
+```
+
 ## 使用方式
 
 請依賴 `Einvoice::Provider` contract，不要依賴特定的 adapter。每個 provider 都是各自建立的實例（沒有全域設定），所以多商家的應用程式只要為每一組帳號各建立一個 provider。
@@ -147,6 +154,8 @@ provider.query_statuses                                     # => the statuses th
 ### ECPay 綠界
 
 ```ruby
+require "einvoice/ecpay"
+
 provider = Einvoice::ECPay::Provider.new(
   merchant_id: "2000132",
   hash_key: "...",          # 16 bytes, server-side only
@@ -177,6 +186,8 @@ provider = Einvoice::ECPay::Provider.new(**Einvoice::ECPay::SANDBOX)
 ### Amego 光貿
 
 ```ruby
+require "einvoice/amego"
+
 provider = Einvoice::Amego::Provider.new(
   ban: "12345678",          # the seller's 統一編號
   app_key: "..."            # from Amego support, server-side only
@@ -198,6 +209,8 @@ provider = Einvoice::Amego::Provider.new(
 ### ezPay 簡單行動支付（實驗性質）
 
 ```ruby
+require "einvoice/ezpay"
+
 provider = Einvoice::EzPay::Provider.new(
   merchant_id: "...",               # 商店代號
   hash_key: "...", hash_iv: "...",  # 32 and 16 bytes, server-side only
@@ -218,6 +231,8 @@ provider = Einvoice::EzPay::Provider.new(
 ### 關貿 Tradevan（DEFAULTAPI，實驗性質）
 
 ```ruby
+require "einvoice/tradevan"
+
 provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
   acnt: "...", acntp: "...",
   key1: "...", key2: "...",          # 16 bytes each, server-side only
@@ -243,6 +258,8 @@ provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
 直接使用財政部公開服務的 client，不綁定任何加值中心。它們不開立任何東西，也不需要帳號，所以不論你用哪一家加值中心都可以用，甚至還沒選定加值中心時也可以用。
 
 ```ruby
+require "einvoice/mof"
+
 codes = Einvoice::MOF::DonationCodes.new
 
 codes.lookup("2718")
@@ -267,7 +284,7 @@ bundle exec rspec  # run the specs
 bundle exec rake   # default task: rspec
 ```
 
-`spec/support/shared_examples/` 裡的 shared examples 是可以執行的 contract。每個 adapter 都要執行 `"an invoice provider"`，每個 adapter 的 client 都要執行 `"a provider client"`。新的 adapter 只要引用它們，就能證明自己遵守 unified model。
+`spec/support/shared_examples/` 裡的 shared examples 是可以執行的 contract。每個 adapter 都要執行 `"an invoice provider"`，每個 adapter 的 client 都要執行 `"a provider client"`。新的 adapter 只要引用它們，就能證明自己遵守 unified model。新的 adapter 也要有自己的入口檔 `lib/einvoice/<name>.rb`，在裡面 require `einvoice`。`lib/einvoice.rb` 不載入它，`spec/spec_helper.rb` 會載入它。
 
 要寫新的 adapter，請從 [`docs/providers/`](docs/providers/README.zh-TW.md) 的加值中心筆記開始。閱讀順序：先讀財政部 MIG 筆記（所有加值中心都遵循的規格），再讀 ECPay 筆記（第一個 adapter，可以看筆記怎麼對應到程式碼），接著讀你要做的那一家的筆記，最後讀上面提到的 shared examples。
 
