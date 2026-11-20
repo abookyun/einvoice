@@ -6,7 +6,7 @@ English | [繁體中文](README.zh-TW.md)
 
 A provider-agnostic **Taiwan e-invoice SDK** (財政部 MIG 4.1). The core models the five operations once: issue (開立), void (作廢), allowance (折讓), void-allowance (折讓作廢) and query (查詢). It has a unified value model and an `Einvoice::Provider` contract. Each value-added center is a thin adapter that maps the unified model to its wire format and back, so your business code does not depend on one center.
 
-> **2.0 is a ground-up rewrite, and the 1.x line is now in maintenance mode.** 1.x was a single-provider (Tradevan) wire-format client with a different API. If you depend on that, pin `~> 1.4`. It continues on the [`1-x-stable`](https://github.com/abookyun/einvoice/tree/1-x-stable) branch. 2.0's unified model is not backward compatible.
+> **2.0 is a ground-up rewrite, and the 1.x line is now in maintenance mode.** 1.x was a single-provider (Tradevan) wire-format client with a different API. If you depend on that, pin `~> 1.4`. It continues on the [`1-x-stable`](https://github.com/abookyun/einvoice/tree/1-x-stable) branch. 2.0's unified model is not backward compatible. To move to 2.0, read [Upgrading from 1.x to 2.0](docs/upgrading-to-2.0.md).
 
 ## What this is
 

@@ -8,7 +8,7 @@
 
 不綁定特定加值中心的**台灣電子發票 SDK**（財政部 MIG 4.1）。核心只定義一次五個操作：開立（issue）、作廢（void）、折讓（allowance）、折讓作廢（void-allowance）、查詢（query）。這些操作由一套 unified value model 和 `Einvoice::Provider` contract 表達。每一家加值中心是一個輕量的 adapter，負責在 unified model 和該家的傳輸格式之間轉換。所以業務程式碼不會綁定在某一家加值中心。
 
-> **2.0 是全新改寫的版本，1.x 已經進入維護模式。** 1.x 是只支援關貿（Tradevan）一家的傳輸格式 client，API 也不一樣。如果你依賴 1.x，請鎖定 `~> 1.4`。1.x 會在 [`1-x-stable`](https://github.com/abookyun/einvoice/tree/1-x-stable) branch 繼續維護。2.0 的 unified model 和 1.x 不相容。
+> **2.0 是全新改寫的版本，1.x 已經進入維護模式。** 1.x 是只支援關貿（Tradevan）一家的傳輸格式 client，API 也不一樣。如果你依賴 1.x，請鎖定 `~> 1.4`。1.x 會在 [`1-x-stable`](https://github.com/abookyun/einvoice/tree/1-x-stable) branch 繼續維護。2.0 的 unified model 和 1.x 不相容。要升級到 2.0，請見[從 1.x 升級到 2.0](docs/upgrading-to-2.0.zh-TW.md)。
 
 ## 這是什麼
 
