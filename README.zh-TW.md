@@ -28,7 +28,13 @@
 
 ## 安裝
 
-2.0 還沒有發佈到 RubyGems，RubyGems 上只有 1.x。請從 GitHub 安裝 2.0：
+2.0 還在 alpha 階段，API 在不同的 alpha 之間仍可能改變。請鎖定確切的版本：
+
+```ruby
+gem "einvoice", "2.0.0.alpha2"
+```
+
+如果想追蹤最新的進度，可以改從 `2.0.0-alpha` branch 安裝：
 
 ```ruby
 gem "einvoice", git: "https://github.com/abookyun/einvoice", branch: "2.0.0-alpha"

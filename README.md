@@ -26,7 +26,13 @@ Other centers follow. Coverage and completeness for those will vary: their docs 
 
 ## Installation
 
-2.0 is not on RubyGems yet. RubyGems has 1.x only. Install 2.0 from GitHub:
+2.0 is in alpha, and its API can still change between alphas. Pin the exact version:
+
+```ruby
+gem "einvoice", "2.0.0.alpha2"
+```
+
+To follow the latest work, install from the `2.0.0-alpha` branch instead:
 
 ```ruby
 gem "einvoice", git: "https://github.com/abookyun/einvoice", branch: "2.0.0-alpha"

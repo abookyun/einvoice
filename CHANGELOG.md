@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.0.0.alpha2] - 2026-11-20
+
 2.0 is a rewrite. 1.x was a client for one provider, Tradevan. 2.0 has one interface for several providers, so application code does not depend on one provider. **2.0 is not backward compatible.** 1.x stays in maintenance on `1-x-stable`. Pin `~> 1.4` if you depend on it. To move to 2.0, read [Upgrading from 1.x to 2.0](docs/upgrading-to-2.0.md).
 
 ### Added
@@ -30,6 +32,21 @@ Each provider's note in `docs/providers/` gives its mapping, its limits and what
 ### Removed
 - The 1.x Tradevan layer (`Client`, `Configuration`, `Connection`, `Result` and the Tradevan models). The unified core and the adapters replace it. Tradevan DEFAULTAPI is back as an adapter.
 - `lib/einvoice/donation_unit_list.json` and the scheduled workflow that refreshed it. `Einvoice::MOF::DonationCodes` looks the codes up live.
+
+## [1.5.0] - 2026-09-11
+
+### Fixed
+- Tradevan `IssueData#payload` and `VoidData#payload` now exclude `context_for_validation`. On Rails 8 this internal ivar was sent as a business field once `valid?` had run, and Tradevan rejected the whole request. Thanks @dlackty.
+
+### Changed
+- **Ruby 3.1 or newer is now required.** CI covers 3.1 through 3.4.
+- **Faraday 2 is now required** (`~> 2.1`); `faraday_middleware` is gone, replaced by a built-in `Faraday::Response::ParseXml`. If you pin `faraday` to 1.x, stay on 1.4.0.
+- `Einvoice::Utils` and the `gyoku` dependency have been removed. Nothing in the gem called them.
+
+### Internal
+- Added request-level Tradevan provider specs.
+- CI runs on `1-x-stable`; the donation unit list task parses with `CSV`.
+- README documents the allowance operations and 1.x maintenance mode.
 
 ## [1.4.0] - 2026-08-08
 

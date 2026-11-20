@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
 
   spec.metadata = {
     "source_code_uri" => "https://github.com/abookyun/einvoice",
-    "changelog_uri" => "https://github.com/abookyun/einvoice/blob/main/CHANGELOG.md",
+    "changelog_uri" => "https://github.com/abookyun/einvoice/blob/v#{spec.version}/CHANGELOG.md",
     "bug_tracker_uri" => "https://github.com/abookyun/einvoice/issues",
     "rubygems_mfa_required" => "true"
   }
