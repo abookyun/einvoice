@@ -122,6 +122,8 @@ The class tells you what to do next, the same way at every provider:
 - `ValidationError`: the input breaks a MIG rule, so no provider takes it. Fix the input.
 - `UnsupportedError`: this provider does not take the input, or lacks the feature. Another provider may take it.
 - `NetworkError`: the request may not have reached the provider. Retry it. After a timeout on `issue`, the invoice may exist anyway. Retry with the same `order_id`: a `ConflictError` with `reason: :duplicate_order` tells you that it does.
+- After a timeout on `allowance`, a retry can credit twice, so check first. Amego takes your `allowance_id` and refuses a second one with `reason: :duplicate_allowance`. ECPay and ezPay assign the allowance number themselves, so the adapter cannot find an allowance that went through. Check the provider's back office before you retry. Tradevan takes `allowance_id` too, but nobody has checked whether it refuses a repeat.
+- After a timeout on `void` or `void_allowance`, a retry is safe, because nothing can be voided twice. A `ConflictError` with `reason: :already_voided` means that the first one went through.
 - `reason: :rate_limited`, on any class: the provider asks you to slow down. Retry later.
 - `ConflictError` with `reason: :retry_later`: the provider is still working on the invoice. Try again later.
 

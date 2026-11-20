@@ -131,6 +131,8 @@ end
 - `ValidationError`：輸入違反 MIG 的規則，任何加值中心都不會接受。請修正輸入。
 - `UnsupportedError`：這家加值中心不接受這個輸入，或沒有這項功能。別家可能接受。
 - `NetworkError`：請求可能沒有送到加值中心。請重試。`issue` 逾時後，發票可能其實已經開立。請用同一個 `order_id` 重試：如果收到 `reason` 為 `:duplicate_order` 的 `ConflictError`，就代表發票已經存在。
+- `allowance` 逾時後，重試可能會折讓兩次，所以要先確認。Amego 會使用你的 `allowance_id`，收到重複的折讓時，會丟出 `reason` 為 `:duplicate_allowance` 的錯誤。ECPay 和 ezPay 由加值中心自己配發折讓單號，所以 adapter 找不到已經成功的那張折讓。重試前請先到加值中心的後台確認。關貿也會使用 `allowance_id`，但還沒有人確認過它會不會拒絕重複的折讓。
+- `void` 或 `void_allowance` 逾時後，可以安全重試，因為同一張不會被作廢兩次。收到 `reason` 為 `:already_voided` 的 `ConflictError`，就代表第一次已經成功。
 - 任何類別帶有 `reason: :rate_limited`：加值中心要求你放慢速度。請稍後重試。
 - `ConflictError` 帶有 `reason: :retry_later`：加值中心還在處理這張發票。請稍後再試。
 
