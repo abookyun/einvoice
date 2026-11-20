@@ -25,7 +25,10 @@ module Einvoice
     MIXED_TAX = :mixed_tax
     # Look up an invoice by the merchant order id, not just the invoice number.
     QUERY_BY_ORDER_ID = :query_by_order_id
-    # Schedule an invoice to be issued automatically at a future date.
+    # Schedule an invoice to be issued automatically at a future date. No
+    # adapter declares it and the unified model has no method for it yet: at
+    # ECPay a delayed issue calls the merchant back, and 2.0 has no callbacks.
+    # It stays so that a later version can add the feature.
     SCHEDULED_ISSUE = :scheduled_issue
     # Validate a carrier (手機條碼 / 愛心碼) against the tax authority.
     CARRIER_VALIDATION = :carrier_validation

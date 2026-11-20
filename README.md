@@ -6,7 +6,7 @@ English | [繁體中文](README.zh-TW.md)
 
 A provider-agnostic **Taiwan e-invoice SDK** (財政部 MIG 4.1). The core models the five operations once: issue (開立), void (作廢), allowance (折讓), void-allowance (折讓作廢) and query (查詢). It has a unified value model and an `Einvoice::Provider` contract. Each value-added center is a thin adapter that maps the unified model to its wire format and back, so your business code does not depend on one center.
 
-> **2.0 is a ground-up rewrite, and the 1.x line is now in maintenance mode.** 1.x was a single-provider (Tradevan) wire-format client with a different API. If you depend on that, pin `~> 1.4`. It continues on the [`1-x-stable`](https://github.com/abookyun/einvoice/tree/1-x-stable) branch. 2.0's unified model is not backward compatible.
+> **2.0 is a ground-up rewrite, and the 1.x line is now in maintenance mode.** 1.x was a single-provider (Tradevan) wire-format client with a different API. If you depend on that, pin `~> 1.4`. It continues on the [`1-x-stable`](https://github.com/abookyun/einvoice/tree/1-x-stable) branch. 2.0's unified model is not backward compatible. To move to 2.0, read [Upgrading from 1.x to 2.0](docs/upgrading-to-2.0.md).
 
 ## What this is
 
@@ -111,9 +111,12 @@ Every failure is an `Einvoice::Error` subclass carrying a stable `#code`, the pr
 begin
   provider.void(invoice: invoice.reference, reason: "customer cancelled")
 rescue Einvoice::ConflictError => e
-  e.reason   # => :already_voided  (idempotent — treat as success)
+  # Only :already_voided means that the invoice is voided. Another reason,
+  # such as :void_blocked_by_allowance, means that it is not.
+  raise unless e.reason == :already_voided
 rescue Einvoice::Error => e
   e.code     # => :network, :auth, :not_found, …
+  raise
 end
 ```
 

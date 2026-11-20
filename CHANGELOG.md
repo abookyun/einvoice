@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-2.0 is a rewrite. 1.x was a client for one provider, Tradevan. 2.0 has one interface for several providers, so an application can switch providers by changing the constructor. **2.0 is not backward compatible.** 1.x stays in maintenance on `1-x-stable`. Pin `~> 1.4` if you depend on it.
+2.0 is a rewrite. 1.x was a client for one provider, Tradevan. 2.0 has one interface for several providers, so application code does not depend on one provider. **2.0 is not backward compatible.** 1.x stays in maintenance on `1-x-stable`. Pin `~> 1.4` if you depend on it. To move to 2.0, read [Upgrading from 1.x to 2.0](docs/upgrading-to-2.0.md).
 
 ### Added
 - **One interface for every provider.** `Einvoice::Provider` has the five operations: `issue`, `void`, `allowance`, `void_allowance` and `query`. They take plain hashes or value objects, and return value types (`Data.define`).
