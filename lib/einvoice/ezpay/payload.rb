@@ -39,7 +39,7 @@ module Einvoice
         options = string_keys(parsed.provider_options)
         types = parsed.items.map { |item| item.tax_type || parsed.tax_type }
         mixed = types.uniq.size > 1
-        check_issue!(parsed, b2b, types, mixed, options)
+        check_issue!(parsed, b2b, types, mixed)
 
         breakdown = parsed.tax_breakdown(provider: Client::PROVIDER)
 
@@ -57,7 +57,8 @@ module Einvoice
           "TaxType" => mixed ? MIXED_TAX_CODE : TAX_TYPE.fetch(types.first),
           "TaxRate" => TAX_RATES.fetch(parsed.tax_rate)
         }
-        fields["CustomsClearance"] = options["customs_clearance"].to_s if types.include?(TaxType::ZERO_RATED)
+        # ezPay has no field for zero_tax_rate_reason (docs, section 4.6).
+        fields["CustomsClearance"] = parsed.customs_clearance_mark if parsed.zero_rated?
         fields.merge!(issue_amounts(breakdown, mixed))
         fields.merge!(item_fields(parsed.items, breakdown.lines, net: b2b))
         fields["ItemTaxType"] = types.map { |type| TAX_TYPE.fetch(type) }.join(ITEM_SEPARATOR) if mixed
@@ -111,20 +112,18 @@ module Einvoice
 
       # --- issue -------------------------------------------------------------
 
-      def check_issue!(parsed, b2b, types, mixed, options)
-        invalid!("order_id must be 1 to 20 letters, digits or _") unless parsed.order_id.to_s.match?(ORDER_ID)
-        max!(parsed.remark.to_s, 200, "remark")
+      def check_issue!(parsed, b2b, types, mixed)
+        unless parsed.order_id.to_s.match?(ORDER_ID)
+          unsupported!("ezPay takes an order_id of 1 to 20 letters, digits or _")
+        end
         max!(parsed.buyer&.email.to_s, 50, "buyer email")
-        max!(parsed.buyer&.address.to_s, 100, "buyer address")
         refuse_special!(types)
-        if mixed && b2b
-          raise UnsupportedError.new("ezPay allows mixed tax only on a B2C invoice", provider: Client::PROVIDER)
-        end
-        invalid!("ezPay allows a carrier or a donation only on a B2C invoice") if b2b && (parsed.carrier || parsed.donation)
-        invalid!("ezPay does not take a carrier together with a donation") if parsed.carrier && parsed.donation
-        if types.include?(TaxType::ZERO_RATED) && !options.key?("customs_clearance")
-          invalid!("a zero-rated sale needs provider_options[:customs_clearance]")
-        end
+        unsupported!("ezPay allows mixed tax only on a B2C invoice") if mixed && b2b
+        # The MIG allows a carrier and a donation on a B2B invoice, and a carrier
+        # with a donation. ezPay refuses all three.
+        unsupported!("ezPay takes a donation only on a B2C invoice") if b2b && parsed.donation
+        unsupported!("ezPay takes a carrier only on a B2C invoice") if b2b && parsed.carrier
+        unsupported!("ezPay does not take a carrier together with a donation") if parsed.carrier && parsed.donation
         check_rate!(parsed.tax_rate)
       end
 
@@ -158,7 +157,7 @@ module Einvoice
       def buyer_name(buyer, b2b)
         name = buyer&.name.to_s
         if b2b
-          return name if !name.empty? && name.length <= 60
+          return name unless name.empty?
 
           return buyer.ubn.to_s
         end
@@ -199,15 +198,17 @@ module Einvoice
       def item_row(item, amount)
         name = item.description.to_s
         unit = item.unit.to_s.empty? ? DEFAULT_UNIT : item.unit.to_s
-        [name, unit].each { |text| invalid!("item text must not contain |: #{text.inspect}") if text.include?("|") }
+        [name, unit].each do |text|
+          unsupported!("ezPay item text must not contain |: #{text.inspect}") if text.include?("|")
+        end
         max!(name, 30, "item description")
         limited!(unit, UNIT_LIMIT, "item unit")
 
         count = integer!(item.quantity, "item quantity")
-        invalid!("ezPay needs an item quantity above 0, got #{count}") unless count.positive?
+        unsupported!("ezPay needs an item quantity above 0, got #{count}") unless count.positive?
         amount = integer!(amount, "item amount")
         unless (amount % count).zero?
-          invalid!("ezPay needs a whole unit price, but the item amount #{amount} does not divide by #{count}")
+          unsupported!("ezPay needs a whole unit price, but the item amount #{amount} does not divide by #{count}")
         end
 
         { "ItemName" => name, "ItemCount" => count, "ItemUnit" => unit, "ItemPrice" => amount / count,
@@ -226,10 +227,10 @@ module Einvoice
       end
 
       # ezPay counts "2 Chinese or 6 English characters". A text with any
-      # non-ASCII character gets the Chinese limit.
+      # non-ASCII character gets the Chinese limit. The ASCII limits are the
+      # MIG's, which the core checks, so only the shorter limit is left here.
       def limited!(text, (ascii, other), field)
-        limit = text.ascii_only? ? ascii : other
-        max!(text, limit, field)
+        max!(text, text.ascii_only? ? ascii : other, field)
       end
 
       # The core reads every number as exact, but allows decimals. ezPay does
@@ -238,15 +239,26 @@ module Einvoice
         rational = value.to_r
         return rational.to_i if rational.denominator == 1
 
-        invalid!("ezPay needs a whole number for #{field}, got #{Number.plain(rational)}")
+        unsupported!("ezPay needs a whole number for #{field}, got #{Number.plain(rational)}")
       end
 
+      # The core checks the MIG lengths. A shorter limit of ezPay's own is
+      # UnsupportedError: another provider may take the value
+      # (docs/providers/README.md, "The unified model").
       def max!(value, limit, field)
-        invalid!("#{field} is longer than #{limit} characters") if value.length > limit
+        return if value.length <= limit
+
+        unsupported!("ezPay takes a #{field} of at most #{limit} characters")
       end
 
+      # The input breaks a MIG rule, or lacks what the call needs.
       def invalid!(message)
         raise ValidationError.new(message, provider: Client::PROVIDER)
+      end
+
+      # The MIG allows the input, but ezPay does not take it.
+      def unsupported!(message)
+        raise UnsupportedError.new(message, provider: Client::PROVIDER)
       end
 
       def string_keys(hash)

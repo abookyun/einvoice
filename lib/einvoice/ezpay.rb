@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "einvoice"
 require "einvoice/ezpay/crypto"
 require "einvoice/ezpay/errors"
 require "einvoice/ezpay/client"

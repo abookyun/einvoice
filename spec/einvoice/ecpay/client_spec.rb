@@ -9,6 +9,17 @@ RSpec.describe Einvoice::ECPay::Client do
   let(:iv) { Einvoice::ECPay::SANDBOX[:hash_iv] }
   let(:url) { "https://ecpay.test/B2CInvoice/Issue" }
 
+  it_behaves_like "a provider client" do
+    let(:stub_host) { /ecpay\.test/ }
+    let(:secrets) { [key, iv] }
+    let(:error_body) { JSON.generate("MerchantID" => "2000132", "TransCode" => 110, "TransMsg" => "decrypt fail") }
+    let(:error_class) { Einvoice::AuthError }
+    let(:success_body) { business("RtnCode" => 1, "RtnMsg" => "ok")[:body] }
+
+    def send_request = client.request("/B2CInvoice/Issue", {})
+    def build_client(base_url:) = described_class.new(**Einvoice::ECPay::SANDBOX, base_url: base_url)
+  end
+
   def envelope(body)
     { status: 200, headers: { "Content-Type" => "application/json" }, body: JSON.generate(body) }
   end
@@ -106,26 +117,6 @@ RSpec.describe Einvoice::ECPay::Client do
           expect(error.reason).to eq(Einvoice::Reason::RATE_LIMITED)
           expect(error.raw_code).to eq("403")
         }
-    end
-
-    it "reports a gateway page with HTTP 5xx as a network error" do
-      stub_request(:post, url).to_return(status: 502, body: "<html>bad gateway</html>")
-
-      expect { client.request("/B2CInvoice/Issue", {}) }
-        .to raise_error(Einvoice::NetworkError, /HTTP 502/)
-    end
-
-    it "does not report a bug in the adapter as a network error" do
-      allow(Net::HTTP).to receive(:new).and_raise(NoMethodError, "bug")
-
-      expect { client.request("/B2CInvoice/Issue", {}) }.to raise_error(NoMethodError)
-    end
-
-    it "wraps a connection failure as a network error" do
-      stub_request(:post, url).to_timeout
-
-      expect { client.request("/B2CInvoice/Issue", {}) }
-        .to raise_error(Einvoice::NetworkError, /ECPay request failed/)
     end
   end
 

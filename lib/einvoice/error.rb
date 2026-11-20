@@ -37,6 +37,10 @@ module Einvoice
     CONTRACT_EXPIRED          = :contract_expired
     IP_BLOCKED                = :ip_blocked
     ACCOUNT_SUSPENDED         = :account_suspended
+    # The provider refused the request time. The caller's server clock is off.
+    # An AuthError at every provider: the request is checked with its time, and
+    # a retry fails the same way until the clock is fixed. The shared ECPay
+    # fixtures, which the TypeScript SDK runs too, pin it as AUTH.
     STALE_TIMESTAMP           = :stale_timestamp
     # The adapter queried the provider on its own, to fill a field the call did
     # not give, and that query failed. +cause+ holds the error of the query.
@@ -169,6 +173,19 @@ module Einvoice
 
       reason = status == 429 ? Reason::RATE_LIMITED : nil
       new("#{provider} returned HTTP #{status}", provider: provider, reason: reason, raw_code: response.code)
+    end
+
+    # The error for a connection failure. +response+ is the response whose
+    # headers had arrived before the failure, or nil. Its status is kept, so a
+    # body that failed to arrive after HTTP 429 is still RATE_LIMITED. +name+
+    # is the provider's name for the message, such as "ECPay".
+    def self.for_failure(cause, provider:, name: provider, response: nil)
+      message = "#{name} request failed: #{cause.message}"
+      return new(message, provider: provider, cause: cause) unless response
+
+      reason = response.code.to_i == 429 ? Reason::RATE_LIMITED : nil
+      new("#{message} (HTTP #{response.code})", provider: provider, reason: reason, raw_code: response.code,
+                                                 cause: cause)
     end
   end
 

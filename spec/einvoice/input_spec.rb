@@ -73,6 +73,28 @@ RSpec.describe Einvoice::Input do
     end
   end
 
+  # The caller may leave amount out. The core derives it by the rules that
+  # check a given one.
+  describe "an issue without amount" do
+    let(:items) { [{ "description" => "a", "quantity" => 2, "unit_price" => 525, "amount" => 1050 }] }
+
+    it "puts the tax inside sales_amount for a consumer (F0401)" do
+      input = described_class.issue(issue_hash.except("amount").merge("items" => items))
+      expect(input.amount).to eq(Einvoice::AmountSummary.new(sales_amount: 1050, tax_amount: 0, total_amount: 1050))
+    end
+
+    it "keeps the tax apart for a business (F0401)" do
+      input = described_class.issue(issue_hash.except("amount", "carrier")
+        .merge("items" => items, "buyer" => { "ubn" => "53538851", "name" => "Acme", "email" => "b@x.com" }))
+      expect(input.amount).to eq(Einvoice::AmountSummary.new(sales_amount: 1000, tax_amount: 50, total_amount: 1050))
+    end
+
+    it "still checks an amount that the caller gives" do
+      expect { described_class.issue(issue_hash.merge("items" => items)) }
+        .to raise_error(Einvoice::ValidationError, /total_amount is 100, but the items add up to 1050/)
+    end
+  end
+
   describe "MIG checks on an issue" do
     def issue(**changes)
       described_class.issue(issue_hash.merge(changes.transform_keys(&:to_s)))
@@ -153,6 +175,15 @@ RSpec.describe Einvoice::Input do
       expect(lines).to eq([[100, 5, 105], [-20, -1, -21]])
     end
 
+    # A discount larger than the sale would take the derived totals below
+    # zero, which a given amount may not be either.
+    it "rejects negative totals that the core derives" do
+      items = [{ "description" => "a", "quantity" => 1, "unit_price" => 100, "amount" => 100 },
+               { "description" => "discount", "quantity" => 1, "unit_price" => -200, "amount" => -200 }]
+      expect(error_for { issue("amount" => nil, "tax_type" => "TAX_FREE", "items" => items) })
+        .to match(/amount.sales_amount must not be negative, got -100/)
+    end
+
     it "rejects negative totals" do
       expect(error_for { issue(amount: { "sales_amount" => -100, "tax_amount" => 0, "total_amount" => -100 }) })
         .to match(/sales_amount must not be negative/)
@@ -184,9 +215,41 @@ RSpec.describe Einvoice::Input do
       expect([input.carrier, input.donation]).to all(be_truthy)
     end
 
+    # The MIG lengths are checked once here, so every provider answers alike.
+    it "checks the MIG field lengths" do
+      item = issue_hash["items"].first
+      {
+        { remark: "x" * 201 } => /remark must be 200/,
+        { buyer: { email: "b@x.com", name: "x" * 61 } } => /buyer_name must be 60/,
+        { buyer: { email: "b@x.com", address: "x" * 101 } } => /buyer_address must be 100/,
+        { buyer: { email: "#{'x' * 400}@x.com" } } => /buyer_email must be 400/,
+        { buyer: { email: "b@x.com", phone: "1" * 27 } } => /buyer_phone must be 26/,
+        { carrier: { type: "MEMBER", code: "x" * 401 } } => /carrier_code must be 400/,
+        { items: [item.merge("description" => "x" * 501)] } => /item_description must be 500/,
+        { items: [item.merge("unit" => "x" * 7)] } => /item_unit must be 6/,
+        { items: [item.merge("remark" => "x" * 121)] } => /item_remark must be 120/
+      }.each { |changes, message| expect(error_for { issue(**changes) }).to match(message) }
+      expect(issue(remark: "x" * 200).remark).to eq("x" * 200)
+    end
+
+    it "refuses a consumer name of 0 to 0000, and a carrier code with a space at an end (MIG)" do
+      expect(error_for { issue(buyer: { email: "b@x.com", name: "000" }) }).to match(/must not be "000"/)
+      expect(issue(buyer: { email: "b@x.com", name: "0000A" }).buyer.name).to eq("0000A")
+      expect(error_for { issue(carrier: { type: "MEMBER", code: "abc\u3000" }) }).to match(/space/)
+    end
+
+    it "needs the MIG clearance mark on a zero-rated invoice, and checks both MIG codes" do
+      expect(error_for { issue(tax_type: "ZERO_RATED") }).to match(/needs customs_clearance_mark/)
+      zero = issue(tax_type: "ZERO_RATED", customs_clearance_mark: 2, zero_tax_rate_reason: 71)
+      expect(zero).to have_attributes(customs_clearance_mark: "2", zero_tax_rate_reason: "71", zero_rated?: true)
+      expect(error_for { issue(customs_clearance_mark: "3") }).to match(/customs_clearance_mark must be one of 1, 2/)
+      expect(error_for { issue(zero_tax_rate_reason: "70") }).to match(/zero_tax_rate_reason must be one of 71/)
+      expect(issue(customs_clearance_mark: "")).to have_attributes(customs_clearance_mark: nil, zero_rated?: false)
+    end
+
     it "defaults tax_rate by the tax types of the lines" do
       expect(issue.tax_rate).to eq(Rational(5, 100))
-      expect(issue(tax_type: "ZERO_RATED").tax_rate).to eq(0)
+      expect(issue(tax_type: "ZERO_RATED", customs_clearance_mark: "1").tax_rate).to eq(0)
       expect(error_for { issue(tax_type: "SPECIAL") }).to match(/tax_rate is required for a special line/)
 
       # A taxable line under a tax-free header is still taxed at 5%.
@@ -247,6 +310,11 @@ RSpec.describe Einvoice::Input do
 
     def taxes(input)
       input.tax_breakdown.lines.map { |line| [line.net_amount, line.tax] }
+    end
+
+    it "derives amount when the caller leaves it out, with sales_amount without tax (G0401)" do
+      input = allowance([item(100)], nil)
+      expect(input.amount).to eq(Einvoice::AmountSummary.new(sales_amount: 95, tax_amount: 5, total_amount: 100))
     end
 
     it "splits the tax out of tax-included items, and leaves the items as given" do

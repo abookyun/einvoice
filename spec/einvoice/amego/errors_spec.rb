@@ -3,7 +3,7 @@
 RSpec.describe Einvoice::Amego::Errors do
   describe ".classify" do
     {
-      15 => [:validation, Einvoice::Reason::STALE_TIMESTAMP],
+      15 => [:auth, Einvoice::Reason::STALE_TIMESTAMP],
       16 => [:auth, Einvoice::Reason::CREDENTIALS_INVALID],
       21 => [:provider, Einvoice::Reason::RATE_LIMITED],
       71 => [:not_found, nil],

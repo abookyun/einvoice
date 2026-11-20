@@ -31,7 +31,7 @@ module Einvoice
         @mode = mode
         @base_url = Redaction.base_url!(base_url || BASE_URL.fetch(mode) do
           raise ValidationError.new("Unknown ezPay mode: #{mode.inspect}", provider: PROVIDER)
-        end, provider: PROVIDER).chomp("/")
+        end, provider: PROVIDER)
         @timeout = timeout
         @clock = clock
       end
@@ -71,9 +71,11 @@ module Einvoice
 
         post = Net::HTTP::Post.new(uri.request_uri)
         post.set_form_data(form)
-        parse(http.request(post))
+        response = nil
+        http.request(post) { |res| (response = res).read_body }
+        parse(response)
       rescue *Error::NETWORK_ERRORS => e
-        raise NetworkError.new("ezPay request failed: #{e.message}", provider: PROVIDER, cause: e)
+        raise NetworkError.for_failure(e, provider: PROVIDER, name: "ezPay", response: response)
       end
 
       # A body that ezPay wrote (a JSON object with +Status+) decides the

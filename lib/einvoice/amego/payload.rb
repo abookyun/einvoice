@@ -31,17 +31,12 @@ module Einvoice
       MOBILE_MEMBER = /\A09\d{8}\z/
 
       MAX_ORDER_ID = 40
-      MAX_REMARK = 200
       MAX_DESCRIPTION = 256
-      MAX_ITEM_REMARK = 120
-      MAX_UNIT = 6
       MAX_ALLOWANCE_NUMBER = 16
 
       # provider_options key => f0401 field, for fields with no unified home.
       ISSUE_OPTIONS = {
         "track_api_code" => "TrackApiCode",
-        "customs_clearance_mark" => "CustomsClearanceMark",
-        "zero_tax_rate_reason" => "ZeroTaxRateReason",
         "brand_name" => "BrandName",
         "detail_amount_round" => "DetailAmountRound",
         "tax_adjustment" => "TaxAdjustment"
@@ -55,7 +50,7 @@ module Einvoice
         exclusive = parsed.price_mode == PriceMode::TAX_EXCLUSIVE
         options = string_keys(parsed.provider_options)
         types = parsed.items.map { |item| item.tax_type || parsed.tax_type }
-        check_issue!(parsed, types, b2b, exclusive, options)
+        check_issue!(parsed, types, b2b, exclusive)
         breakdown = parsed.tax_breakdown(provider: Client::PROVIDER)
 
         data = {
@@ -74,6 +69,10 @@ module Einvoice
           "TaxRate" => number(parsed.tax_rate),
           "DetailVat" => exclusive ? "0" : "1"
         }
+        if parsed.zero_rated?
+          data["CustomsClearanceMark"] = parsed.customs_clearance_mark
+          data["ZeroTaxRateReason"] = parsed.zero_tax_rate_reason
+        end
         ISSUE_OPTIONS.each { |key, field| data[field] = options[key].to_s if options.key?(key) }
         data
       end
@@ -88,6 +87,8 @@ module Einvoice
       # +invoice_datetime+.
       def allowance(parsed, original, allowance_date)
         number = parsed.allowance_id.to_s
+        # Amego sends allowance_id as the MIG AllowanceNumber. Other providers
+        # number an allowance themselves, so this limit is Amego's.
         max!(number, MAX_ALLOWANCE_NUMBER, "allowance_id")
         breakdown = parsed.tax_breakdown(provider: Client::PROVIDER)
         refuse_special!(breakdown.lines.map(&:tax_type))
@@ -125,18 +126,16 @@ module Einvoice
 
       # --- issue -------------------------------------------------------------
 
-      def check_issue!(parsed, types, b2b, exclusive, options)
+      def check_issue!(parsed, types, b2b, exclusive)
         max!(parsed.order_id.to_s, MAX_ORDER_ID, "order_id")
-        max!(parsed.remark.to_s, MAX_REMARK, "remark")
-        if exclusive && !b2b
-          invalid!("Amego takes tax-exclusive prices only for a B2B invoice")
-        end
+        unsupported!("Amego takes tax-exclusive prices only for a B2B invoice") if exclusive && !b2b
         refuse_special!(types)
         check_rate!(parsed.tax_rate)
-        return unless types.include?(TaxType::ZERO_RATED)
-        return if options.key?("customs_clearance_mark") && options.key?("zero_tax_rate_reason")
+        # The core asks for the clearance mark. The MIG asks for the reason too,
+        # and so does Amego.
+        return unless parsed.zero_rated? && parsed.zero_tax_rate_reason.nil?
 
-        invalid!("a zero-rated sale needs provider_options customs_clearance_mark and zero_tax_rate_reason")
+        invalid!("a zero-rated invoice needs zero_tax_rate_reason (71 to 79)")
       end
 
       def refuse_special!(types)
@@ -167,7 +166,6 @@ module Einvoice
 
       def buyer_name(buyer, b2b)
         name = buyer&.name.to_s
-        invalid!("buyer name must not be #{name.inspect}") if name.match?(/\A0{1,4}\z/)
         return name unless name.empty?
 
         b2b ? buyer.ubn.to_s : CONSUMER_NAME
@@ -196,8 +194,6 @@ module Einvoice
       def issue_item(item, type)
         description = item.description.to_s
         max!(description, MAX_DESCRIPTION, "item description")
-        max!(item.remark.to_s, MAX_ITEM_REMARK, "item remark")
-        max!(item.unit.to_s, MAX_UNIT, "item unit")
         {
           "Description" => description,
           "Quantity" => number(item.quantity),
@@ -253,12 +249,23 @@ module Einvoice
         Taipei.date(time, provider: Client::PROVIDER).strftime("%Y%m%d")
       end
 
+      # The core checks the MIG lengths. A shorter limit of Amego's own is
+      # UnsupportedError: another provider may take the value
+      # (docs/providers/README.md, "The unified model").
       def max!(value, limit, field)
-        invalid!("#{field} is longer than #{limit} characters") if value.length > limit
+        return if value.length <= limit
+
+        unsupported!("Amego takes a #{field} of at most #{limit} characters")
       end
 
+      # The input breaks a MIG rule, or lacks what the call needs.
       def invalid!(message)
         raise ValidationError.new(message, provider: Client::PROVIDER)
+      end
+
+      # The MIG allows the input, but Amego does not take it.
+      def unsupported!(message)
+        raise UnsupportedError.new(message, provider: Client::PROVIDER)
       end
 
       def string_keys(hash)

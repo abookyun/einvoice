@@ -276,8 +276,8 @@ API 文件屬於關貿網路 Tradevan。關貿沒有公開這份文件，也拒�
 | `status` | 見 4.4 |
 | `amount` | `sales = exclusiveAmount`、`tax = tax`、`total = total` |
 | `buyer` | `receiverName`、`receiverAddr`、`receiverPhone`。回應裡沒有 email 和統一編號 |
-| `items` | `detailList[]`：`productName`、`qty`、`price`、`total`、`taxType` |
-| `tax_type` | 品項的 `taxType`。有兩種不同的已知稅別時為 `MIXED`。有一列沒有已知稅別時為 `nil` |
+| `items` | `detailList[]`：`productName`、`qty`、`price`、`total`、`taxType`。沒有數字時為 `nil`。數字不是小數格式時：`ProviderError` |
+| `tax_type` | 品項的 `taxType`。有兩種不同的已知稅別時為 `MIXED`，即使另有一列沒有已知稅別也一樣。其他情況下，有一列沒有已知稅別時為 `nil` |
 | `tax_rate` | 有 `TAXABLE` 的列時為 `0.05`，否則為 `0`，`MIXED` 也一樣。有一列沒有已知稅別時為 `nil`。DEFAULTAPI 沒有稅率欄位，應稅品項只能是一般稅率（6.1） |
 | `reference` | 用上面的欄位組成 |
 
@@ -334,7 +334,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 - **課稅別是英文字母。** `T`、`Z`、`O` 代表 MIG 的 `1`、`2`、`3`（推論）。沒有對應 MIG `4` 或 `9` 的字母（6.1）。
 - **載具類別就是 MIG 的代碼**（6.2）。
 - **type `G` 的 `checkNumber`。** MIG 4.0 已經從 F0401 拿掉 `CheckNumber` `[mig]`。我們不知道關貿現在怎麼處理它。
-- **沒有零稅率的細節欄位。** `issueData` 沒有 `CustomsClearanceMark` 和 `ZeroTaxRateReason`，但 F0401 的零稅率發票要求這兩個欄位 `[mig 表 15-3]`。關貿一定要自己補上，否則零稅率發票無法透過這個 API 開立。
+- **沒有零稅率的細節欄位。** `issueData` 沒有 `CustomsClearanceMark` 和 `ZeroTaxRateReason`，但 F0401 的零稅率發票要求這兩個欄位 `[mig 表 15-3]`。adapter 不送 `customs_clearance_mark` 和 `zero_tax_rate_reason`。關貿一定要自己補上，否則零稅率發票無法透過這個 API 開立。
 - **沒有作廢原因。** `voidData` 沒有原因欄位。MIG F0501 要求 `CancelReason`，所以關貿一定是自己補上（推論）。
 - **沒有作廢日期。** `voidData` 沒有發票日期。關貿是從 `saleIdentifier` 和 `invoiceNumber` 找出日期（推論）。
 - **折讓的每個品項都帶發票日期**，和 MIG G0401 一樣。
@@ -344,6 +344,7 @@ unified 的規則見 [unified model](../README.zh-TW.md#unified-model)。
 - **沒有 live 測試。** 我們沒有帳號，也不知道主機。
 - **只能用 fake。** `spec/support/fake_tradevan.rb` 依照 1.x 的程式碼和 `[readme]` 的範例寫成。它的兩把金鑰用不同的值，所以 `key1` 和 `key2` 用反了會被發現。它會拒絕 schema 以外的欄位，和 `[prod]` 的回報一致。但它的失敗訊息是我們猜的（6.4），所以 contract 通過只能證明「猜的訊息被一致地分類了」。fake 不能使用 adapter 自己的規則檢查，否則規則寫錯時兩邊都會通過。
 - **Reference。** contract 把 `issue` 回傳的 reference 傳給後面的步驟。reference 有 `order_id` 和 `invoice_datetime`，所以作廢和折讓都能運作。
+- **欄位規則。** 呼叫前，adapter 會依 DEFAULTAPI 的欄位規則檢查 `issueData` 和 `voidData` `[rules]`。所有問題都是超過關貿自己的長度限制時，丟 `UnsupportedError`。這些限制是訂單編號和折讓編號、`productName`（300，MIG 允許 500）、`receiverEmail`（80，MIG 400）、`receiverMobile`（15，MIG 26）和 `carrierId`（64，MIG 400）。其他問題都丟 `ValidationError`。
 - **不存在的折讓單號。** adapter 在呼叫前會檢查折讓單號是否為 16 字元。所以 contract 收到 16 字元的 `unknown_allowance_number`（`ABCDE20260101999`）。
 - **加密。** `crypto_spec.rb` 把密文和 1.x 程式碼的輸出逐 byte 比對。關貿沒有公開測試向量。
 - **查詢狀態。** contract 會檢查作廢後的狀態，並接受 `nil`，所以狀態代碼的意思還不知道，也能通過。

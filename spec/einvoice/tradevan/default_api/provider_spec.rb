@@ -11,7 +11,9 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
   # 16 characters (docs, section 4.8).
   it_behaves_like "an invoice provider",
                   unknown_reference: { number: "ZZ00000000" },
-                  unknown_allowance_number: "ABCDE20260101999"
+                  unknown_allowance_number: "ABCDE20260101999",
+                  # An order id of 51 characters: Tradevan's limit, not the MIG's.
+                  unsupported_issue: { order_id: "O" * 51 }
 
   let(:issue_input) do
     {
@@ -90,11 +92,25 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
       }
     end
 
-    # Ported from the 1.x provider spec: invalid data never reaches the network.
-    it "raises ValidationError without a request when the data breaks the field rules" do
+    # Ported from the 1.x provider spec: data that breaks the field rules never
+    # reaches the network. A limit of Tradevan's own is unsupported. A limit
+    # that the MIG sets too is checked by the core first, as invalid input.
+    it "raises without a request when the data breaks the field rules" do
       expect { provider.issue(issue_input.merge(order_id: "x" * 51)) }
-        .to raise_error(Einvoice::ValidationError, /transactionNumber/)
+        .to raise_error(Einvoice::UnsupportedError, /transactionNumber/)
+      expect { provider.issue(issue_input.merge(buyer: { email: "#{'x' * 80}@x.com" })) }
+        .to raise_error(Einvoice::UnsupportedError, /receiverEmail/)
+      expect { provider.issue(issue_input.merge(buyer: { email: "b@x.com", address: "x" * 101 })) }
+        .to raise_error(Einvoice::ValidationError, /buyer_address/)
       expect(tradevan.requests).to be_empty
+    end
+
+    # A wrong orgId comes from the merchant's settings, not a limit of
+    # Tradevan's own, so the whole error is a ValidationError.
+    it "raises ValidationError when another field rule fails too" do
+      wrong = described_class.new(**FakeTradevan::CREDENTIALS.merge(org_id: "ABCDEF"))
+      expect { wrong.issue(issue_input.merge(order_id: "x" * 51)) }
+        .to raise_error(Einvoice::ValidationError, /orgId.*transactionNumber/)
     end
 
     it "lets validate_payload: false send the data as it is" do
@@ -357,6 +373,26 @@ RSpec.describe Einvoice::Tradevan::DefaultAPI::Provider do
         search_reply("detailList" => list)
         expect { provider.query({ invoice: "GX38551078" }) }.to raise_error(Einvoice::ProviderError, /detailList/)
       end
+    end
+
+    it "raises ProviderError for a detailList number that is not a decimal, and reads a missing one as nil" do
+      line = { "productName" => "A", "qty" => "1", "price" => "1", "total" => "1", "taxType" => "T" }
+      %w[unavailable 5abc].each do |bad|
+        search_reply("detailList" => [line.merge("qty" => bad)])
+        expect { provider.query({ invoice: "GX38551078" }) }.to raise_error(Einvoice::ProviderError, /qty/)
+      end
+
+      search_reply("detailList" => [line.merge("qty" => " 2 ")])
+      expect(provider.query({ invoice: "GX38551078" }).items.first.quantity).to eq(2)
+
+      search_reply("detailList" => [line.merge("qty" => "0", "price" => "0.5", "total" => "")])
+      expect(provider.query({ invoice: "GX38551078" }).items.first)
+        .to have_attributes(quantity: 0, unit_price: 0.5, amount: nil)
+    end
+
+    it "raises ProviderError for a header total that is not a decimal" do
+      search_reply("total" => "5abc")
+      expect { provider.query({ invoice: "GX38551078" }) }.to raise_error(Einvoice::ProviderError, /total/)
     end
 
     it "reads the rate of a mixed invoice without a taxable line as 0" do

@@ -73,7 +73,7 @@ core 依品項算出稅額，也就是 input 的 `#tax_breakdown`。只有 core 
 - 合計有 `sales_amount`（未稅）、`taxable_amount`、`zero_rated_amount`、`tax_free_amount`、`tax_amount` 和 `total_amount`。稅額是 `round(應稅銷售額 × tax_rate)`。
 - 零稅率和免稅的品項稅額為 `0`。
 
-呼叫端給的 `AmountSummary` 拿來和明細核對，不會用來指示 core 怎麼算，core 也不會改動呼叫端的品項。發票照 F0401：買方是消費者時，`sales_amount` 含稅，`tax_amount` 為 `0`；買方是營業人時，`tax_amount` 必須等於明細的稅額。折讓照 G0401：`sales_amount` 不含稅，`tax_amount` 是明細的稅額。
+呼叫端的 `AmountSummary` 是選填。沒給時，core 依下面的規則從明細填入。有給時，拿來和明細核對，不會用來指示 core 怎麼算，core 也不會改動呼叫端的品項。發票照 F0401：買方是消費者時，`sales_amount` 含稅，`tax_amount` 為 `0`；買方是營業人時，`tax_amount` 必須等於明細的稅額。折讓照 G0401：`sales_amount` 不含稅，`tax_amount` 是明細的稅額。
 
 **稅率。** `tax_rate` 是小數，例如 `0.05`。core 只接受 MIG 的稅率：`0`、`0.01`、`0.02`、`0.05`、`0.15`、`0.25` `[mig 表 4-18]`。開立時的預設值由品項決定，不看表頭：有應稅品項時是 `0.05`，否則是 `0`。特種稅額品項沒有預設值。應稅品項的稅率不能是 `0`。加值中心無法送出某個稅率時，adapter 丟出 `UnsupportedError`。
 
@@ -86,7 +86,7 @@ core 依品項算出稅額，也就是 input 的 `#tax_breakdown`。只有 core 
 - 作廢原因是 1 到 20 個字元。作廢折讓的原因可以不給，沒給時 core 補上 `作廢折讓`。
 - 捐贈和載具可以同時給，MIG 允許這樣做。
 
-**狀態。** 加值中心的狀態無法對應到 `InvoiceStatus` 時，`QueryInvoiceResult#status` 為 `nil`。
+**狀態。** 加值中心的狀態無法對應到 `InvoiceStatus` 時，`QueryInvoiceResult#status` 為 `nil`。`Provider#query_statuses` 列出 adapter 會回傳的狀態，預設是全部。加值中心分辨不出某些狀態時，adapter 會列得比較少，發票在其他狀態時回傳 `nil`。共用 contract 會依這份清單檢查每個 adapter：列出的狀態一定要回傳，沒列出的一定是 `nil`。
 
 **錯誤。** 每一種失敗都是 `Einvoice::Error`，不會是 Ruby 原生的錯誤。錯誤類別分成兩組：
 
@@ -95,18 +95,21 @@ core 依品項算出稅額，也就是 input 的 `#tax_breakdown`。只有 core 
 | 發票 | `ValidationError`、`NotFoundError`、`ConflictError`、`NumberExhaustedError` | 請求違反財政部的規則，或發票不在需要的狀態。在每一家加值中心的意思都相同 |
 | 加值中心 | `AuthError`、`NetworkError`、`ProviderError`、`UnsupportedError` | 帳號、連線、加值中心自己的服務，或它不支援的功能 |
 
+- core 會檢查所有加值中心都適用的 MIG 規則，例如欄位長度，所以每一家的結果都相同。adapter 只檢查自己加值中心的規則。
+- MIG 允許、但這家加值中心不接受的輸入，丟 `UnsupportedError`。例如欄位超過加值中心自己的長度限制，或品項單價必須是整數。換一家加值中心可能就能接受。`ValidationError` 表示輸入違反 MIG 的規則，或缺少這次呼叫需要的資料，所以任何一家都不會照原樣接受。
 - adapter 為了補上缺少的欄位而自己發出的查詢，屬於加值中心這一組。查詢失敗時，adapter 丟出帶有 `Reason::LOOKUP_FAILED` 的 `ProviderError`。錯誤訊息會指出它需要哪個欄位，`cause` 是查詢本身的錯誤。所以 `NotFoundError` 一定是指這次呼叫的那張發票。
 - 遇到我們不認得的錯誤代碼時，每家加值中心有自己的預設類別。第 6.4 節寫明預設類別和依據。
-- body 不是加值中心的回應時，HTTP 5xx 和 429 是 `NetworkError`，呼叫端可以重試。adapter 讀得懂的 body，不管 HTTP 狀態是什麼，都依 body 決定錯誤。例如 ECPay 金鑰錯誤時，回的是 HTTP 500 加上正常的 envelope。
+- body 不是加值中心的回應時，HTTP 5xx 和 429 是 `NetworkError`，呼叫端可以重試。adapter 讀得懂的 body，不管 HTTP 狀態是什麼，都依 body 決定錯誤。例如 ECPay 金鑰錯誤時，回的是 HTTP 500 加上正常的 envelope。header 已經收到、但 body 沒有收到時，`NetworkError` 會保留 HTTP 狀態，所以 HTTP 429 仍然是 `RATE_LIMITED`。
 - client 只 rescue 連線錯誤。adapter 自己的 bug 不是 `NetworkError`。
 - `Reason::RETRY_LATER` 表示加值中心說「現在不行，晚一點再試」，例如發票上傳前就作廢。
+- 請求時間被拒絕時，每家都是 `AuthError`，reason 是 `Reason::STALE_TIMESTAMP`。原因是呼叫端伺服器的時鐘不準。provider 會連同時間一起驗證請求，所以時鐘修好之前，重試也會得到同樣的錯誤。
 
 **Capability。**
 
 - `QUERY_BY_ORDER_ID` 表示加值中心可以只靠呼叫端知道的資料找到發票，不需要發票號碼。呼叫端傳一個帶有 `order_id` 的 `InvoiceReference`；加值中心需要時，再加上 `total_amount`。
 - `CARRIER_VALIDATION` 表示 adapter 實作了 `Provider#validate_carrier`。
 
-**連線。** `base_url` 一定要用 https，只有 localhost 可以用 http。也不能帶帳號或密碼，因為 `inspect` 會顯示它。
+**連線。** `base_url` 一定要用 https，只有 localhost 可以用 http。也不能帶帳號或密碼，因為 `inspect` 會顯示它。也不能帶查詢字串或 fragment，因為 client 會在後面接上路徑。`spec/support/shared_examples/provider_client.rb` 會對每個 client 檢查這些規則，以及上面的錯誤規則。
 
 ## 來源與可信度
 

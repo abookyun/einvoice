@@ -161,7 +161,7 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 
 | Unified | Endpoint | Reference 欄位 | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `invoice_issue`，`Status` `1` | | `customs_clearance` |
+| `issue` | `invoice_issue`，`Status` `1` | | |
 | `void` | `invoice_invalid` | `number` | |
 | `allowance` | `allowance_issue`，`Status` `1` | `number`、`order_id`、`buyer_ubn` | `tax_type_for_mixed`、`buyer_email` |
 | `void_allowance` | `allowanceInvalid` | `allowance_number` | |
@@ -179,14 +179,14 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 | --- | --- | --- |
 | `order_id` | `MerchantOrderNo` | 最多 **20**，英文字母、數字和 `_`。其他加值中心允許更長的編號 |
 | `category`（或買方的統一編號） | `Category` | `B2B` / `B2C` |
-| `buyer.name` | `BuyerName` | 必填。B2C 沒有名稱時為 `消費者`。B2B 為公司名稱，最多 60 |
+| `buyer.name` | `BuyerName` | 必填。B2C 沒有名稱時為 `消費者`。B2B 沒有名稱時為統一編號。名稱超過 MIG 上限 60 時，core 會拒絕 |
 | `buyer.ubn` | `BuyerUBN` | 只有 B2B 才送 |
 | `buyer.address` | `BuyerAddress` | |
 | `buyer.email` | `BuyerEmail` | 最多 50。使用 ezPay 會員載具時必填 |
 | `buyer.phone` | （無） | 開立時沒有這個欄位，不送出 |
-| `carrier.type` | `CarrierType` | `MOBILE_BARCODE` 為 `0`、`CITIZEN_CERTIFICATE` 為 `1`、`MEMBER` 為 `2`。只限 B2C：B2B 發票帶載具會丟出 `ValidationError` |
+| `carrier.type` | `CarrierType` | `MOBILE_BARCODE` 為 `0`、`CITIZEN_CERTIFICATE` 為 `1`、`MEMBER` 為 `2`。只限 B2C：B2B 發票帶載具會丟出 `UnsupportedError` |
 | `carrier.code` | `CarrierNum` | 先做 `rawurlencode`（2.2）。`MEMBER` 沒有 code 時，用買方的 email |
-| `donation.npoban` | `LoveCode` | 只限 B2C。ezPay 不接受和載具同時送出 `[inv 四]`，所以兩者同時給會丟出 `ValidationError` |
+| `donation.npoban` | `LoveCode` | 只限 B2C：B2B 發票捐贈會丟出 `UnsupportedError`。ezPay 不接受和載具同時送出 `[inv 四]`，所以兩者同時給也會丟出 `UnsupportedError` |
 | （推導） | `PrintFlag` | B2B 為 `Y`；B2C 沒有載具也沒有捐贈時為 `Y`。其他為 `N` |
 | `tax_type`、`items[].tax_type` | `TaxType` | 品項不一致時為 `9`。混合稅率只限 B2C：B2B 有混合品項時丟出 `UnsupportedError`。`SPECIAL`：`UnsupportedError`（6.1） |
 | `tax_rate` | `TaxRate` | 百分比：`tax_rate × 100`，也就是 `5` 或 `0`。其他稅率：`UnsupportedError` |
@@ -201,10 +201,10 @@ RespondType=JSON&Version=1.5&TimeStamp=1729000000&MerchantOrderNo=ORDER_1&Status
 
 | Unified | ezPay | 規則 |
 | --- | --- | --- |
-| `description` | `ItemName` | 最多 **30**，超過就丟出 `ValidationError`。文字中有 `\|`：`ValidationError` |
-| `quantity` | `ItemCount` | **整數**。有小數：`ValidationError` |
+| `description` | `ItemName` | 最多 **30**，超過就丟出 `UnsupportedError`。文字中有 `\|`：`UnsupportedError` |
+| `quantity` | `ItemCount` | **整數**。有小數：`UnsupportedError` |
 | `unit` | `ItemUnit` | 必填。最多中文 2 字或英數 6 字。沒有時為 `個` |
-| `unit_price` | `ItemPrice` | **整數**：`ItemAmt / ItemCount`。不是整數時：`ValidationError` |
+| `unit_price` | `ItemPrice` | **整數**：`ItemAmt / ItemCount`。不是整數時：`UnsupportedError` |
 | `amount` | `ItemAmt` | 整數。core 明細中該列的金額：B2B 未稅，B2C 含稅 |
 | `tax_type` | `ItemTaxType` | 只用在混合稅率 |
 | `remark` | （無） | 沒有這個欄位，不送出 |
@@ -315,7 +315,7 @@ adapter 依原發票的買方，從 `invoice.buyer_ubn` 決定用哪一種：
 - **消費者**（`buyer_ubn` 為 `nil`）：含稅價格。`ItemAmt` 是 core 明細中每一列的 `gross_amount`，`ItemTaxAmt` 為 `0`。「買方不能扣抵」這條規則不影響，因為消費者本來就不扣抵營業稅。含稅價格也比較容易整除：2 件、每件 50 元，仍然是每件 50。
 - **營業人**：未稅價格（G0401）。`ItemAmt` 是每一列的 `net_amount`，`ItemTaxAmt` 是它的 `tax`。
 
-兩種情況的 `TotalAmt` 都是 `amount.total_amount`。`ItemPrice` 是 `ItemAmt / ItemCount`。ezPay 要求 `ItemAmt = ItemCount × ItemPrice` 完全相等，而且是整數，所以除不盡時，adapter 丟出 `ValidationError`。未稅時可能發生這種情況，例如 2 件共 95 元（見第 7 節）。
+兩種情況的 `TotalAmt` 都是 `amount.total_amount`。`ItemPrice` 是 `ItemAmt / ItemCount`。ezPay 要求 `ItemAmt = ItemCount × ItemPrice` 完全相等，而且是整數，所以除不盡時，adapter 丟出 `UnsupportedError`。未稅時可能發生這種情況，例如 2 件共 95 元（見第 7 節）。
 
 **整數。** 品項數量和價格都是整數。unified model 允許小數，所以要在呼叫前檢查。
 
@@ -365,7 +365,7 @@ adapter 依原發票的買方，從 `invoice.buyer_ubn` 決定用哪一種：
 - **混合稅率發票的折讓要拆開。** 一張折讓只能對應一種課稅別（`TaxTypeForMixed`）。混合稅率的發票，每種課稅別都要開一張折讓 `[inv 六]`。
 - **折讓價格可以含稅。** MIG G0401 要求未稅金額，以及每個品項的稅額。買方是消費者時，adapter 送出含稅價格，拆稅交給 ezPay。
 - **折讓單號比 MIG 長。** ezPay 回傳的 `AllowanceNo` 最多 20 字元（`allowanceInvalid` 最多 25）。MIG 的 `AllowanceNumber` 最多 16。手冊的範例是 16 字元（`A151015111705007`）。
-- **沒有零稅率原因。** 手冊最後一次更新早於 MIG 4.0，沒有 `ZeroTaxRateReason` 欄位。
+- **沒有零稅率原因。** 手冊最後一次更新早於 MIG 4.0，沒有 `ZeroTaxRateReason` 欄位。adapter 把 `customs_clearance_mark` 送成 `CustomsClearance`，不送 `zero_tax_rate_reason`。
 
 ### 4.8 Contract 與 live 測試
 
@@ -545,7 +545,7 @@ ezPay 的代碼是它自己定義的，不是 MIG 的代碼，也和 ECPay 的�
 | `KEY10002` | 資料解密失敗 | `AuthError` | `CREDENTIALS_INVALID` |
 | `KEY10004` | 資料不齊全 | `ValidationError` | |
 | `KEY10006` | 商店未申請電子發票 | `AuthError` | `NOT_ENROLLED` |
-| `KEY10007` | 頁面停留超過 30 分鐘 | `ValidationError` | `STALE_TIMESTAMP` |
+| `KEY10007` | 頁面停留超過 30 分鐘 | `AuthError` | `STALE_TIMESTAMP` |
 | `KEY10010`、`KEY10011`、`KEY10013` | 商店代號、`PostData_` 或資料空白 | `ValidationError` | |
 | `KEY10012` | 資料傳遞錯誤 | `ProviderError` | |
 | `KEY10014` | 逾時 | `NetworkError` | |

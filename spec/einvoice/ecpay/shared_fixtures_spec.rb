@@ -48,6 +48,9 @@ RSpec.describe "ECPay against the shared fixtures" do
     case operation
     when "issue"
       input["amount"] = split_tax(input["amount"]) if input.dig("buyer", "ubn")
+      # The clearance mark is a unified field in Ruby, not a provider option.
+      mark = options.delete("clearance_mark")
+      input["customs_clearance_mark"] = mark if mark
       input.merge("provider_options" => options)
     when "void"
       { "invoice" => invoice_reference(input, options), "reason" => input["reason"], "provider_options" => options }

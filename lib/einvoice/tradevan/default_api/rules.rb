@@ -19,6 +19,9 @@ module Einvoice
       # Each check returns a Hash of field name => messages. An empty Hash means
       # the data is valid.
       module Rules
+        # A whole decimal string. String#to_r would read "100oops" as 100.
+        DECIMAL = /\A-?\d+(\.\d+)?\z/
+
         ISSUE_TYPES = %w[I R G H A].freeze
         VOID_TYPES = %w[C I A].freeze
         YES_NO = %w[Y N].freeze
@@ -41,6 +44,18 @@ module Einvoice
           saleIdentifier serialNumber invoiceNumber invoiceDate invoiceTime productCode
           productName qty price tax itemExclude itemTotal taxType description
         ].freeze
+
+        # Fields that carry the caller's input, with a DEFAULTAPI length limit of
+        # Tradevan's own: stricter than the MIG's (productName 300 against 500,
+        # receiverEmail 80 against 400, receiverMobile 15 against 26, carrierId
+        # 64 against 400), or with no MIG field (the order and allowance ids).
+        # The core refuses a value over the MIG's limit first, so a value here
+        # is over Tradevan's limit only.
+        OWN_LIMITS = %w[
+          transactionNumber saleIdentifier allowanceIdentifier productName
+          receiverEmail receiverMobile carrierId carrierIdHidden
+        ].freeze
+        TOO_LONG = /\Amust be \d+ characters or fewer\z/
 
         VOID_FIELDS = %w[
           type saleIdentifier invoiceNumber invoicePaperReturned allowanceNumber
@@ -103,13 +118,24 @@ module Einvoice
           check.errors
         end
 
-        # Raise {ValidationError} listing every problem, or return +nil+.
+        # Raise an error listing every problem, or return +nil+. When every
+        # problem is a length over one of Tradevan's own limits, the MIG allows
+        # the input, so it is an UnsupportedError (docs/providers/README.md,
+        # "The unified model"). Anything else is a ValidationError.
         def validate!(errors, what)
           return if errors.empty?
 
           details = errors.flat_map { |field, messages| messages.map { |m| "#{field} #{m}" } }
+          if errors.all? { |field, messages| own_limit?(field, messages) }
+            raise UnsupportedError.new("Tradevan DEFAULTAPI does not take this #{what} — #{details.join('; ')}",
+                                       provider: Client::PROVIDER, raw_message: details.join("; "))
+          end
           raise ValidationError.new("Invalid Tradevan #{what} — #{details.join('; ')}",
                                     provider: Client::PROVIDER, raw_message: details.join("; "))
+        end
+
+        def own_limit?(field, messages)
+          OWN_LIMITS.include?(field.sub(/\AitemList\[\d+\]\./, "")) && messages.all?(TOO_LONG)
         end
 
         def issue_common(check, data)
@@ -256,8 +282,6 @@ module Einvoice
           def optional(field, **rule)
             apply(field, **rule) unless Rules.blank?(@data[field])
           end
-
-          DECIMAL = /\A-?\d+(\.\d+)?\z/
 
           def total_matches_items
             items = Array(@data["itemList"]).map { |item| Rules.stringify(item) }

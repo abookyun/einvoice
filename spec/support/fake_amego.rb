@@ -15,7 +15,7 @@ require "digest"
 # up. The real API queues a void. This fake applies it at once.
 class FakeAmego
   BASE_URL = "https://amego.test"
-  CREDENTIALS = { ban: "12345678", app_key: "test-app-key", endpoint: BASE_URL }.freeze
+  CREDENTIALS = { ban: "12345678", app_key: "test-app-key", base_url: BASE_URL }.freeze
 
   attr_reader :requests
 

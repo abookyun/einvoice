@@ -40,9 +40,9 @@ module Einvoice
 
       attr_reader :capabilities, :client
 
-      def initialize(ban:, app_key:, endpoint: Client::ENDPOINT, timeout: 30, clock: -> { Time.now })
+      def initialize(ban:, app_key:, base_url: Client::BASE_URL, timeout: 30, clock: -> { Time.now })
         super()
-        @client = Client.new(ban: ban, app_key: app_key, endpoint: endpoint, timeout: timeout, clock: clock)
+        @client = Client.new(ban: ban, app_key: app_key, base_url: base_url, timeout: timeout, clock: clock)
         @clock = clock
         @capabilities = CAPABILITIES
       end

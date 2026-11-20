@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "einvoice"
 require "einvoice/tradevan/default_api/crypto"
 require "einvoice/tradevan/default_api/errors"
 require "einvoice/tradevan/default_api/client"

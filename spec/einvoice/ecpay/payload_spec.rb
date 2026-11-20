@@ -39,14 +39,33 @@ RSpec.describe Einvoice::ECPay::Payload do
       expect(payload).to include("Print" => "1")
     end
 
+    # Print can only clash with a carrier through a raw provider_options[:data].
+    it "refuses a carrier invoice that also prints, as invalid input" do
+      expect { build(provider_options: { data: { "Print" => "1" } }) }
+        .to raise_error(Einvoice::ValidationError, /Print must be 0 for a carrier invoice/)
+    end
+
+    # TaxType can only become 2 without a mark through provider_options[:data].
+    it "refuses a zero-rated payload without a clearance mark, as invalid input" do
+      expect { build(provider_options: { data: { "TaxType" => "2" } }) }
+        .to raise_error(Einvoice::ValidationError, /ClearanceMark is required for a zero-rated item/)
+    end
+
+    it "refuses a mixed payload with a zero-rated item whose mark was cleared" do
+      items = [{ description: "a", quantity: 1, unit_price: 50, amount: 50, tax_type: "TAXABLE" },
+               { description: "b", quantity: 1, unit_price: 50, amount: 50, tax_type: "ZERO_RATED" }]
+      expect { build(items: items, customs_clearance_mark: "1", provider_options: { data: { "ClearanceMark" => "" } }) }
+        .to raise_error(Einvoice::ValidationError, /ClearanceMark is required for a zero-rated item/)
+    end
+
     it "refuses to print without somewhere to send the paper" do
       expect { build(carrier: nil) }
-        .to raise_error(Einvoice::ValidationError, /CustomerName is required.*CustomerAddr is required/m)
+        .to raise_error(Einvoice::UnsupportedError, /CustomerName is required.*CustomerAddr is required/m)
     end
 
     it "refuses to print without a way to reach the buyer" do
       expect { build(carrier: nil, buyer: { name: "王小明", address: "台北市信義路一段1號" }) }
-        .to raise_error(Einvoice::ValidationError, /CustomerEmail or CustomerPhone is required/)
+        .to raise_error(Einvoice::UnsupportedError, /CustomerEmail or CustomerPhone is required/)
     end
 
     it "accepts a phone in place of an email on a printed invoice" do
@@ -91,23 +110,21 @@ RSpec.describe Einvoice::ECPay::Payload do
       expect(payload).to include("TaxType" => "1")
     end
 
-    it "requires a clearance mark for a zero-rated invoice" do
-      expect { build(tax_type: "ZERO_RATED") }
-        .to raise_error(Einvoice::ValidationError, /ClearanceMark is required/)
-    end
-
-    it "accepts a zero-rated invoice once the clearance mark is supplied" do
-      payload = build(tax_type: "ZERO_RATED", provider_options: { clearance_mark: "2" })
+    # The core asks for the mark. The reason may come from ECPay's back office.
+    it "sends the clearance mark of a zero-rated invoice, and the reason when given" do
+      payload = build(tax_type: "ZERO_RATED", customs_clearance_mark: "2")
       expect(payload).to include("TaxType" => "2", "ClearanceMark" => "2")
+      expect(payload).not_to have_key("ZeroTaxRateReason")
+
+      payload = build(tax_type: "ZERO_RATED", customs_clearance_mark: 1, zero_tax_rate_reason: 71)
+      expect(payload).to include("ClearanceMark" => "1", "ZeroTaxRateReason" => "71")
     end
 
-    it "requires a clearance mark when a zero-rated item is mixed in" do
-      expect do
-        build(items: [
-                { description: "a", quantity: 1, unit_price: 50, amount: 50, tax_type: "TAXABLE" },
-                { description: "b", quantity: 1, unit_price: 50, amount: 50, tax_type: "ZERO_RATED" }
-              ])
-      end.to raise_error(Einvoice::ValidationError, /ClearanceMark is required/)
+    it "sends the clearance mark when a zero-rated item is mixed in, and leaves it out otherwise" do
+      items = [{ description: "a", quantity: 1, unit_price: 50, amount: 50, tax_type: "TAXABLE" },
+               { description: "b", quantity: 1, unit_price: 50, amount: 50, tax_type: "ZERO_RATED" }]
+      expect(build(items: items, customs_clearance_mark: "1")).to include("TaxType" => "9", "ClearanceMark" => "1")
+      expect(build(customs_clearance_mark: "1")).not_to have_key("ClearanceMark")
     end
   end
 
@@ -160,7 +177,7 @@ RSpec.describe Einvoice::ECPay::Payload do
         build(carrier: nil, buyer: { ubn: "53538851", name: "測試公司" }, amount: b2b_amount,
               donation: { npoban: "168001" })
       end
-        .to raise_error(Einvoice::ValidationError, /non-printed B2B invoice must use a carrier/)
+        .to raise_error(Einvoice::UnsupportedError, /non-printed B2B invoice must use a carrier/)
     end
 
     it "maps each carrier type to its ECPay code" do
@@ -207,10 +224,11 @@ RSpec.describe Einvoice::ECPay::Payload do
 
     # ECPay allows ItemPrice × ItemCount to differ from ItemAmount by 1, for
     # the rounding of the line tax.
+    # The gap is ECPay's own rule, so a larger one is unsupported, not invalid.
     it "allows a difference of 1 between price × count and the amount" do
       expect { check(26.25, 2, 53) }.not_to raise_error
       expect { check(1000, 1, 1050) }
-        .to raise_error(Einvoice::ValidationError,
+        .to raise_error(Einvoice::UnsupportedError,
                         /ItemPrice × ItemCount \(1000\) must be within 1 of ItemAmount \(1050\)/)
     end
 
@@ -226,11 +244,6 @@ RSpec.describe Einvoice::ECPay::Payload do
   end
 
   describe "provider options" do
-    it "passes 零稅率 and 特種稅額 details through" do
-      payload = build(tax_type: "ZERO_RATED",
-                      provider_options: { clearance_mark: "1", zero_tax_rate_reason: "71" })
-      expect(payload).to include("ClearanceMark" => "1", "ZeroTaxRateReason" => "71")
-    end
 
     it "lets a raw data override reach fields the mapper does not model" do
       payload = build(provider_options: { data: { "ChannelPartner" => "1" } })
@@ -246,7 +259,7 @@ RSpec.describe Einvoice::ECPay::Payload do
 
     it "is capped at 50 characters" do
       expect { described_class.issue(parse.with(order_id: "X" * 51)) }
-        .to raise_error(Einvoice::ValidationError, /50 characters or fewer/)
+        .to raise_error(Einvoice::UnsupportedError, /50 characters or fewer/)
     end
   end
 

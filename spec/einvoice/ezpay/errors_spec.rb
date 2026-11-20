@@ -4,7 +4,7 @@ RSpec.describe Einvoice::EzPay::Errors do
   describe ".classify" do
     {
       "KEY10002" => [:auth, Einvoice::Reason::CREDENTIALS_INVALID],
-      "KEY10007" => [:validation, Einvoice::Reason::STALE_TIMESTAMP],
+      "KEY10007" => [:auth, Einvoice::Reason::STALE_TIMESTAMP],
       "KEY10014" => [:network, nil],
       "INV20006" => [:not_found, nil],
       "INV90005" => [:auth, Einvoice::Reason::CONTRACT_EXPIRED],

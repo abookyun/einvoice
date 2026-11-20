@@ -171,7 +171,7 @@ Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部
 
 | Unified | Endpoint | Reference 欄位 | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `f0401` | | `track_api_code`、`customs_clearance_mark`、`zero_tax_rate_reason`、`brand_name`、`detail_amount_round`、`tax_adjustment` |
+| `issue` | `f0401` | | `track_api_code`、`brand_name`、`detail_amount_round`、`tax_adjustment` |
 | `void` | `f0501` | `number` | |
 | `allowance` | `g0401` | `number`、`invoice_datetime`、`buyer_ubn` | `buyer_name` |
 | `void_allowance` | `g0501` | `allowance_number` | |
@@ -198,10 +198,10 @@ Amego 對實際送出的字串計算簽章。JSON 的排版也是輸入的一部
 | `remark` | `MainRemark` | 最多 200 |
 | `tax_type`、`items[].tax_type` | `TaxType` | 品項的課稅別不同時為 `9`，否則為對應代碼（6.1）。`SPECIAL`：`UnsupportedError` |
 | `tax_rate` | `TaxRate` | 小數字串，例如 `0.05`。只接受 `0` 和 `0.05`，其他稅率：`UnsupportedError`。沒有應稅品項時，core 給 `0`。Amego 在免稅發票上接受了 `0` `[live]` |
-| `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` 為 `0`，否則為 `1`。`0` 只能用在 B2B：B2C 用 `TAX_EXCLUSIVE` 會丟出 `ValidationError` |
+| `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` 為 `0`，否則為 `1`。`0` 只能用在 B2B：B2C 用 `TAX_EXCLUSIVE` 會丟出 `UnsupportedError` |
 | `amount` | `SalesAmount`、`FreeTaxSalesAmount`、`ZeroTaxSalesAmount`、`TaxAmount`、`TotalAmount` | 從品項計算。見 4.3 |
-| `provider_options[:customs_clearance_mark]` | `CustomsClearanceMark` | `1` 或 `2`。有零稅率品項時必填 |
-| `provider_options[:zero_tax_rate_reason]` | `ZeroTaxRateReason` | `71` 到 `79`。有零稅率品項時必填 |
+| `customs_clearance_mark` | `CustomsClearanceMark` | `1` 或 `2`。有零稅率品項時送出。這時 core 會要求必填 |
+| `zero_tax_rate_reason` | `ZeroTaxRateReason` | `71` 到 `79`。有零稅率品項時送出。這時 adapter 會要求必填：`ValidationError` |
 | `items[]` | `ProductItem` | `description` → `Description`（最多 256）、`quantity` → `Quantity`、`unit` → `Unit`、`unit_price` → `UnitPrice`、`amount` → `Amount`、`remark` → `Remark`、`tax_type` → `TaxType`（品項的課稅別，沒有時用發票的） |
 | `currency` | （無） | 不是新台幣時丟出 `UnsupportedError`（見第 7 節） |
 | `category` | （無） | 和 core 一樣，用來判斷是否為 B2B |
@@ -547,7 +547,7 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 | `11`、`12` | `invoice`（統一編號）空白或錯誤 | `AuthError` | `CREDENTIALS_INVALID` |
 | `13` | 狀態未啟用 | `AuthError` | `NOT_ENROLLED` |
 | `14` | IP 不允許 | `AuthError` | `IP_BLOCKED` |
-| `15` | `time` 超出範圍 | `ValidationError` | `STALE_TIMESTAMP` |
+| `15` | `time` 超出範圍 | `AuthError` | `STALE_TIMESTAMP` |
 | `16` | 簽章錯誤 | `AuthError` | `CREDENTIALS_INVALID` |
 | `17` | 資料空白 | `ValidationError` | |
 | `18` | 資料庫連線失敗 | `ProviderError` | |
@@ -610,7 +610,15 @@ MIG 的代碼：`1` 應稅、`2` 零稅率、`3` 免稅、`4` 特種稅率、`9`
 | `4050135` | 超過期限 | `ConflictError` | `PAST_DEADLINE` |
 | `4050141` | 等待佇列中的變更 | `ConflictError` | `RETRY_LATER` |
 
-`barcode` 的代碼：`9000111` 空白、`9000112` 格式錯誤、`9000113` 不存在。做載具檢查時，`9000113` 表示「未登記」，不是錯誤。未登記的手機條碼回傳了 `9000113` `[live]`。
+`barcode` 的代碼：
+
+| 代碼 | 意思 | Unified 錯誤 | `Reason` |
+| --- | --- | --- | --- |
+| `9000111` | 條碼空白 | `ValidationError` | |
+| `9000112` | 條碼格式錯誤 | `ValidationError` | |
+| `9000113` | 條碼不存在 | | |
+
+做載具檢查時，`9000113` 表示「未登記」，不是錯誤，所以沒有錯誤類別。未登記的手機條碼回傳了 `9000113` `[live]`。
 
 ## 7. 待解問題
 

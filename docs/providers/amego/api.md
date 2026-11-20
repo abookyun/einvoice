@@ -169,7 +169,7 @@ A track is set to one mode in the back office (發票作業 > 發票字軌列表
 
 | Unified | Endpoint | Reference fields | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `f0401` | | `track_api_code`, `customs_clearance_mark`, `zero_tax_rate_reason`, `brand_name`, `detail_amount_round`, `tax_adjustment` |
+| `issue` | `f0401` | | `track_api_code`, `brand_name`, `detail_amount_round`, `tax_adjustment` |
 | `void` | `f0501` | `number` | |
 | `allowance` | `g0401` | `number`, `invoice_datetime`, `buyer_ubn` | `buyer_name` |
 | `void_allowance` | `g0501` | `allowance_number` | |
@@ -196,10 +196,10 @@ Each call sends one entry, also to the array endpoints (2.3).
 | `remark` | `MainRemark` | Max 200 |
 | `tax_type`, `items[].tax_type` | `TaxType` | `9` when items have different tax types, else the code (6.1). `SPECIAL`: `UnsupportedError` |
 | `tax_rate` | `TaxRate` | As a decimal string, for example `0.05`. Only `0` and `0.05`. Any other rate: `UnsupportedError`. The core gives `0` when no item is taxed. Amego accepted `0` on a tax-free invoice `[live]` |
-| `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` `0`, else `1`. `0` only for B2B: B2C with `TAX_EXCLUSIVE` is a `ValidationError` |
+| `price_mode` | `DetailVat` | `TAX_EXCLUSIVE` `0`, else `1`. `0` only for B2B: B2C with `TAX_EXCLUSIVE` is an `UnsupportedError` |
 | `amount` | `SalesAmount`, `FreeTaxSalesAmount`, `ZeroTaxSalesAmount`, `TaxAmount`, `TotalAmount` | Computed from the items. See 4.3 |
-| `provider_options[:customs_clearance_mark]` | `CustomsClearanceMark` | `1` or `2`. Required when a zero rated item is present |
-| `provider_options[:zero_tax_rate_reason]` | `ZeroTaxRateReason` | `71` to `79`. Required when a zero rated item is present |
+| `customs_clearance_mark` | `CustomsClearanceMark` | `1` or `2`. Sent when a zero rated item is present. The core requires it then |
+| `zero_tax_rate_reason` | `ZeroTaxRateReason` | `71` to `79`. Sent when a zero rated item is present. The adapter requires it then: `ValidationError` |
 | `items[]` | `ProductItem` | `description` → `Description` (max 256), `quantity` → `Quantity`, `unit` → `Unit`, `unit_price` → `UnitPrice`, `amount` → `Amount`, `remark` → `Remark`, `tax_type` → `TaxType` (the item's, else the invoice's) |
 | `currency` | (none) | Not TWD: `UnsupportedError` (see 7) |
 | `category` | (none) | Decides B2B, as in the core |
@@ -545,7 +545,7 @@ Common codes:
 | `11`, `12` | `invoice` (統一編號) empty or wrong | `AuthError` | `CREDENTIALS_INVALID` |
 | `13` | Status not active | `AuthError` | `NOT_ENROLLED` |
 | `14` | IP not allowed | `AuthError` | `IP_BLOCKED` |
-| `15` | `time` out of range | `ValidationError` | `STALE_TIMESTAMP` |
+| `15` | `time` out of range | `AuthError` | `STALE_TIMESTAMP` |
 | `16` | Signature wrong | `AuthError` | `CREDENTIALS_INVALID` |
 | `17` | Data empty | `ValidationError` | |
 | `18` | Database connection failed | `ProviderError` | |
@@ -608,7 +608,15 @@ Common codes:
 | `4050135` | Past the time limit | `ConflictError` | `PAST_DEADLINE` |
 | `4050141` | Waiting for a queued change | `ConflictError` | `RETRY_LATER` |
 
-`barcode` codes: `9000111` empty, `9000112` wrong format, `9000113` does not exist. For a carrier check, `9000113` means "not registered", not an error. A barcode that is not registered gave `9000113` `[live]`.
+`barcode` codes:
+
+| Code | Meaning | Unified error | `Reason` |
+| --- | --- | --- | --- |
+| `9000111` | Barcode empty | `ValidationError` | |
+| `9000112` | Barcode format wrong | `ValidationError` | |
+| `9000113` | Barcode does not exist | | |
+
+For a carrier check, `9000113` means "not registered", not an error, so it has no class. A barcode that is not registered gave `9000113` `[live]`.
 
 ## 7. Open questions
 

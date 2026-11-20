@@ -6,13 +6,13 @@
 
 [![Build Status](https://github.com/abookyun/einvoice/actions/workflows/build.yml/badge.svg)](https://github.com/abookyun/einvoice/actions/workflows/build.yml) [![codecov](https://codecov.io/github/abookyun/einvoice/graph/badge.svg?token=yxJNmXiUyp)](https://codecov.io/github/abookyun/einvoice)
 
-不綁定特定加值中心的**台灣電子發票 SDK**（財政部 MIG 4.0）。核心只定義一次五個操作：開立（issue）、作廢（void）、折讓（allowance）、折讓作廢（void-allowance）、查詢（query）。這些操作由一套 unified value model 和 `Einvoice::Provider` contract 表達。每一家加值中心是一個輕量的 adapter，負責在 unified model 和該家的傳輸格式之間轉換。所以更換加值中心只需要改一行 constructor，不會動到業務程式碼。
+不綁定特定加值中心的**台灣電子發票 SDK**（財政部 MIG 4.1）。核心只定義一次五個操作：開立（issue）、作廢（void）、折讓（allowance）、折讓作廢（void-allowance）、查詢（query）。這些操作由一套 unified value model 和 `Einvoice::Provider` contract 表達。每一家加值中心是一個輕量的 adapter，負責在 unified model 和該家的傳輸格式之間轉換。所以業務程式碼不會綁定在某一家加值中心。
 
 > **2.0 是全新改寫的版本，1.x 已經進入維護模式。** 1.x 是只支援關貿（Tradevan）一家的傳輸格式 client，API 也不一樣。如果你依賴 1.x，請鎖定 `~> 1.4`。1.x 會在 [`1-x-stable`](https://github.com/abookyun/einvoice/tree/1-x-stable) branch 繼續維護。2.0 的 unified model 和 1.x 不相容。
 
 ## 這是什麼
 
-台灣每一家加值中心包裝的都是財政部同一份 MIG 規格，差別只在傳輸格式：欄位名稱、簽章、封包結構。這個 SDK 只定義一次操作，每一家加值中心都只是輕量的 adapter。應用程式只依賴 `Einvoice::Provider` 和 unified 型別，所以從一家加值中心換到另一家，只要換 constructor。
+台灣每一家加值中心包裝的都是財政部同一份 MIG 規格，差別只在傳輸格式：欄位名稱、簽章、封包結構。這個 SDK 只定義一次操作，每一家加值中心都只是輕量的 adapter。應用程式只依賴 `Einvoice::Provider` 和 unified 型別，所以換到另一家加值中心，第一步是換 constructor。各家能做的事仍然不同。每個 adapter 會透過 capabilities、`query_statuses` 和 `UnsupportedError` 說明這些差異，所以你可以在換之前先檢查。
 
 ## 狀態
 
@@ -28,8 +28,17 @@
 
 ## 安裝
 
+2.0 還沒有發佈到 RubyGems，RubyGems 上只有 1.x。請從 GitHub 安裝 2.0：
+
 ```ruby
-gem "einvoice", ">= 2.0.0.alpha1"
+gem "einvoice", git: "https://github.com/abookyun/einvoice", branch: "2.0.0-alpha"
+```
+
+`require "einvoice"` 只會載入 core 和 `MockProvider`。請 require 你使用的加值中心，只有它會被載入：
+
+```ruby
+require "einvoice/ecpay"  # or einvoice/amego, einvoice/ezpay, einvoice/tradevan
+require "einvoice/mof"    # the 財政部 lookups, if you use them
 ```
 
 ## 使用方式
@@ -46,7 +55,6 @@ result = provider.issue(
   items: [
     { description: "咖啡拿鐵", quantity: 1, unit_price: 100, amount: 100 }
   ],
-  amount: { sales_amount: 100, tax_amount: 0, total_amount: 100 }, # integer TWD
   tax_type: "TAXABLE",
   price_mode: "TAX_INCLUSIVE",
   carrier: { type: "MEMBER" }
@@ -56,7 +64,8 @@ result.invoice_number   # => "MK10000000"
 result.status           # => :issued
 
 invoice = provider.query(invoice: result.reference)
-invoice.status          # => :issued
+invoice.status          # => :issued，加值中心分辨不出時為 nil
+provider.query_statuses # => [:issued, :voided, :allowance]
 
 provider.void(invoice: result.reference, reason: "客戶取消")
 ```
@@ -68,17 +77,19 @@ provider.void(invoice: result.reference, reason: "客戶取消")
 檢查的規則：
 
 - 買方的 `ubn` 是 8 位數字，也就是企業的統一編號。（MIG 表 4-7 允許 8 到 10 位的 BAN，9 位和 10 位的形式不用在買方。）B2B 發票一定要有統編；明確指定 `category` 時，必須和統編一致。
-- 總計是整數，而且不能是負數。品項的數量、單價、金額是數字，最多 7 位小數。
-- 手機條碼是 `/` 加 7 個字元。自然人憑證是 2 個英文字母加 14 個數字。這些格式來自加值中心的文件，MIG 只列出載具類別。
+- 總計是整數，而且不能是負數。品項的數量、單價、金額是數字，最多 7 位小數。發票的品項可以是負數，作為折扣列。折讓的品項不能是負數（MIG 4.1）。
+- 手機條碼是 `/` 加 7 個字元。自然人憑證是 2 個英文字母加 14 個數字。這些格式來自加值中心的文件，MIG 只列出載具類別。愛心碼是 3 到 7 位數字。
 - `tax_rate` 是小數，例如 `0.05`，而且必須是 MIG 規定的稅率。開立時的預設值由品項決定，不看表頭：有應稅品項時是 `0.05`，否則是 `0`。有特種稅額品項時一定要給。應稅品項的稅率不能是 `0`。
+- 零稅率發票必須給 `customs_clearance_mark`，值是 `"1"` 或 `"2"`，對應 MIG 的 CustomsClearanceMark。`zero_tax_rate_reason` 是 `"71"` 到 `"79"`，對應 MIG 的 ZeroTaxRateReason。MIG 也規定零稅率發票要有零稅率原因，但 ECPay 可以從後台設定取得，所以 core 不要求。Amego 會要求。
 - 金額必須和品項一致（見下一節）。
+- MIG 的欄位長度：`remark` 200、買方 `name` 60、`address` 100、`email` 400、`phone` 26、載具 `code` 400、品項 `description` 500、`unit` 6、`remark` 120。消費者的名稱不能是 `0` 到 `0000`，載具號碼的開頭和結尾不能有空白。provider 自己的上限比較短時，丟 `UnsupportedError`。
 - 作廢原因最多 20 個字。作廢折讓的原因沒給時，預設是 `作廢折讓`。
 
 ### 金額與稅額
 
 稅額由 core 依品項計算。`price_mode` 說明品項金額是否含稅，`tax_type` 是整張發票的稅別（品項可以有自己的），`tax_rate` 是稅率。計算結果是 `input.tax_breakdown`：每一列的未稅金額、稅額、含稅金額，以及 MIG 的各項合計。adapter 讀取它，不自己計算稅額。core 不會改動你的品項。
 
-你給的 `amount` 會拿來和它核對。發票照 F0401：買方是消費者時，稅額含在 `sales_amount` 裡，`tax_amount` 是 `0`。買方是營業人時，`tax_amount` 是 `round(應稅銷售額 × tax_rate)`：
+`amount` 是選填。沒給時，core 從計算結果填入。有給時，會拿來和計算結果核對，所以你自己算的合計不會和品項對不上。發票照 F0401：買方是消費者時，稅額含在 `sales_amount` 裡，`tax_amount` 是 `0`。買方是營業人時，`tax_amount` 是 `round(應稅銷售額 × tax_rate)`：
 
 ```ruby
 amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 }  # 含稅 100，開給營業人
@@ -115,10 +126,20 @@ rescue Einvoice::Error => e
 end
 ```
 
+錯誤類別說明下一步該怎麼做，每一家加值中心都一樣：
+
+- `ValidationError`：輸入違反 MIG 的規則，任何加值中心都不會接受。請修正輸入。
+- `UnsupportedError`：這家加值中心不接受這個輸入，或沒有這項功能。別家可能接受。
+- `NetworkError`：請求可能沒有送到加值中心。請重試。`issue` 逾時後，發票可能其實已經開立。請用同一個 `order_id` 重試：如果收到 `reason` 為 `:duplicate_order` 的 `ConflictError`，就代表發票已經存在。
+- `allowance` 逾時後，重試可能會折讓兩次，所以要先確認。Amego 會使用你的 `allowance_id`，收到重複的折讓時，會丟出 `reason` 為 `:duplicate_allowance` 的錯誤。ECPay 和 ezPay 由加值中心自己配發折讓單號，所以 adapter 找不到已經成功的那張折讓。重試前請先到加值中心的後台確認。關貿也會使用 `allowance_id`，但還沒有人確認過它會不會拒絕重複的折讓。
+- `void` 或 `void_allowance` 逾時後，可以安全重試，因為同一張不會被作廢兩次。收到 `reason` 為 `:already_voided` 的 `ConflictError`，就代表第一次已經成功。
+- 任何類別帶有 `reason: :rate_limited`：加值中心要求你放慢速度。請稍後重試。
+- `ConflictError` 帶有 `reason: :retry_later`：加值中心還在處理這張發票。請稍後再試。
+
 ### 帳號金鑰與買方資料
 
 - 結果物件的 `inspect`、`to_s` 和 `pp` 會把 `raw` 顯示成 `[FILTERED]`，因為 `raw` 是加值中心的回應，裡面有買方的資料。需要時，請直接讀 `#raw`。`Buyer` 的姓名、email、地址和電話也會顯示成 `[FILTERED]`，不論它在哪個輸入或結果裡；`ubn` 照常顯示。adapter 的 client 也會把金鑰顯示成 `[FILTERED]`。
-- `base_url` 必須使用 https。只有 localhost 可以用 http，方便測試。
+- `base_url` 必須使用 https。只有 localhost 可以用 http，方便測試。網址裡不能有帳號、密碼、查詢字串或 fragment。
 
 ### Capabilities
 
@@ -127,6 +148,7 @@ end
 ```ruby
 provider.supports?(Einvoice::Capability::FOREIGN_CURRENCY)  # => true / false
 provider.assert_supports!(Einvoice::Capability::B2B)        # raises UnsupportedError if absent
+provider.query_statuses                                     # => the statuses that query can return
 ```
 
 ## 加值中心
@@ -134,6 +156,8 @@ provider.assert_supports!(Einvoice::Capability::B2B)        # raises Unsupported
 ### ECPay 綠界
 
 ```ruby
+require "einvoice/ecpay"
+
 provider = Einvoice::ECPay::Provider.new(
   merchant_id: "2000132",
   hash_key: "...",          # 16 bytes, server-side only
@@ -164,6 +188,8 @@ provider = Einvoice::ECPay::Provider.new(**Einvoice::ECPay::SANDBOX)
 ### Amego 光貿
 
 ```ruby
+require "einvoice/amego"
+
 provider = Einvoice::Amego::Provider.new(
   ban: "12345678",          # the seller's 統一編號
   app_key: "..."            # from Amego support, server-side only
@@ -185,6 +211,8 @@ provider = Einvoice::Amego::Provider.new(
 ### ezPay 簡單行動支付（實驗性質）
 
 ```ruby
+require "einvoice/ezpay"
+
 provider = Einvoice::EzPay::Provider.new(
   merchant_id: "...",               # 商店代號
   hash_key: "...", hash_iv: "...",  # 32 and 16 bytes, server-side only
@@ -195,7 +223,7 @@ provider = Einvoice::EzPay::Provider.new(
 - **實驗性質。** ezPay 沒有共用的測試帳號，也沒有人對 ezPay 執行過這個 adapter。它的加密和 `CheckCode` 和 ezPay 手冊的範例逐 byte 吻合。請先用你自己的測試商店測試，再正式使用。
 - **查詢需要隨機碼。** `issue` 或 `query` 回傳的 reference 裡有隨機碼。
 - **折讓需要原發票的訂單編號。** reference 裡有訂單編號。沒有時，adapter 會先用發票號碼查詢。折讓單號由 ezPay 配發，所以不會送出 `allowance_id`。折讓日期是今天（Asia/Taipei）。
-- **查詢分不出有沒有折讓。** ezPay 只說明發票是否已作廢。未作廢的發票，查詢結果的狀態是 `nil`。
+- **查詢分不出有沒有折讓。** ezPay 只說明發票是否已作廢。未作廢的發票，查詢結果的狀態是 `nil`。`query_statuses` 是 `[:voided]`。
 - **作廢要等上傳之後。** ezPay 在隔天早上上傳前一天的發票，上傳前不能作廢。
 - **價格依發票類別決定。** ezPay 要求 B2C 價格含稅，B2B 價格未稅。adapter 從 core 的明細取得價格，所以任何 `price_mode` 都可以。品項數量和單價必須是整數。
 - **不支援**：訂單編號查詢、特種稅率、外幣、B2B 發票的混合稅率，以及載具驗證 API。`tax_rate` 只能是 0 或 0.05。
@@ -205,6 +233,8 @@ provider = Einvoice::EzPay::Provider.new(
 ### 關貿 Tradevan（DEFAULTAPI，實驗性質）
 
 ```ruby
+require "einvoice/tradevan"
+
 provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
   acnt: "...", acntp: "...",
   key1: "...", key2: "...",          # 16 bytes each, server-side only
@@ -219,7 +249,7 @@ provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
 - **實驗性質。** 這個 adapter 依據 1.x client、它的 validator 和 README 範例移植而來。關貿沒有公開 API 文件，也沒有人對 live API 執行過這個 adapter。請先用你自己的帳號測試，再正式使用。1.x client 繼續留在 `1-x-stable`。
 - **作廢和折讓需要原發票的 `saleIdentifier`。** DEFAULTAPI 用它識別發票。adapter 依序從 `provider_options: { sale_identifier: }` 取得（1.x client 開立的發票請用這個方式），或用 reference 的訂單編號組出，或用發票號碼查詢。折讓另外需要原發票日期，從 reference 或同一次查詢取得。`issue` 回傳的 reference 都有這些值。
 - **折讓需要稅別和稅率**，而且在查詢之前就要有。`issue` 或 `query` 回傳的 reference 都有。只有發票號碼時，請在折讓的輸入中傳入 `tax_type:`，有應稅品項時也要傳入 `tax_rate:`。
-- **查詢結果的 `status` 常常是 `nil`。** DEFAULTAPI 狀態代碼的意思還不清楚，所以 adapter 不猜。發票有折讓時 `status` 為 `:allowance`，其他情況為 `nil`。原始代碼在 `result.raw["status"]`。
+- **查詢結果的 `status` 常常是 `nil`。** DEFAULTAPI 狀態代碼的意思還不清楚，所以 adapter 不猜。發票有折讓時 `status` 為 `:allowance`，其他情況為 `nil`。`query_statuses` 是 `[:allowance]`。原始代碼在 `result.raw["status"]`。
 - **送出的價格含稅。** adapter 從 core 的稅額明細取得價格，所以任何 `price_mode` 都可以。應稅的 `tax_rate` 必須是 0.05。折讓的回應沒有日期時，折讓日期是今天（Asia/Taipei）。
 - **不支援**：用訂單編號查詢、混合稅率、特種稅率，以及外幣。
 - **其他功能**：其他 DEFAULTAPI endpoint 請用 `provider.raw(path, params)` 呼叫，例如 `provider.raw("get/getInvoiceMarkInfo", { ... })`。
@@ -230,6 +260,8 @@ provider = Einvoice::Tradevan::DefaultAPI::Provider.new(
 直接使用財政部公開服務的 client，不綁定任何加值中心。它們不開立任何東西，也不需要帳號，所以不論你用哪一家加值中心都可以用，甚至還沒選定加值中心時也可以用。
 
 ```ruby
+require "einvoice/mof"
+
 codes = Einvoice::MOF::DonationCodes.new
 
 codes.lookup("2718")
@@ -254,9 +286,9 @@ bundle exec rspec  # run the specs
 bundle exec rake   # default task: rspec
 ```
 
-`"an invoice provider"` shared examples（`spec/support/shared_examples/`）是每個 adapter 都要執行的 contract。新的 adapter 只要加一行引用它，就能證明自己遵守 unified model。
+`spec/support/shared_examples/` 裡的 shared examples 是可以執行的 contract。每個 adapter 都要執行 `"an invoice provider"`，每個 adapter 的 client 都要執行 `"a provider client"`。新的 adapter 只要引用它們，就能證明自己遵守 unified model。新的 adapter 也要有自己的入口檔 `lib/einvoice/<name>.rb`，在裡面 require `einvoice`。`lib/einvoice.rb` 不載入它，`spec/spec_helper.rb` 會載入它。
 
-要寫新的 adapter，請從 [`docs/providers/`](docs/providers/README.zh-TW.md) 的加值中心筆記開始。閱讀順序：先讀財政部 MIG 筆記（所有加值中心都遵循的規格），再讀 ECPay 筆記（唯一已經有 adapter 的加值中心，可以看筆記怎麼對應到程式碼），接著讀你要做的那一家的筆記，最後讀上面提到的 shared examples。
+要寫新的 adapter，請從 [`docs/providers/`](docs/providers/README.zh-TW.md) 的加值中心筆記開始。閱讀順序：先讀財政部 MIG 筆記（所有加值中心都遵循的規格），再讀 ECPay 筆記（第一個 adapter，可以看筆記怎麼對應到程式碼），接著讀你要做的那一家的筆記，最後讀上面提到的 shared examples。
 
 ECPay adapter 的測試分成三層，其中兩層在 CI 中離線執行：
 
@@ -269,6 +301,12 @@ ECPay adapter 的測試分成三層，其中兩層在 CI 中離線執行：
    ```
 
    預設使用公開的測試帳號，所以不需要任何設定。如果要改用你自己的 stage 帳號，請設定 `ECPAY_MERCHANT_ID`、`ECPAY_HASH_KEY`、`ECPAY_HASH_IV`。這層不在 CI 中執行，因為它需要網路，而且測試帳號是共用的。
+
+Amego 也有 live 測試，使用 Amego 公開的測試帳號：
+
+```bash
+AMEGO_LIVE=1 bundle exec rspec spec/einvoice/amego/live_spec.rb
+```
 
 ## 授權
 

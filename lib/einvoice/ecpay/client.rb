@@ -83,17 +83,18 @@ module Einvoice
       end
 
       def post(path, body)
-        uri = URI("#{@base_url.chomp('/')}#{path}")
+        uri = URI("#{@base_url}#{path}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = uri.scheme == "https"
         http.open_timeout = @timeout
         http.read_timeout = @timeout
 
-        response = http.request(post_request(uri, body))
+        response = nil
+        http.request(post_request(uri, body)) { |res| (response = res).read_body }
         check_rate_limit!(response)
         parse_json(response)
       rescue *Error::NETWORK_ERRORS => e
-        raise NetworkError.new("ECPay request failed: #{e.message}", provider: PROVIDER, cause: e)
+        raise NetworkError.for_failure(e, provider: PROVIDER, name: "ECPay", response: response)
       end
 
       # ECPay answers HTTP 403 when a merchant calls too often, and asks it to wait
@@ -115,8 +116,17 @@ module Einvoice
       # ECPay answers some errors with HTTP 500 and a normal envelope (a wrong
       # HashKey gives TransCode 110), so the body decides when it can be read.
       # Only a body that is not JSON falls back to the HTTP status.
+      # A body that ECPay wrote (a JSON object with +TransCode+) decides the
+      # error, whatever the HTTP status. Any other body falls back to the
+      # status: HTTP 429 and 5xx are a NetworkError, such as a gateway's own
+      # JSON error page (docs/providers/README.md, "The unified model").
       def parse_json(response)
-        JSON.parse(response.body.to_s)
+        body = JSON.parse(response.body.to_s)
+        unless body.is_a?(Hash) && body.key?("TransCode")
+          status_error = NetworkError.for_status(response, provider: PROVIDER)
+          raise status_error if status_error
+        end
+        body
       rescue JSON::ParserError => e
         status_error = NetworkError.for_status(response, provider: PROVIDER)
         raise status_error if status_error

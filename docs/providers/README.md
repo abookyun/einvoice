@@ -71,7 +71,7 @@ The core computes the tax from the items, as `#tax_breakdown` on the input. Only
 - The totals are `sales_amount` (without tax), `taxable_amount`, `zero_rated_amount`, `tax_free_amount`, `tax_amount` and `total_amount`. The tax is `round(taxable sales × tax_rate)`.
 - Zero-rated and tax-free lines have tax `0`.
 
-The caller's `AmountSummary` is checked against the breakdown. It never tells the core what to compute, and the core never changes the caller's items. An invoice follows F0401: for a consumer, `sales_amount` includes tax and `tax_amount` is `0`, and for a business buyer, `tax_amount` has to be the breakdown's tax. An allowance follows G0401: `sales_amount` excludes tax and `tax_amount` is the breakdown's tax.
+The caller's `AmountSummary` is optional. Without it, the core fills it from the breakdown by the rules below. A given one is checked against the breakdown. It never tells the core what to compute, and the core never changes the caller's items. An invoice follows F0401: for a consumer, `sales_amount` includes tax and `tax_amount` is `0`, and for a business buyer, `tax_amount` has to be the breakdown's tax. An allowance follows G0401: `sales_amount` excludes tax and `tax_amount` is the breakdown's tax.
 
 **Tax rate.** `tax_rate` is a decimal, for example `0.05`. The core accepts the MIG rates only: `0`, `0.01`, `0.02`, `0.05`, `0.15` and `0.25` `[mig 表 4-18]`. On an issue the lines decide the default, not the header: `0.05` when a line is taxable, else `0`. A special-tax line has no default. A taxable line cannot have rate `0`. When a provider cannot send a rate, the adapter raises `UnsupportedError`.
 
@@ -84,7 +84,7 @@ The caller's `AmountSummary` is checked against the breakdown. It never tells th
 - A void reason is 1 to 20 characters. A void allowance reason is optional. The core fills `作廢折讓` when it is missing.
 - A donation and a carrier can both be set. The MIG allows it.
 
-**Status.** `QueryInvoiceResult#status` is `nil` when the provider's status cannot be mapped to `InvoiceStatus`.
+**Status.** `QueryInvoiceResult#status` is `nil` when the provider's status cannot be mapped to `InvoiceStatus`. `Provider#query_statuses` lists the statuses that the adapter can return. It is every status by default. An adapter whose provider cannot show some states lists fewer, and returns `nil` for an invoice in any other state. The shared contract holds each adapter to its list: a listed status has to come back, and an unlisted one is `nil`.
 
 **Errors.** Every failure is an `Einvoice::Error`, never a plain Ruby error. The classes fall into two groups:
 
@@ -93,18 +93,21 @@ The caller's `AmountSummary` is checked against the breakdown. It never tells th
 | The invoice | `ValidationError`, `NotFoundError`, `ConflictError`, `NumberExhaustedError` | The request breaks a rule of the MOF, or the invoice is not in the state it needs. These mean the same at every provider |
 | The provider | `AuthError`, `NetworkError`, `ProviderError`, `UnsupportedError` | The account, the connection, the provider's own service, or a feature it lacks |
 
+- The core checks the MIG rules that hold at every provider, such as the field lengths, so every provider answers them alike. An adapter checks only its provider's own rules.
+- An input that the MIG allows but this provider does not take is an `UnsupportedError`, for example a field longer than the provider's own limit, or an item price that must be whole. Another provider may take it. A `ValidationError` means the input breaks a MIG rule, or lacks data that the call needs, so no provider takes it as it is.
 - A query that the adapter makes on its own, to fill a missing field, belongs to the provider group. If it fails, the adapter raises `ProviderError` with `Reason::LOOKUP_FAILED`. The message names the field it needed, and `cause` holds the error of the query. So a `NotFoundError` always means the invoice of the call itself.
 - Each provider has its own default class for an error code that we do not know. Section 6.4 gives it, with the evidence.
-- When the body is not a provider response, HTTP 5xx and 429 are a `NetworkError`, so the caller can retry. A body that the adapter can read decides the error, whatever the status. ECPay, for example, sends a wrong key as HTTP 500 with a normal envelope.
+- When the body is not a provider response, HTTP 5xx and 429 are a `NetworkError`, so the caller can retry. A body that the adapter can read decides the error, whatever the status. ECPay, for example, sends a wrong key as HTTP 500 with a normal envelope. When the headers arrive but the body does not, the `NetworkError` keeps the status, so HTTP 429 is still `RATE_LIMITED`.
 - The client rescues only connection errors. A bug in an adapter is not a `NetworkError`.
 - `Reason::RETRY_LATER` means the provider says "not now, try later", for example a void before the invoice is uploaded.
+- A refused request time is an `AuthError` with `Reason::STALE_TIMESTAMP` at every provider. The caller's server clock is off. The provider checks the request with its time, and a retry fails the same way until the clock is fixed.
 
 **Capabilities.**
 
 - `QUERY_BY_ORDER_ID` means the provider can find an invoice from data that the caller knows, without the invoice number. The caller passes an `InvoiceReference` with `order_id`, and `total_amount` if the provider needs it.
 - `CARRIER_VALIDATION` means the adapter implements `Provider#validate_carrier`.
 
-**Connection.** `base_url` must use https. Only localhost may use http. It must not carry a user or password, because `inspect` shows it.
+**Connection.** `base_url` must use https. Only localhost may use http. It must not carry a user or password, because `inspect` shows it. It must not carry a query or a fragment either, because the client appends its path. `spec/support/shared_examples/provider_client.rb` checks these rules and the error rules above for every client.
 
 ## Sources and trust
 

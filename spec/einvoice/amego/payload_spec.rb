@@ -48,7 +48,7 @@ RSpec.describe Einvoice::Amego::Payload do
 
     it "refuses tax-exclusive prices on a B2C invoice" do
       expect { issue(price_mode: "TAX_EXCLUSIVE", amount: { sales_amount: 105, tax_amount: 0, total_amount: 105 }) }
-        .to raise_error(Einvoice::ValidationError, /B2B/)
+        .to raise_error(Einvoice::UnsupportedError, /B2B/)
     end
 
     it "derives the mixed tax type 9 from items with different tax types" do
@@ -61,9 +61,10 @@ RSpec.describe Einvoice::Amego::Payload do
 
     it "needs the clearance mark and reason for a zero-rated sale" do
       expect { issue(tax_type: "ZERO_RATED") }.to raise_error(Einvoice::ValidationError, /customs_clearance_mark/)
+      expect { issue(tax_type: "ZERO_RATED", customs_clearance_mark: 1) }
+        .to raise_error(Einvoice::ValidationError, /zero_tax_rate_reason/)
 
-      data = issue(tax_type: "ZERO_RATED",
-                   provider_options: { customs_clearance_mark: 1, zero_tax_rate_reason: "71" })
+      data = issue(tax_type: "ZERO_RATED", customs_clearance_mark: 1, zero_tax_rate_reason: "71")
       expect(data).to include("TaxType" => "2", "TaxRate" => "0", "ZeroTaxSalesAmount" => 100, "SalesAmount" => 0,
                               "CustomsClearanceMark" => "1", "ZeroTaxRateReason" => "71")
     end
@@ -108,19 +109,12 @@ RSpec.describe Einvoice::Amego::Payload do
       expect(issue(donation: { npoban: "168001" })["NPOBAN"]).to eq("168001")
     end
 
-    it "refuses a buyer name of only zeros" do
-      expect { issue(buyer: { name: "000" }) }.to raise_error(Einvoice::ValidationError, /must not be/)
-    end
-
-    it "checks the documented lengths" do
-      expect { issue(order_id: "x" * 41) }.to raise_error(Einvoice::ValidationError, /order_id/)
-      expect { issue(remark: "x" * 201) }.to raise_error(Einvoice::ValidationError, /remark/)
+    # The core checks the MIG's lengths. These are Amego's own, shorter ones.
+    it "checks Amego's own lengths" do
+      expect { issue(order_id: "x" * 41) }.to raise_error(Einvoice::UnsupportedError, /order_id/)
       expect do
         issue(items: [{ description: "x" * 257, quantity: 1, unit_price: 100, amount: 100 }])
-      end.to raise_error(Einvoice::ValidationError, /description/)
-      expect do
-        issue(items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100, unit: "x" * 7 }])
-      end.to raise_error(Einvoice::ValidationError, /unit/)
+      end.to raise_error(Einvoice::UnsupportedError, /description/)
     end
 
     it "refuses an item number it cannot read, instead of reading it as 0" do
@@ -226,11 +220,13 @@ RSpec.describe Einvoice::Amego::Payload do
         .to raise_error(Einvoice::UnsupportedError, /special/)
     end
 
+    # Amego sends allowance_id as the AllowanceNumber. Other providers number
+    # an allowance themselves, so the limit is Amego's.
     it "refuses an allowance number longer than 16" do
       expect do
         allowance(allowance_id: "x" * 17, items: [{ description: "a", quantity: 1, unit_price: 100, amount: 100 }],
                   amount: { sales_amount: 95, tax_amount: 5, total_amount: 100 })
-      end.to raise_error(Einvoice::ValidationError, /allowance_id/)
+      end.to raise_error(Einvoice::UnsupportedError, /allowance_id/)
     end
   end
 

@@ -136,14 +136,24 @@ module Einvoice
 
   # --- Issue (開立) ---
 
+  # +customs_clearance_mark+ (+"1"+ or +"2"+) and +zero_tax_rate_reason+
+  # (+"71"+ to +"79"+) are the MIG's CustomsClearanceMark and
+  # ZeroTaxRateReason, for an invoice with a zero-rated line.
   IssueInvoiceInput = Data.define(
     :order_id, :buyer, :items, :amount, :tax_type, :price_mode, :tax_rate, :category,
-    :carrier, :donation, :remark, :currency, :exchange_rate, :provider_options
+    :carrier, :donation, :remark, :currency, :exchange_rate, :customs_clearance_mark,
+    :zero_tax_rate_reason, :provider_options
   ) do
-    def initialize(order_id:, buyer:, items:, amount:, tax_type:, price_mode:, tax_rate: nil,
+    def initialize(order_id:, buyer:, items:, tax_type:, price_mode:, amount: nil, tax_rate: nil,
                    category: nil, carrier: nil, donation: nil, remark: nil, currency: nil,
-                   exchange_rate: nil, provider_options: nil)
+                   exchange_rate: nil, customs_clearance_mark: nil, zero_tax_rate_reason: nil,
+                   provider_options: nil)
       super
+    end
+
+    # True when a line is zero rated, by its own tax type or the invoice's.
+    def zero_rated?
+      items.any? { |item| (item.tax_type || tax_type) == TaxType::ZERO_RATED }
     end
 
     # Explicit +category+, else derived from the buyer's 統一編號.
@@ -247,7 +257,7 @@ module Einvoice
   # against #tax_breakdown, which holds the tax of each line.
   AllowanceInput = Data.define(:invoice, :allowance_id, :items, :amount, :price_mode, :tax_type, :tax_rate,
                                :provider_options) do
-    def initialize(invoice:, allowance_id:, items:, amount:, price_mode:, tax_type:, tax_rate:,
+    def initialize(invoice:, allowance_id:, items:, price_mode:, tax_type:, tax_rate:, amount: nil,
                    provider_options: nil)
       super
     end

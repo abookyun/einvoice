@@ -7,7 +7,9 @@ RSpec.describe Einvoice::Amego::Provider do
 
   # The contract runs without provider_options: an allowance queries the
   # invoice for its buyer and date.
-  it_behaves_like "an invoice provider", unknown_reference: { number: "ZZ00000000" }
+  # An order id of 41 characters: Amego's limit, not the MIG's.
+  it_behaves_like "an invoice provider", unknown_reference: { number: "ZZ00000000" },
+                                         unsupported_issue: { order_id: "O" * 41 }
 end
 
 RSpec.describe Einvoice::Amego::Provider, "adapter details" do
@@ -40,7 +42,7 @@ RSpec.describe Einvoice::Amego::Provider, "adapter details" do
   end
 
   it "uses the published test account by default host" do
-    expect(described_class.new(**Einvoice::Amego::SANDBOX).client.endpoint).to eq("https://invoice-api.amego.tw")
+    expect(described_class.new(**Einvoice::Amego::SANDBOX).client.base_url).to eq("https://invoice-api.amego.tw")
   end
 
   describe "#issue" do

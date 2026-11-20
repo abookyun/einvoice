@@ -274,8 +274,8 @@ Result, from `searchInvoiceDetail` `[readme]`:
 | `status` | See 4.4 |
 | `amount` | `sales = exclusiveAmount`, `tax = tax`, `total = total` |
 | `buyer` | `receiverName`, `receiverAddr`, `receiverPhone`. No email or 統一編號 in the response |
-| `items` | `detailList[]`: `productName`, `qty`, `price`, `total`, `taxType` |
-| `tax_type` | The items' `taxType`. Two different known types: `MIXED`. A line without a known type: `nil` |
+| `items` | `detailList[]`: `productName`, `qty`, `price`, `total`, `taxType`. A missing number is `nil`. A number that is not a decimal: `ProviderError` |
+| `tax_type` | The items' `taxType`. Two different known types: `MIXED`, even when another line has no known type. Otherwise, a line without a known type: `nil` |
 | `tax_rate` | `0.05` when a line is `TAXABLE`, else `0`, `MIXED` too. A line without a known type: `nil`. DEFAULTAPI has no rate field, and a taxable line can only be at the general rate (6.1) |
 | `reference` | Built from the fields above |
 
@@ -332,7 +332,7 @@ Unknown. The sources say nothing about upload times or void deadlines. The MOF r
 - **Tax types are letters.** `T`, `Z`, `O` stand for MIG `1`, `2`, `3` (inferred). There is no letter for MIG `4` or `9` (6.1).
 - **Carrier types are the MIG codes** (6.2).
 - **`checkNumber` on type `G`.** MIG 4.0 dropped `CheckNumber` from F0401 `[mig]`. We do not know what Tradevan does with it today.
-- **No zero rated details.** `issueData` has no fields for `CustomsClearanceMark` or `ZeroTaxRateReason`, which F0401 requires for zero rated invoices `[mig 表 15-3]`. Tradevan must fill them, or zero rated invoices do not work through this API.
+- **No zero rated details.** `issueData` has no fields for `CustomsClearanceMark` or `ZeroTaxRateReason`, which F0401 requires for zero rated invoices `[mig 表 15-3]`. The adapter does not send `customs_clearance_mark` or `zero_tax_rate_reason`. Tradevan must fill them, or zero rated invoices do not work through this API.
 - **No void reason.** `voidData` has no reason. MIG F0501 requires `CancelReason`, so Tradevan fills it (inferred).
 - **No void date.** `voidData` has no invoice date. Tradevan finds it from `saleIdentifier` and `invoiceNumber` (inferred).
 - **Allowances carry the invoice date per item,** as MIG G0401 does.
@@ -342,6 +342,7 @@ Unknown. The sources say nothing about upload times or void deadlines. The MOF r
 - **No live tests.** We have no account and no host.
 - **A fake only.** `spec/support/fake_tradevan.rb` follows the 1.x code and the `[readme]` examples. It uses two different keys, so a mix-up of `key1` and `key2` shows. It rejects keys outside the schema, as `[prod]` reports. Its failure texts are our guesses (6.4), so a passing contract proves only that the guesses are classified the same way. The fake must not use the adapter's own rule checks, or a wrong rule passes on both sides.
 - **References.** The contract passes the reference from `issue` to the next steps. It has `order_id` and `invoice_datetime`, so void and allowance work.
+- **Field rules.** Before the call, the adapter checks `issueData` and `voidData` against the DEFAULTAPI field rules `[rules]`. When every problem is a length over one of Tradevan's own limits, the error is an `UnsupportedError`. These limits are the order and allowance ids, `productName` (300, the MIG allows 500), `receiverEmail` (80, MIG 400), `receiverMobile` (15, MIG 26) and `carrierId` (64, MIG 400). Any other problem is a `ValidationError`.
 - **Unknown allowance number.** The adapter checks that an allowance number has 16 characters before the call. So the contract gets a 16-character `unknown_allowance_number` (`ABCDE20260101999`).
 - **Encryption.** `crypto_spec.rb` compares the cipher text byte for byte with output from the 1.x code. Tradevan publishes no test vectors.
 - **Query status.** The contract checks the status after a void, and accepts `nil`, so it can pass while the status codes stay unknown.

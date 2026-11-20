@@ -159,7 +159,7 @@ Other endpoints. An adapter can reach them through a `raw` method:
 
 | Unified | Endpoint | Reference fields | `provider_options` |
 | --- | --- | --- | --- |
-| `issue` | `invoice_issue`, `Status` `1` | | `customs_clearance` |
+| `issue` | `invoice_issue`, `Status` `1` | | |
 | `void` | `invoice_invalid` | `number` | |
 | `allowance` | `allowance_issue`, `Status` `1` | `number`, `order_id`, `buyer_ubn` | `tax_type_for_mixed`, `buyer_email` |
 | `void_allowance` | `allowanceInvalid` | `allowance_number` | |
@@ -177,14 +177,14 @@ Other endpoints. An adapter can reach them through a `raw` method:
 | --- | --- | --- |
 | `order_id` | `MerchantOrderNo` | Max **20**, letters, digits and `_`. Other providers allow longer ids |
 | `category` (or the buyer's 統一編號) | `Category` | `B2B` / `B2C` |
-| `buyer.name` | `BuyerName` | M. B2C without a name: `消費者`. B2B: the company name, max 60 |
+| `buyer.name` | `BuyerName` | M. B2C without a name: `消費者`. B2B without a name: the 統一編號. The core refuses a name over 60, the MIG's limit |
 | `buyer.ubn` | `BuyerUBN` | B2B only |
 | `buyer.address` | `BuyerAddress` | |
 | `buyer.email` | `BuyerEmail` | Max 50. M for the ezPay member carrier |
 | `buyer.phone` | (none) | No field on issue. Dropped |
-| `carrier.type` | `CarrierType` | `MOBILE_BARCODE` `0`, `CITIZEN_CERTIFICATE` `1`, `MEMBER` `2`. B2C only: a carrier on a B2B invoice is a `ValidationError` |
+| `carrier.type` | `CarrierType` | `MOBILE_BARCODE` `0`, `CITIZEN_CERTIFICATE` `1`, `MEMBER` `2`. B2C only: a carrier on a B2B invoice is an `UnsupportedError` |
 | `carrier.code` | `CarrierNum` | `rawurlencode` first (2.2). For `MEMBER` without a code, use the buyer's email |
-| `donation.npoban` | `LoveCode` | B2C only. ezPay does not take it together with a carrier `[inv 四]`, so both together are a `ValidationError` |
+| `donation.npoban` | `LoveCode` | B2C only: a donation on a B2B invoice is an `UnsupportedError`. ezPay does not take it together with a carrier `[inv 四]`, so both together are an `UnsupportedError` too |
 | (derived) | `PrintFlag` | `Y` for B2B, and for B2C with no carrier and no donation. Else `N` |
 | `tax_type`, `items[].tax_type` | `TaxType` | `9` when items differ. Mixed tax is B2C only: B2B with mixed items is an `UnsupportedError`. `SPECIAL`: `UnsupportedError` (6.1) |
 | `tax_rate` | `TaxRate` | A percent: `tax_rate × 100`, so `5` or `0`. Any other rate: `UnsupportedError` |
@@ -199,10 +199,10 @@ Items, each joined with `|`:
 
 | Unified | ezPay | Rule |
 | --- | --- | --- |
-| `description` | `ItemName` | Max **30**. Longer: `ValidationError`. A `\|` in the text: `ValidationError` |
-| `quantity` | `ItemCount` | **Integer**. A decimal: `ValidationError` |
+| `description` | `ItemName` | Max **30**. Longer: `UnsupportedError`. A `\|` in the text: `UnsupportedError` |
+| `quantity` | `ItemCount` | **Integer**. A decimal: `UnsupportedError` |
 | `unit` | `ItemUnit` | M. Max 2 Chinese or 6 English characters. `個` when missing |
-| `unit_price` | `ItemPrice` | **Integer**: `ItemAmt / ItemCount`. Not a whole number: `ValidationError` |
+| `unit_price` | `ItemPrice` | **Integer**: `ItemAmt / ItemCount`. Not a whole number: `UnsupportedError` |
 | `amount` | `ItemAmt` | Integer. The line's amount from the core's breakdown: without tax for B2B, with tax for B2C |
 | `tax_type` | `ItemTaxType` | Mixed tax only |
 | `remark` | (none) | No field. Dropped |
@@ -313,7 +313,7 @@ The adapter picks the form by the buyer of the original invoice, from `invoice.b
 - **A consumer** (`buyer_ubn` is `nil`): prices with tax. `ItemAmt` is each line's `gross_amount` from the core's breakdown, and `ItemTaxAmt` is `0`. The "cannot deduct" rule does not matter, because a consumer does not deduct business tax. Prices with tax also divide well: two items of 50 stay 50 each.
 - **A business**: prices without tax (G0401). `ItemAmt` is each line's `net_amount`, and `ItemTaxAmt` is its `tax`.
 
-`TotalAmt` is `amount.total_amount` in both forms. `ItemPrice` is `ItemAmt / ItemCount`. ezPay wants `ItemAmt = ItemCount × ItemPrice` exactly, in integers, so the adapter raises `ValidationError` when that is not a whole number. Without tax, this can happen: 2 items for 95 (see 7).
+`TotalAmt` is `amount.total_amount` in both forms. `ItemPrice` is `ItemAmt / ItemCount`. ezPay wants `ItemAmt = ItemCount × ItemPrice` exactly, in integers, so the adapter raises `UnsupportedError` when that is not a whole number. Without tax, this can happen: 2 items for 95 (see 7).
 
 **Integers.** Item counts and prices are integers. The unified model allows decimals, so check before the call.
 
@@ -363,7 +363,7 @@ The query has no allowance data and no cancelled status. So the adapter cannot t
 - **An allowance on a mixed invoice is split.** One allowance covers one tax type (`TaxTypeForMixed`). A mixed invoice needs one allowance per tax type `[inv 六]`.
 - **Allowance prices may include tax.** MIG G0401 wants amounts without tax and a tax per item. The adapter sends prices with tax for a consumer, and leaves the split to ezPay.
 - **The allowance number is longer than the MIG's.** ezPay returns an `AllowanceNo` of up to 20 characters (25 in `allowanceInvalid`). MIG `AllowanceNumber` is max 16. The manual's example is 16 characters (`A151015111705007`).
-- **No zero tax rate reason.** The manual was last changed before MIG 4.0 and has no field for `ZeroTaxRateReason`.
+- **No zero tax rate reason.** The manual was last changed before MIG 4.0 and has no field for `ZeroTaxRateReason`. The adapter sends `customs_clearance_mark` as `CustomsClearance`, and does not send `zero_tax_rate_reason`.
 
 ### 4.8 Contract and live tests
 
@@ -543,7 +543,7 @@ For two cases without a code, the class depends on the operation (inferred): `LI
 | `KEY10002` | Cannot decrypt the data | `AuthError` | `CREDENTIALS_INVALID` |
 | `KEY10004` | Data incomplete | `ValidationError` | |
 | `KEY10006` | Shop has not applied for e-invoicing | `AuthError` | `NOT_ENROLLED` |
-| `KEY10007` | Page stayed open more than 30 minutes | `ValidationError` | `STALE_TIMESTAMP` |
+| `KEY10007` | Page stayed open more than 30 minutes | `AuthError` | `STALE_TIMESTAMP` |
 | `KEY10010`, `KEY10011`, `KEY10013` | Shop id, `PostData_` or data empty | `ValidationError` | |
 | `KEY10012` | Data transfer error | `ProviderError` | |
 | `KEY10014` | Timeout | `NetworkError` | |

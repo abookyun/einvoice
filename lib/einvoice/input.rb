@@ -27,6 +27,18 @@ module Einvoice
     }.freeze
     # MIG F0501 and G0501 allow a reason of 1 to 20 characters.
     MAX_REASON_LENGTH = 20
+    # MIG 4.1 field lengths, checked here once so that every provider gets the
+    # same answer [mig 表 4-2, 15-2, 15-5, 18-2]. A shorter limit of one
+    # provider is that adapter's UnsupportedError.
+    MIG_LENGTHS = {
+      remark: 200, buyer_name: 60, buyer_address: 100, buyer_email: 400, buyer_phone: 26,
+      carrier_code: 400, item_description: 500, item_unit: 6, item_remark: 120
+    }.freeze
+    # MIG 表 4-2: a consumer's name must not be 0 to 0000.
+    ZERO_NAME = /\A0{1,4}\z/
+    # MIG CustomsClearanceMarkEnum and ZeroTaxRateReasonEnum [mig 表 4-9, 4-19].
+    CUSTOMS_CLEARANCE_MARKS = %w[1 2].freeze
+    ZERO_TAX_RATE_REASONS = ("71".."79").to_a.freeze
     DEFAULT_VOID_ALLOWANCE_REASON = "作廢折讓"
     # The rates the MIG allows [mig 表 4-18].
     TAX_RATES = [0, Rational(1, 100), Rational(2, 100), Rational(5, 100), Rational(15, 100),
@@ -45,6 +57,7 @@ module Einvoice
       tax_type = enum!(h[:tax_type], TaxType::ALL, :tax_type, provider)
       category = h[:category] && enum!(h[:category], InvoiceCategory::ALL, :category, provider)
       check_category!(category, buyer, provider)
+      check_consumer_name!(category, buyer, provider)
       parsed = IssueInvoiceInput.new(
         order_id: fetch!(h, :order_id, provider),
         buyer: buyer,
@@ -56,12 +69,21 @@ module Einvoice
         category: category,
         carrier: build_carrier(h[:carrier], provider),
         donation: build_donation(h[:donation], provider),
-        remark: h[:remark],
+        remark: length!(h[:remark], :remark, provider),
         currency: h[:currency],
         exchange_rate: h[:exchange_rate],
+        customs_clearance_mark: code!(h[:customs_clearance_mark], CUSTOMS_CLEARANCE_MARKS,
+                                      :customs_clearance_mark, provider),
+        zero_tax_rate_reason: code!(h[:zero_tax_rate_reason], ZERO_TAX_RATE_REASONS,
+                                    :zero_tax_rate_reason, provider),
         provider_options: h[:provider_options]
       )
-      check_issue_amount!(parsed, provider)
+      if parsed.amount.nil?
+        parsed = parsed.with(amount: issue_amount(parsed, provider))
+      else
+        check_issue_amount!(parsed, provider)
+      end
+      check_zero_rated!(parsed, provider)
       parsed
     end
 
@@ -99,7 +121,11 @@ module Einvoice
         tax_rate: tax_rate,
         provider_options: h[:provider_options]
       )
-      check_allowance_amount!(parsed, provider)
+      if parsed.amount.nil?
+        parsed = parsed.with(amount: allowance_amount(parsed, provider))
+      else
+        check_allowance_amount!(parsed, provider)
+      end
       parsed
     end
 
@@ -157,6 +183,28 @@ module Einvoice
         fail!("a B2C invoice has tax_amount 0 and the tax inside sales_amount (F0401), got tax_amount " \
               "#{amount.tax_amount}", provider)
       end
+    end
+
+    # The totals that the core derives when the caller gives no +amount+, by
+    # the same rules that check a given one: F0401 for an invoice, G0401 for an
+    # allowance.
+    def issue_amount(input, provider)
+      breakdown = input.tax_breakdown(provider: provider)
+      total = breakdown.total_amount
+      tax = input.resolved_category == InvoiceCategory::B2B ? breakdown.tax_amount : 0
+      totals = { sales_amount: total - tax, tax_amount: tax, total_amount: total }
+      # Discount lines can take the items below zero. A given amount cannot be
+      # negative, so a derived one cannot be either.
+      totals.each do |field, value|
+        fail!("amount.#{field} must not be negative, got #{value}", provider) if value.negative?
+      end
+      AmountSummary.new(**totals)
+    end
+
+    def allowance_amount(input, provider)
+      breakdown = input.tax_breakdown(provider: provider)
+      AmountSummary.new(sales_amount: breakdown.total_amount - breakdown.tax_amount,
+                        tax_amount: breakdown.tax_amount, total_amount: breakdown.total_amount)
     end
 
     # An allowance follows G0401: sales_amount excludes tax.
@@ -240,8 +288,10 @@ module Einvoice
       ubn = blank?(h[:ubn]) ? nil : h[:ubn].to_s
       fail!("buyer ubn must be 8 digits, got #{ubn.inspect}", provider) if ubn && !ubn.match?(UBN_FORMAT)
 
-      Buyer.new(name: h[:name], ubn: ubn, email: h[:email], address: h[:address],
-                phone: h[:phone])
+      Buyer.new(name: length!(h[:name], :buyer_name, provider), ubn: ubn,
+                email: length!(h[:email], :buyer_email, provider),
+                address: length!(h[:address], :buyer_address, provider),
+                phone: length!(h[:phone], :buyer_phone, provider))
     end
 
     def build_carrier(value, provider)
@@ -253,7 +303,11 @@ module Einvoice
       if format && !h[:code].to_s.match?(format)
         fail!("carrier code for #{type} must match #{format.source}, got #{h[:code].inspect}", provider)
       end
-      Carrier.new(type: type, code: h[:code])
+      # MIG 表 15-3: no space, half-width or full-width, at either end.
+      if h[:code].to_s.match?(/\A[\s\u3000]|[\s\u3000]\z/)
+        fail!("carrier code must not start or end with a space, got #{h[:code].inspect}", provider)
+      end
+      Carrier.new(type: type, code: length!(h[:code], :carrier_code, provider))
     end
 
     def build_donation(value, provider)
@@ -269,8 +323,9 @@ module Einvoice
       Donation.new(npoban: npoban)
     end
 
+    # nil when the caller gives no amount: the core derives it from the items.
     def build_amount(value, provider)
-      fail!("amount is required", provider) if value.nil?
+      return nil if value.nil?
 
       h = hash!(value, "amount", provider)
       sales, tax, total = %i[sales_amount tax_amount total_amount].map do |field|
@@ -293,13 +348,13 @@ module Einvoice
           Number.decimal!(fetch!(h, field, provider), field: "items[#{index}].#{field}", provider: provider)
         end
         InvoiceItem.new(
-          description: fetch!(h, :description, provider),
+          description: length!(fetch!(h, :description, provider), :item_description, provider),
           quantity: fetch!(h, :quantity, provider),
           unit_price: fetch!(h, :unit_price, provider),
           amount: fetch!(h, :amount, provider),
-          unit: h[:unit],
+          unit: length!(h[:unit], :item_unit, provider),
           tax_type: h[:tax_type] && enum!(h[:tax_type], TaxType::ALL, :tax_type, provider),
-          remark: h[:remark]
+          remark: length!(h[:remark], :item_remark, provider)
         )
       end
     end
@@ -319,6 +374,21 @@ module Einvoice
     end
 
     # A B2B invoice needs a 統一編號. An explicit category has to agree with it.
+    # The value as it is, after a check against its MIG length.
+    def length!(value, field, provider)
+      limit = MIG_LENGTHS.fetch(field)
+      length = value.to_s.length
+      fail!("#{field} must be #{limit} characters or fewer (MIG), got #{length}", provider) if length > limit
+      value
+    end
+
+    def check_consumer_name!(category, buyer, provider)
+      return if buyer.nil? || buyer.business? || category == InvoiceCategory::B2B
+      return unless buyer.name.to_s.match?(ZERO_NAME)
+
+      fail!("a consumer's buyer name must not be #{buyer.name.inspect} (MIG)", provider)
+    end
+
     def check_category!(category, buyer, provider)
       business = buyer&.business? || false
       if category == InvoiceCategory::B2B && !business
@@ -347,6 +417,24 @@ module Einvoice
               provider)
       end
       rate
+    end
+
+    # A MIG code given as a String or an Integer. nil when it is not given.
+    def code!(value, codes, field, provider)
+      return nil if blank?(value)
+
+      code = value.to_s
+      fail!("#{field} must be one of #{codes.join(', ')}, got #{value.inspect}", provider) unless codes.include?(code)
+      code
+    end
+
+    # The MIG requires CustomsClearanceMark on a zero-rated invoice. It requires
+    # ZeroTaxRateReason too, but ECPay lets a merchant set the reason in its
+    # back office, so the core does not ask for it. Amego asks for it itself.
+    def check_zero_rated!(parsed, provider)
+      return unless parsed.zero_rated? && parsed.customs_clearance_mark.nil?
+
+      fail!("a zero-rated invoice needs customs_clearance_mark (1 or 2)", provider)
     end
 
     def reason!(reason, provider)

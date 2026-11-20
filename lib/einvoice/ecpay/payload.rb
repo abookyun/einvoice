@@ -63,9 +63,11 @@ module Einvoice
           "InvType" => parsed.tax_type == TaxType::SPECIAL ? "08" : "07",
           "vat" => parsed.price_mode == PriceMode::TAX_EXCLUSIVE ? "0" : "1"
         }
-        # 零稅率/特種稅額 details the unified model has no field for.
-        data["ClearanceMark"] = options["clearance_mark"] if options.key?("clearance_mark")
-        data["ZeroTaxRateReason"] = options["zero_tax_rate_reason"] if options.key?("zero_tax_rate_reason")
+        # The core asks for the clearance mark on a zero-rated invoice. ECPay
+        # takes the reason from its back office when it is not sent.
+        data["ClearanceMark"] = parsed.customs_clearance_mark if parsed.zero_rated?
+        data["ZeroTaxRateReason"] = parsed.zero_tax_rate_reason if parsed.zero_rated? && parsed.zero_tax_rate_reason
+        # 特種稅額 details the unified model has no field for.
         data["SpecialTaxType"] = options["special_tax_type"] if options.key?("special_tax_type")
         # Last-resort escape hatch for fields this mapper does not model.
         data.merge!(string_keys(options["data"])) if options["data"]
@@ -114,8 +116,13 @@ module Einvoice
         errors = []
         relate = data["RelateNumber"].to_s
         errors << "RelateNumber is required" if relate.empty?
-        errors << "RelateNumber must be #{MAX_RELATE_NUMBER_LENGTH} characters or fewer" if
-          relate.length > MAX_RELATE_NUMBER_LENGTH
+        # A zero-rated invoice needs ClearanceMark (MIG, 5000007). The adapter
+        # sets it, but provider_options[:data] can change the payload after
+        # that, so the final payload is checked. A mixed invoice needs it only
+        # with a zero-rated item: stage takes taxable plus tax-free without it.
+        if zero_rated_payload?(data) && data["ClearanceMark"].to_s.empty?
+          errors << "ClearanceMark is required for a zero-rated item"
+        end
 
         # 發票金額(含稅) must equal round(Σ ItemAmount) — 5000022. Only checked for
         # 含稅 (vat=1). With vat=0, ECPay does not read ItemAmount: it stores
@@ -129,12 +136,24 @@ module Einvoice
 
         errors.concat(buyer_errors(data))
         errors.concat(carrier_errors(data))
-        errors << "ClearanceMark is required for a zero-rated invoice" if clearance_missing?(data)
 
-        return if errors.empty?
+        unless errors.empty?
+          raise ValidationError.new("Invalid ECPay invoice payload — #{errors.join('; ')}",
+                                    provider: Client::PROVIDER, raw_message: errors.join("; "))
+        end
 
-        raise ValidationError.new("Invalid ECPay invoice payload — #{errors.join('; ')}",
-                                  provider: Client::PROVIDER, raw_message: errors.join("; "))
+        limits = own_limits(data)
+        return if limits.empty?
+
+        raise UnsupportedError.new("ECPay does not take this invoice — #{limits.join('; ')}",
+                                   provider: Client::PROVIDER, raw_message: limits.join("; "))
+      end
+
+      def zero_rated_payload?(data)
+        zero = TAX_TYPE.fetch(TaxType::ZERO_RATED)
+        return true if data["TaxType"] == zero
+
+        data["TaxType"] == MIXED_TAX_CODE && Array(data["Items"]).any? { |item| item["ItemTaxType"] == zero }
       end
 
       def buyer_errors(data)
@@ -149,60 +168,67 @@ module Einvoice
           errors << "LoveCode (3–7 digits) is required when donating"
         end
 
-        # A printed invoice needs somewhere to print to, and a way to notify.
-        if data["Print"] == "1"
-          errors << "CustomerName is required for a printed invoice" if data["CustomerName"].to_s.empty?
-          errors << "CustomerAddr is required for a printed invoice" if data["CustomerAddr"].to_s.empty?
-          if data["CustomerEmail"].to_s.empty? && data["CustomerPhone"].to_s.empty?
-            errors << "CustomerEmail or CustomerPhone is required for a printed invoice"
-          end
-        end
         errors
       end
 
       def carrier_errors(data)
         errors = []
         carrier = data["CarrierType"].to_s
-        if data["CustomerIdentifier"].to_s.empty?
-          # A B2C carrier invoice is electronic and cannot also print — 5000015.
-          errors << "Print must be 0 for a carrier invoice" if !carrier.empty? && data["Print"] == "1"
-        elsif data["Print"] == "0" && carrier.empty?
-          # A 統編 invoice that is not printed has to live in a carrier — 5000028.
-          errors << "A non-printed B2B invoice must use a carrier"
+        # A B2C carrier invoice is electronic and cannot also print — 5000015.
+        if data["CustomerIdentifier"].to_s.empty? && !carrier.empty? && data["Print"] == "1"
+          errors << "Print must be 0 for a carrier invoice"
         end
         errors
       end
 
-      # 零稅率 (TaxType 2, or 9 when a zero-rated item is mixed in) needs the
-      # customs-clearance mark — 5000007. The docs ask for it on any TaxType 9,
-      # but stage takes taxable plus tax-free without it (2026-11-15).
-      def clearance_missing?(data)
-        return false unless data["ClearanceMark"].to_s.empty?
-        return true if data["TaxType"] == "2"
-
-        data["TaxType"] == MIXED_TAX_CODE &&
-          data["Items"].any? { |item| item["ItemTaxType"] == "2" }
+      # ECPay's own rules, beyond the MIG. The MIG allows these invoices, so
+      # they are UnsupportedError (docs/providers/README.md, "The unified
+      # model"): another provider may take them.
+      def own_limits(data)
+        limits = []
+        # The MIG has no order id, so this limit is ECPay's own.
+        if data["RelateNumber"].to_s.length > MAX_RELATE_NUMBER_LENGTH
+          limits << "RelateNumber must be #{MAX_RELATE_NUMBER_LENGTH} characters or fewer"
+        end
+        # A printed invoice needs somewhere to print to, and a way to notify.
+        if data["Print"] == "1"
+          limits << "CustomerName is required for a printed invoice" if data["CustomerName"].to_s.empty?
+          limits << "CustomerAddr is required for a printed invoice" if data["CustomerAddr"].to_s.empty?
+          if data["CustomerEmail"].to_s.empty? && data["CustomerPhone"].to_s.empty?
+            limits << "CustomerEmail or CustomerPhone is required for a printed invoice"
+          end
+        end
+        # A 統編 invoice that is not printed has to live in a carrier — 5000028.
+        if !data["CustomerIdentifier"].to_s.empty? && data["Print"] == "0" && data["CarrierType"].to_s.empty?
+          limits << "A non-printed B2B invoice must use a carrier"
+        end
+        limits
       end
 
-      # The sum of ItemAmount has to equal AllowanceAmount [doc 7901], and on
-      # each item ItemPrice × ItemCount may differ from ItemAmount by 1 at most.
+      # The sum of ItemAmount has to equal AllowanceAmount [doc 7901]: the
+      # totals must agree, as the MIG asks. On each item ItemPrice × ItemCount
+      # may differ from ItemAmount by 1 at most. That is ECPay's own rule, so
+      # it is an UnsupportedError (docs/providers/README.md, "The unified
+      # model").
       def check_allowance!(data)
-        errors = []
         total = data["Items"].sum { |item| item["ItemAmount"].to_r }
         unless total.round == data["AllowanceAmount"]
-          errors << "AllowanceAmount (#{data['AllowanceAmount']}) must equal the item total (#{total.round})"
+          raise ValidationError.new("Invalid ECPay allowance payload — AllowanceAmount " \
+                                    "(#{data['AllowanceAmount']}) must equal the item total (#{total.round})",
+                                    provider: Client::PROVIDER)
         end
-        data["Items"].each_with_index do |item, index|
+
+        gaps = data["Items"].each_with_index.filter_map do |item, index|
           product = item["ItemPrice"].to_r * item["ItemCount"].to_r
           next if (product - item["ItemAmount"].to_r).abs <= 1
 
-          errors << "Items[#{index}]: ItemPrice × ItemCount (#{Number.plain(product)}) must be within 1 of " \
-                    "ItemAmount (#{item['ItemAmount']})"
+          "Items[#{index}]: ItemPrice × ItemCount (#{Number.plain(product)}) must be within 1 of " \
+            "ItemAmount (#{item['ItemAmount']})"
         end
-        return if errors.empty?
+        return if gaps.empty?
 
-        raise ValidationError.new("Invalid ECPay allowance payload — #{errors.join('; ')}",
-                                  provider: Client::PROVIDER)
+        raise UnsupportedError.new("ECPay does not take this allowance — #{gaps.join('; ')}",
+                                   provider: Client::PROVIDER)
       end
 
       def string_keys(hash)
