@@ -120,9 +120,12 @@ provider.allowance(
 begin
   provider.void(invoice: invoice.reference, reason: "customer cancelled")
 rescue Einvoice::ConflictError => e
-  e.reason   # => :already_voided  (idempotent — treat as success)
+  # Only :already_voided means that the invoice is voided. Another reason,
+  # such as :void_blocked_by_allowance, means that it is not.
+  raise unless e.reason == :already_voided
 rescue Einvoice::Error => e
   e.code     # => :network, :auth, :not_found, …
+  raise
 end
 ```
 

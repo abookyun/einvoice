@@ -154,9 +154,12 @@ provider.allowance(
 begin
   provider.void(invoice: reference, reason: "客戶取消")
 rescue Einvoice::ConflictError => e
-  e.reason        # => :already_voided，可以視為已完成
+  # 只有 :already_voided 代表發票已經作廢。其他 reason，
+  # 例如 :void_blocked_by_allowance，代表沒有作廢。
+  raise unless e.reason == :already_voided
 rescue Einvoice::Error => e
   e.raw_message   # 關貿原始的文字
+  raise
 end
 ```
 

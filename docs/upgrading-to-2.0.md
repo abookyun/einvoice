@@ -152,9 +152,12 @@ If your 1.x `saleIdentifier` was `"#{companyUn}_#{orgId}_#{transactionNumber}"`,
 begin
   provider.void(invoice: reference, reason: "客戶取消")
 rescue Einvoice::ConflictError => e
-  e.reason        # => :already_voided, so treat it as done
+  # Only :already_voided means that the invoice is voided. Another reason,
+  # such as :void_blocked_by_allowance, means that it is not.
+  raise unless e.reason == :already_voided
 rescue Einvoice::Error => e
   e.raw_message   # Tradevan's own text
+  raise
 end
 ```
 
